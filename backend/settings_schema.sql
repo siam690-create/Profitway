@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS shop_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL UNIQUE,
+  currency VARCHAR(10) DEFAULT '৳',
+  decimal_precision INT DEFAULT 2,
+  pos_paper_size VARCHAR(20) DEFAULT '80mm',
+  wholesale_paper_size VARCHAR(20) DEFAULT 'A4',
+  company_name VARCHAR(255),
+  tagline VARCHAR(255),
+  address TEXT,
+  phone VARCHAR(50),
+  email VARCHAR(100),
+  vat_reg_no VARCHAR(100),
+  footer_terms TEXT,
+  footer_thank_you TEXT,
+  show_storage_location TINYINT(1) DEFAULT 1,
+  show_staff_name TINYINT(1) DEFAULT 1,
+  show_savings_discount TINYINT(1) DEFAULT 1,
+  show_qr_barcode TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
