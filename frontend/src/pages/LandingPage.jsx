@@ -126,21 +126,21 @@ export const LandingPage = () => {
             </div>
           </div>
 
-          {/* Customer Focus Navigation Header Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {/* Clean General Navigation Header Buttons (Login & Sign Up) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button 
               onClick={() => { setAuthModal('login'); setLoginEmail(''); setLoginPassword(''); setLoginError(''); }}
-              style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '800', cursor: 'pointer' }}
+              style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '10px 24px', borderRadius: '10px', fontSize: '14px', fontWeight: '800', cursor: 'pointer' }}
             >
-              Shop Owner Login
+              Login
             </button>
 
             <button 
               onClick={() => { setAuthModal('signup'); setSignupError(''); }}
-              style={{ background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', padding: '10px 22px', borderRadius: '10px', fontSize: '13px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 6px 16px rgba(99, 102, 241, 0.35)', display: 'flex', alignItems: 'center', gap: '6px' }}
+              style={{ background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '10px', fontSize: '14px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 6px 16px rgba(99, 102, 241, 0.35)', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <span>Create Free Shop Account</span>
-              <ArrowRight size={14} />
+              <span>Sign Up</span>
+              <ArrowRight size={15} />
             </button>
           </div>
         </div>
@@ -342,7 +342,7 @@ export const LandingPage = () => {
                 <div>✓ Profit & Loss Financial Audit</div>
               </div>
             </div>
-            <button onClick={() => setAuthModal('signup')} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Create Free Shop Account</button>
+            <button onClick={() => setAuthModal('signup')} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Sign Up Free Account</button>
           </div>
 
           {/* Pro Plan */}
@@ -361,7 +361,7 @@ export const LandingPage = () => {
                 <div>✓ Courier Returns Date Audit</div>
               </div>
             </div>
-            <button onClick={() => setAuthModal('signup')} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.35)' }}>Create Free Shop Account</button>
+            <button onClick={() => setAuthModal('signup')} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.35)' }}>Sign Up Free Account</button>
           </div>
 
           {/* Enterprise Plan */}
@@ -378,7 +378,7 @@ export const LandingPage = () => {
                 <div>✓ Priority 24/7 Support Desk</div>
               </div>
             </div>
-            <button onClick={() => setAuthModal('signup')} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Create Free Shop Account</button>
+            <button onClick={() => setAuthModal('signup')} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Sign Up Free Account</button>
           </div>
         </div>
       </section>
@@ -399,7 +399,7 @@ export const LandingPage = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {authModal === 'superadmin' ? <Lock size={20} color="#a855f7" /> : <Store size={20} color="#6366f1" />}
                 <h3 style={{ fontSize: '18px', fontWeight: '800' }}>
-                  {authModal === 'login' && 'Shop Owner Login'}
+                  {authModal === 'login' && 'Account Login'}
                   {authModal === 'signup' && 'Create Free Shop Account'}
                   {authModal === 'superadmin' && 'Super Admin Secret Portal'}
                   {authModal === 'pending_notice' && 'Signup Request Submitted'}
@@ -411,7 +411,7 @@ export const LandingPage = () => {
               </button>
             </div>
 
-            {/* --- TAB 1: SHOP OWNER LOGIN --- */}
+            {/* --- TAB 1: GENERAL LOGIN (Owner, Staff, Manager, Cashier) --- */}
             {authModal === 'login' && (
               <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {loginError && (
@@ -426,7 +426,7 @@ export const LandingPage = () => {
                     type="email"
                     className="form-input"
                     required
-                    placeholder="owner@demostore.com"
+                    placeholder="user@mystore.com"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
@@ -447,13 +447,13 @@ export const LandingPage = () => {
                 </div>
 
                 <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', borderRadius: '10px', fontWeight: '800', background: 'linear-gradient(90deg, #6366f1, #4f46e5)' }} disabled={authLoading}>
-                  {authLoading ? 'Logging in...' : 'Sign In to Shop Dashboard'}
+                  {authLoading ? 'Authenticating...' : 'Sign In to Dashboard'}
                 </button>
 
                 <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '13px', color: '#94a3b8' }}>
                   Don't have a shop account yet?{' '}
                   <span onClick={() => { setAuthModal('signup'); setSignupError(''); }} style={{ color: '#818cf8', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline' }}>
-                    Sign Up Free
+                    Sign Up
                   </span>
                 </div>
               </form>
