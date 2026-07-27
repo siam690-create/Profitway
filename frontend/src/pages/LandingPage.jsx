@@ -534,6 +534,20 @@ export const LandingPage = () => {
                   />
                 </div>
 
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Target Subscription Plan *</label>
+                  <select
+                    className="form-input"
+                    value={signupForm.plan_id || 2}
+                    onChange={(e) => setSignupForm({ ...signupForm, plan_id: e.target.value })}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  >
+                    <option value="1">Starter Plan (৳999/mo - Up to 300 Products)</option>
+                    <option value="2">Pro Plan (৳2,499/mo - Popular • Up to 2,500 Products & Paid Ads)</option>
+                    <option value="3">Enterprise Plan (৳4,999/mo - Unlimited Products & 50 Staff)</option>
+                  </select>
+                </div>
+
                 <div style={{ fontSize: '11px', color: '#94a3b8', background: '#1e293b', padding: '8px 12px', borderRadius: '6px' }}>
                   📌 <strong>Approval Safeguard:</strong> Your account registration will be sent to Super Admin for instant verification & approval.
                 </div>
