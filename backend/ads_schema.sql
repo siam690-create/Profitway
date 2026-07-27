@@ -1,5 +1,5 @@
 -- Add Paid Ads & Marketing Cost Tracker tables
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 CREATE TABLE IF NOT EXISTS `paid_ads` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

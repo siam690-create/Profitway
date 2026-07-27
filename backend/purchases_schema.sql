@@ -1,5 +1,5 @@
 -- Add Purchases and Purchase Items tables for Stock Buying & Weighted Average Cost calculation
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 CREATE TABLE IF NOT EXISTS `purchases` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

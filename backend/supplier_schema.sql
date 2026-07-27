@@ -1,5 +1,5 @@
 -- Supplier Directory and Enhanced Purchase Payment Schema
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 CREATE TABLE IF NOT EXISTS `suppliers` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

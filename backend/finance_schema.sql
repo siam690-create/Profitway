@@ -1,5 +1,5 @@
 -- Complete Finance, Accounts, Dena-Pawna, and Payroll Schema
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 CREATE TABLE IF NOT EXISTS `finance_accounts` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

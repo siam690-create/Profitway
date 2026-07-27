@@ -1,5 +1,5 @@
 -- Add Courier Returns & Product Restock tables
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 CREATE TABLE IF NOT EXISTS `returns` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

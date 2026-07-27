@@ -1,5 +1,5 @@
 -- Complete Wholesale B2B Sales & Buyer Schema
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 CREATE TABLE IF NOT EXISTS `wholesale_customers` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

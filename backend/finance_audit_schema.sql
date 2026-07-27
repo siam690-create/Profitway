@@ -1,5 +1,5 @@
 -- Database Migration for Liability Payments and Receivable Collection Logs
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 CREATE TABLE IF NOT EXISTS `liability_payments` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

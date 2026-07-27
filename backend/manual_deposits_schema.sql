@@ -1,5 +1,5 @@
 -- Database Migration for Manual Cash & Bank Deposits Log
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 CREATE TABLE IF NOT EXISTS `manual_deposits` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

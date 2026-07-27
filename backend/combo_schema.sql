@@ -1,5 +1,5 @@
 -- Add Combo Product Bundling support
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 -- Add is_combo flag to products table if not exists
 ALTER TABLE `products` ADD COLUMN IF NOT EXISTS `is_combo` TINYINT(1) DEFAULT 0;

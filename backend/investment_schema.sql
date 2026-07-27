@@ -1,5 +1,5 @@
 -- Business Investments & Investor Capital Schema
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 CREATE TABLE IF NOT EXISTS `investments` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

@@ -1,15 +1,15 @@
 -- Database Migration for Product Storage Location & Staff Module Permissions
-USE `stock_profit_db`;
+USE `profitway_db`;
 
 -- 1. Add storage location column to products table if not exists
-SET @exist := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='stock_profit_db' AND TABLE_NAME='products' AND COLUMN_NAME='location');
+SET @exist := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='profitway_db' AND TABLE_NAME='products' AND COLUMN_NAME='location');
 SET @sql := IF(@exist = 0, 'ALTER TABLE products ADD COLUMN location VARCHAR(255) DEFAULT NULL', 'SELECT 1');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- 2. Add permissions column to users table if not exists
-SET @exist := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='stock_profit_db' AND TABLE_NAME='users' AND COLUMN_NAME='permissions');
+SET @exist := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='profitway_db' AND TABLE_NAME='users' AND COLUMN_NAME='permissions');
 SET @sql := IF(@exist = 0, 'ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL', 'SELECT 1');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;

@@ -1,6 +1,6 @@
 -- Full Multi-Tenant SaaS Database Schema
-CREATE DATABASE IF NOT EXISTS `stock_profit_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `stock_profit_db`;
+CREATE DATABASE IF NOT EXISTS `profitway_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `profitway_db`;
 
 -- Disable foreign key checks for clean migration
 SET FOREIGN_KEY_CHECKS = 0;
