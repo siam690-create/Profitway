@@ -1,7 +1,8 @@
 const db = require('../config/db');
 const { hashPassword, comparePassword, generateToken } = require('../utils/auth');
+const mailer = require('../utils/mailer');
 
-// Register New Tenant Shop (14-Day Free Trial)
+// Register New Tenant Shop (Requires Super Admin Approval)
 exports.registerTenant = async (req, res) => {
   const connection = await db.getConnection();
   try {
@@ -23,14 +24,14 @@ exports.registerTenant = async (req, res) => {
     const baseSlug = shop_name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
     const slug = `${baseSlug}-${Math.floor(100 + Math.random() * 900)}`;
 
-    // Set 14-Day Trial Expiry Date
+    // Set 14-Day Trial Expiry Date (activates upon Super Admin approval)
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-    // 1. Create Tenant
+    // 1. Create Tenant in 'pending_approval' status
     const [tenantResult] = await connection.query(
       `INSERT INTO tenants (shop_name, slug, owner_name, email, phone, currency, subscription_status, trial_ends_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'trial', ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, 'pending_approval', ?)`,
       [
         shop_name,
         slug,
@@ -67,20 +68,22 @@ exports.registerTenant = async (req, res) => {
 
     await connection.commit();
 
-    // 4. Generate Token
-    const token = generateToken({
-      userId,
-      tenantId,
-      role: 'owner',
-      email,
-      name: owner_name
-    });
+    // Send email alert to Super Admin about new signup
+    try {
+      await mailer.sendMail({
+        to: 'admin@profitway.bd',
+        subject: `🚨 New Shop Registration Signup: ${shop_name} [${shopCode}]`,
+        text: `New Shop Signup Request:\nShop Name: ${shop_name}\nOwner: ${owner_name}\nEmail: ${email}\nPhone: ${phone || 'N/A'}\nShop Code: ${shopCode}\n\nPlease log in to Super Admin Portal to Review & Approve this account.`
+      });
+    } catch (e) {
+      console.error('Email notify error:', e.message);
+    }
 
     res.status(201).json({
-      message: 'Shop account registered successfully with 14-day free trial.',
-      token,
-      user: { id: userId, name: owner_name, email, role: 'owner' },
-      tenant: { id: tenantId, shop_name, shop_code: shopCode, slug, currency: currency || '৳', subscription_status: 'trial', trial_ends_at: trialEndsAt }
+      message: 'Shop registration submitted successfully! Your account is pending Super Admin approval. You will receive access once approved.',
+      requires_approval: true,
+      shop_name,
+      shop_code: shopCode
     });
 
   } catch (error) {
@@ -118,6 +121,20 @@ exports.login = async (req, res) => {
     if (user.tenant_id) {
       const [tenants] = await db.query('SELECT * FROM tenants WHERE id = ?', [user.tenant_id]);
       if (tenants.length > 0) tenant = tenants[0];
+    }
+
+    // Block non-superadmin logins if pending approval or suspended
+    if (user.role !== 'superadmin' && tenant) {
+      if (tenant.subscription_status === 'pending_approval') {
+        return res.status(403).json({
+          error: 'Your shop registration is pending Super Admin approval. Please wait for approval before logging in.'
+        });
+      }
+      if (tenant.subscription_status === 'suspended') {
+        return res.status(403).json({
+          error: 'Your shop account has been suspended by Super Admin. Please contact support.'
+        });
+      }
     }
 
     const token = generateToken({

@@ -135,6 +135,23 @@ export const SuperAdminDashboard = () => {
     }
   };
 
+  const handleApproveShop = async (shopId, newStatus = 'trial') => {
+    if (window.confirm(`Approve this shop registration and activate account access?`)) {
+      try {
+        const res = await authFetch(`/api/super-admin/tenants/${shopId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ subscription_status: newStatus })
+        });
+        if (res.ok) {
+          alert('Shop account approved successfully! Confirmation email dispatched to Shop Owner.');
+          fetchSuperAdminData();
+        }
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+  };
+
   const handleViewTicketThread = async (ticketId) => {
     try {
       const res = await authFetch(`/api/support/tickets/${ticketId}`);
@@ -301,11 +318,13 @@ export const SuperAdminDashboard = () => {
               </thead>
               <tbody>
                 {shops.map(shop => {
+                  const isPending = shop.subscription_status === 'pending_approval';
                   const isTrial = shop.subscription_status === 'trial';
                   const isActive = shop.subscription_status === 'active';
+                  const isSuspended = shop.subscription_status === 'suspended';
 
                   return (
-                    <tr key={shop.id}>
+                    <tr key={shop.id} style={{ background: isPending ? 'rgba(245, 158, 11, 0.08)' : undefined }}>
                       <td>
                         <span className="badge badge-info" style={{ fontWeight: '800', fontSize: '12px' }}>
                           {shop.shop_code || `SHOP-${1000 + shop.id}`}
@@ -322,15 +341,20 @@ export const SuperAdminDashboard = () => {
                       <td style={{ fontWeight: '600' }}>{shop.product_count || 0}</td>
                       <td style={{ fontWeight: '600' }}>{shop.sales_count || 0}</td>
                       <td>
-                        <span className={`badge ${isActive ? 'badge-success' : isTrial ? 'badge-warning' : 'badge-danger'}`}>
-                          {shop.subscription_status.toUpperCase()}
+                        <span className={`badge ${isPending ? 'badge-warning' : isActive ? 'badge-success' : isTrial ? 'badge-info' : 'badge-danger'}`} style={{ fontWeight: '800' }}>
+                          {isPending ? '⏳ PENDING APPROVAL' : shop.subscription_status.toUpperCase()}
                         </span>
                       </td>
                       <td style={{ fontSize: '12px' }}>
                         {new Date(shop.trial_ends_at).toLocaleDateString()}
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: '6px' }}>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {isPending && (
+                            <button onClick={() => handleApproveShop(shop.id, 'trial')} className="btn btn-success btn-sm" style={{ fontWeight: '800' }}>
+                              ✓ Approve Account
+                            </button>
+                          )}
                           <button onClick={() => handleOpenEditShop(shop)} className="btn btn-secondary btn-sm" title="Edit Master Shop Name & Unique Code">
                             <Edit2 size={14} />
                             <span>Edit</span>
@@ -338,9 +362,14 @@ export const SuperAdminDashboard = () => {
                           <button onClick={() => handleExtendTrial(shop.id)} className="btn btn-secondary btn-sm" title="Extend Trial">
                             + Trial
                           </button>
-                          {!isActive && (
+                          {!isActive && !isPending && (
                             <button onClick={() => handleActivateSubscription(shop.id)} className="btn btn-success btn-sm">
                               Activate
+                            </button>
+                          )}
+                          {!isSuspended && (
+                            <button onClick={() => handleApproveShop(shop.id, 'suspended')} className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} title="Suspend Shop Account">
+                              Suspend
                             </button>
                           )}
                         </div>

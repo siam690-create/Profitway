@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useApp } from '../context/AppContext';
 import { 
   ShoppingBag, 
   Package, 
@@ -19,11 +20,91 @@ import {
   CreditCard, 
   Crown,
   Sparkles,
-  Lock
+  Lock,
+  X,
+  Store,
+  Clock,
+  UserCheck
 } from 'lucide-react';
 
-export const LandingPage = ({ onGetStarted, onTryDemo, onSuperAdmin }) => {
+export const LandingPage = () => {
+  const { login, registerTenant } = useApp();
   const [billingCycle, setBillingCycle] = useState('monthly');
+  
+  // Auth Modal States: null, 'login', 'signup', 'superadmin', 'pending_notice'
+  const [authModal, setAuthModal] = useState(null);
+
+  // Form States
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  const [signupForm, setSignupForm] = useState({
+    shop_name: '',
+    owner_name: '',
+    email: '',
+    password: '',
+    phone: ''
+  });
+  const [signupError, setSignupError] = useState('');
+
+  const [registeredNotice, setRegisteredNotice] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // Auto detect if URL is /superadmin
+  useEffect(() => {
+    if (window.location.pathname.toLowerCase().includes('/superadmin') || window.location.hash.toLowerCase().includes('/superadmin')) {
+      setAuthModal('superadmin');
+      setLoginEmail('admin@profitway.bd');
+    }
+  }, []);
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setAuthLoading(true);
+
+    const res = await login(loginEmail, loginPassword);
+    setAuthLoading(false);
+
+    if (!res.success) {
+      setLoginError(res.error);
+    } else {
+      setAuthModal(null);
+    }
+  };
+
+  const handleSignupSubmit = async (e) => {
+    e.preventDefault();
+    setSignupError('');
+    setAuthLoading(true);
+
+    const res = await registerTenant(
+      signupForm.shop_name,
+      signupForm.owner_name,
+      signupForm.email,
+      signupForm.password,
+      1
+    );
+    setAuthLoading(false);
+
+    if (res.success) {
+      setRegisteredNotice({
+        shop_name: res.shop_name,
+        shop_code: res.shop_code,
+        message: res.message
+      });
+      setAuthModal('pending_notice');
+    } else {
+      setSignupError(res.error);
+    }
+  };
+
+  const handleDemoShopLogin = async () => {
+    setAuthLoading(true);
+    await login('owner@demostore.com', 'demo123');
+    setAuthLoading(false);
+  };
 
   return (
     <div style={{ background: '#0a0f1d', color: '#f8fafc', minHeight: '100vh', fontFamily: "'Outfit', 'Segoe UI', sans-serif" }}>
@@ -45,13 +126,20 @@ export const LandingPage = ({ onGetStarted, onTryDemo, onSuperAdmin }) => {
             </div>
           </div>
 
+          {/* Customer Focus Navigation Header Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <button onClick={onSuperAdmin} style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#cbd5e1', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Lock size={14} color="#a855f7" />
-              <span>Super Admin</span>
+            <button 
+              onClick={() => { setAuthModal('login'); setLoginEmail(''); setLoginPassword(''); setLoginError(''); }}
+              style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '800', cursor: 'pointer' }}
+            >
+              Shop Owner Login
             </button>
-            <button onClick={onGetStarted} style={{ background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 6px 16px rgba(99, 102, 241, 0.35)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>Shop Owner Login</span>
+
+            <button 
+              onClick={() => { setAuthModal('signup'); setSignupError(''); }}
+              style={{ background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', padding: '10px 22px', borderRadius: '10px', fontSize: '13px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 6px 16px rgba(99, 102, 241, 0.35)', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span>Create Free Shop Account</span>
               <ArrowRight size={14} />
             </button>
           </div>
@@ -76,12 +164,18 @@ export const LandingPage = ({ onGetStarted, onTryDemo, onSuperAdmin }) => {
         </p>
 
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <button onClick={onGetStarted} style={{ background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', padding: '16px 36px', borderRadius: '14px', fontSize: '16px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 12px 28px rgba(99, 102, 241, 0.4)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button 
+            onClick={() => setAuthModal('signup')} 
+            style={{ background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', padding: '16px 36px', borderRadius: '14px', fontSize: '16px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 12px 28px rgba(99, 102, 241, 0.4)', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
             <span>Start Free 14-Day Trial</span>
             <ArrowRight size={18} />
           </button>
 
-          <button onClick={onTryDemo} style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button 
+            onClick={handleDemoShopLogin} 
+            style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
             <Zap size={18} />
             <span>Try Live Demo Shop</span>
           </button>
@@ -90,7 +184,7 @@ export const LandingPage = ({ onGetStarted, onTryDemo, onSuperAdmin }) => {
         <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '32px', fontSize: '13px', color: '#64748b' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Check size={14} color="#10b981" /> No Credit Card Required</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Check size={14} color="#10b981" /> Setup in 30 Seconds</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Check size={14} color="#10b981" /> bKash, Nagad & Card Ready</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Check size={14} color="#10b981" /> Super Admin Approval Protected</span>
         </div>
       </header>
 
@@ -248,7 +342,7 @@ export const LandingPage = ({ onGetStarted, onTryDemo, onSuperAdmin }) => {
                 <div>✓ Profit & Loss Financial Audit</div>
               </div>
             </div>
-            <button onClick={onGetStarted} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Start 14-Day Free Trial</button>
+            <button onClick={() => setAuthModal('signup')} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Create Free Shop Account</button>
           </div>
 
           {/* Pro Plan */}
@@ -267,7 +361,7 @@ export const LandingPage = ({ onGetStarted, onTryDemo, onSuperAdmin }) => {
                 <div>✓ Courier Returns Date Audit</div>
               </div>
             </div>
-            <button onClick={onGetStarted} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.35)' }}>Start 14-Day Free Trial</button>
+            <button onClick={() => setAuthModal('signup')} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.35)' }}>Create Free Shop Account</button>
           </div>
 
           {/* Enterprise Plan */}
@@ -284,7 +378,7 @@ export const LandingPage = ({ onGetStarted, onTryDemo, onSuperAdmin }) => {
                 <div>✓ Priority 24/7 Support Desk</div>
               </div>
             </div>
-            <button onClick={onGetStarted} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Contact Sales</button>
+            <button onClick={() => setAuthModal('signup')} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer' }}>Create Free Shop Account</button>
           </div>
         </div>
       </section>
@@ -294,6 +388,243 @@ export const LandingPage = ({ onGetStarted, onTryDemo, onSuperAdmin }) => {
         <p>© 2026 Profitway Platform (profitway.bd). All rights reserved.</p>
         <p style={{ marginTop: '6px' }}>Designed & Engineered for High-Growth Retail & Wholesale Businesses in Bangladesh.</p>
       </footer>
+
+      {/* 🔐 AUTH MODAL SUITE (Login, Sign Up, Super Admin & Pending Approval Notice) */}
+      {authModal && (
+        <div className="modal-overlay" style={{ background: 'rgba(10, 15, 29, 0.85)', backdropFilter: 'blur(10px)', zIndex: 1000 }}>
+          <div className="modal-content" style={{ maxWidth: '440px', background: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '20px', padding: '28px', color: '#fff' }}>
+            
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {authModal === 'superadmin' ? <Lock size={20} color="#a855f7" /> : <Store size={20} color="#6366f1" />}
+                <h3 style={{ fontSize: '18px', fontWeight: '800' }}>
+                  {authModal === 'login' && 'Shop Owner Login'}
+                  {authModal === 'signup' && 'Create Free Shop Account'}
+                  {authModal === 'superadmin' && 'Super Admin Secret Portal'}
+                  {authModal === 'pending_notice' && 'Signup Request Submitted'}
+                </h3>
+              </div>
+
+              <button onClick={() => setAuthModal(null)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* --- TAB 1: SHOP OWNER LOGIN --- */}
+            {authModal === 'login' && (
+              <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {loginError && (
+                  <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', fontSize: '12px', color: '#f87171' }}>
+                    {loginError}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Email Address</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    required
+                    placeholder="owner@demostore.com"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Password</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    required
+                    placeholder="••••••••"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', borderRadius: '10px', fontWeight: '800', background: 'linear-gradient(90deg, #6366f1, #4f46e5)' }} disabled={authLoading}>
+                  {authLoading ? 'Logging in...' : 'Sign In to Shop Dashboard'}
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '13px', color: '#94a3b8' }}>
+                  Don't have a shop account yet?{' '}
+                  <span onClick={() => { setAuthModal('signup'); setSignupError(''); }} style={{ color: '#818cf8', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline' }}>
+                    Sign Up Free
+                  </span>
+                </div>
+              </form>
+            )}
+
+            {/* --- TAB 2: SHOP OWNER SIGN UP --- */}
+            {authModal === 'signup' && (
+              <form onSubmit={handleSignupSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {signupError && (
+                  <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', fontSize: '12px', color: '#f87171' }}>
+                    {signupError}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Shop / Business Name *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. Profitway Electronics & Wholesale"
+                    value={signupForm.shop_name}
+                    onChange={(e) => setSignupForm({ ...signupForm, shop_name: e.target.value })}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Shop Owner Full Name *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. Md. Shahriar"
+                    value={signupForm.owner_name}
+                    onChange={(e) => setSignupForm({ ...signupForm, owner_name: e.target.value })}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1' }}>Email Address *</label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      required
+                      placeholder="owner@mystore.com"
+                      value={signupForm.email}
+                      onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })}
+                      style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#cbd5e1' }}>Phone Number</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="+880 1711 000111"
+                      value={signupForm.phone}
+                      onChange={(e) => setSignupForm({ ...signupForm, phone: e.target.value })}
+                      style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Password *</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    required
+                    placeholder="••••••••"
+                    value={signupForm.password}
+                    onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  />
+                </div>
+
+                <div style={{ fontSize: '11px', color: '#94a3b8', background: '#1e293b', padding: '8px 12px', borderRadius: '6px' }}>
+                  📌 <strong>Approval Safeguard:</strong> Your account registration will be sent to Super Admin for instant verification & approval.
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', borderRadius: '10px', fontWeight: '800', background: 'linear-gradient(90deg, #6366f1, #4f46e5)' }} disabled={authLoading}>
+                  {authLoading ? 'Submitting Registration...' : 'Submit Registration Request'}
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '13px', color: '#94a3b8' }}>
+                  Already have an account?{' '}
+                  <span onClick={() => { setAuthModal('login'); setLoginError(''); }} style={{ color: '#818cf8', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline' }}>
+                    Sign In
+                  </span>
+                </div>
+              </form>
+            )}
+
+            {/* --- TAB 3: SUPER ADMIN SECRET PORTAL LOGIN --- */}
+            {authModal === 'superadmin' && (
+              <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '10px 14px', borderRadius: '8px', fontSize: '12px', color: '#c084fc' }}>
+                  🔒 <strong>Super Admin Portal Access:</strong> Log in to review pending signups, manage master shop names, and approve subscriptions.
+                </div>
+
+                {loginError && (
+                  <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', fontSize: '12px', color: '#f87171' }}>
+                    {loginError}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Super Admin Email</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    required
+                    placeholder="admin@profitway.bd"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Password</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    required
+                    placeholder="••••••••"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', borderRadius: '10px', fontWeight: '800', background: 'linear-gradient(90deg, #a855f7, #7c3aed)' }} disabled={authLoading}>
+                  {authLoading ? 'Authenticating Super Admin...' : 'Login to Super Admin SaaS Controller'}
+                </button>
+              </form>
+            )}
+
+            {/* --- TAB 4: SIGNUP PENDING APPROVAL NOTICE MODAL --- */}
+            {authModal === 'pending_notice' && registeredNotice && (
+              <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#f59e0b' }}>
+                  <Clock size={32} />
+                </div>
+
+                <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#ffffff', marginBottom: '8px' }}>
+                  Registration Submitted!
+                </h4>
+
+                <p style={{ fontSize: '13px', color: '#94a3b8', lineHeight: '1.6', marginBottom: '16px' }}>
+                  Shop <strong>{registeredNotice.shop_name}</strong> (Code: <strong style={{ color: '#818cf8' }}>{registeredNotice.shop_code}</strong>) has been registered.
+                </p>
+
+                <div style={{ background: '#1e293b', border: '1px solid #334155', padding: '14px', borderRadius: '10px', fontSize: '12px', color: '#cbd5e1', textAlign: 'left', lineHeight: '1.5', marginBottom: '20px' }}>
+                  📌 <strong>Next Step:</strong> Your account is currently <strong>Pending Super Admin Approval</strong>. Once approved, an activation email will be sent to your email address and you can log in immediately.
+                </div>
+
+                <button onClick={() => setAuthModal(null)} className="btn btn-primary" style={{ width: '100%', padding: '12px', borderRadius: '10px', fontWeight: '800' }}>
+                  Close & Return to Home
+                </button>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

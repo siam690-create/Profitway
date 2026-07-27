@@ -121,7 +121,7 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Register Tenant Action
+  // Register Tenant Action (Requires Super Admin Approval)
   const registerTenant = async (shopName, ownerName, email, password, planId) => {
     try {
       setLoading(true);
@@ -133,15 +133,13 @@ export const AppProvider = ({ children }) => {
       const data = await res.json();
 
       if (res.ok) {
-        setToken(data.token);
-        setUser(data.user);
-        if (data.tenant) data.tenant.currency = '৳';
-        setTenant(data.tenant);
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        localStorage.setItem('tenant', JSON.stringify(data.tenant));
-        setView('dashboard');
-        return { success: true };
+        return { 
+          success: true, 
+          requires_approval: true, 
+          message: data.message, 
+          shop_name: data.shop_name, 
+          shop_code: data.shop_code 
+        };
       } else {
         return { success: false, error: data.error };
       }
