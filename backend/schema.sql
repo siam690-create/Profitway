@@ -27,7 +27,7 @@ CREATE TABLE `tenants` (
   `phone` VARCHAR(30) DEFAULT NULL,
   `logo_url` VARCHAR(255) DEFAULT NULL,
   `currency` VARCHAR(10) DEFAULT '৳',
-  `subscription_status` ENUM('trial', 'active', 'past_due', 'cancelled') DEFAULT 'trial',
+  `subscription_status` VARCHAR(50) DEFAULT 'pending_approval',
   `trial_ends_at` DATETIME NOT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

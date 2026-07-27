@@ -139,7 +139,7 @@ export const LandingPage = () => {
               onClick={() => { setAuthModal('signup'); setSignupError(''); }}
               style={{ background: 'linear-gradient(90deg, #6366f1, #4f46e5)', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '10px', fontSize: '14px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 6px 16px rgba(99, 102, 241, 0.35)', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <span>Sign Up</span>
+              <span>Create Shop Account</span>
               <ArrowRight size={15} />
             </button>
           </div>
@@ -400,7 +400,7 @@ export const LandingPage = () => {
                 {authModal === 'superadmin' ? <Lock size={20} color="#a855f7" /> : <Store size={20} color="#6366f1" />}
                 <h3 style={{ fontSize: '18px', fontWeight: '800' }}>
                   {authModal === 'login' && 'Account Login'}
-                  {authModal === 'signup' && 'Create Free Shop Account'}
+                  {authModal === 'signup' && 'Create Shop Account'}
                   {authModal === 'superadmin' && 'Super Admin Secret Portal'}
                   {authModal === 'pending_notice' && 'Signup Request Submitted'}
                 </h3>
