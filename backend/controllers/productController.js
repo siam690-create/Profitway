@@ -230,3 +230,134 @@ exports.deleteProduct = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Bulk Import Products from Excel / CSV
+exports.bulkImportProducts = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { products } = req.body;
+
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ error: 'Valid products array is required for bulk import.' });
+    }
+
+    // 1. Check Product Plan Limit
+    const [countRows] = await connection.query('SELECT COUNT(id) AS total FROM products WHERE tenant_id = ?', [tenantId]);
+    const currentCount = Number(countRows[0].total || 0);
+
+    const [tenantRows] = await connection.query(`
+      SELECT t.subscription_status, p.max_products 
+      FROM tenants t
+      LEFT JOIN subscriptions s ON s.tenant_id = t.id AND s.status = 'active'
+      LEFT JOIN plans p ON s.plan_id = p.id
+      WHERE t.id = ?
+    `, [tenantId]);
+
+    const maxLimit = tenantRows.length > 0 && tenantRows[0].max_products ? Number(tenantRows[0].max_products) : 2500;
+    if (currentCount + products.length > maxLimit) {
+      return res.status(400).json({ 
+        error: `Bulk import exceeds your subscription plan product limit (${maxLimit} max products). You currently have ${currentCount} products.` 
+      });
+    }
+
+    await connection.beginTransaction();
+
+    // 2. Load existing categories map
+    const [existingCategories] = await connection.query('SELECT id, LOWER(name) AS lower_name, name FROM categories WHERE tenant_id = ?', [tenantId]);
+    const categoryMap = new Map();
+    existingCategories.forEach(cat => categoryMap.set(cat.lower_name, cat.id));
+
+    let createdCategoriesCount = 0;
+    let importedProductsCount = 0;
+
+    // 3. Process Products
+    for (let i = 0; i < products.length; i++) {
+      const prod = products[i];
+      const rawName = prod.name ? String(prod.name).trim() : '';
+      const rawSelling = Number(prod.selling_price || 0);
+      const rawCost = Number(prod.cost_price || 0);
+      const rawStock = Number(prod.stock_quantity || 0);
+      const rawAlert = Number(prod.low_stock_threshold || prod.min_stock_alert || 5);
+      const rawUnit = prod.unit ? String(prod.unit).trim() : 'Pcs';
+      const rawLocation = prod.location ? String(prod.location).trim() : null;
+      const rawSku = prod.sku ? String(prod.sku).trim() : `SKU-${Date.now().toString().slice(-6)}-${i + 1}`;
+
+      if (!rawName || rawSelling <= 0) {
+        continue; // Skip invalid entries
+      }
+
+      // Handle Category auto-creation
+      let categoryId = null;
+      if (prod.category_name) {
+        const catNameTrim = String(prod.category_name).trim();
+        const lowerCat = catNameTrim.toLowerCase();
+        if (categoryMap.has(lowerCat)) {
+          categoryId = categoryMap.get(lowerCat);
+        } else if (catNameTrim.length > 0) {
+          const [newCatResult] = await connection.query(
+            'INSERT INTO categories (tenant_id, name, description) VALUES (?, ?, ?)',
+            [tenantId, catNameTrim, `Auto-created during bulk import`]
+          );
+          categoryId = newCatResult.insertId;
+          categoryMap.set(lowerCat, categoryId);
+          createdCategoriesCount++;
+        }
+      }
+
+      await connection.query(
+        `INSERT INTO products 
+         (tenant_id, name, sku, category_id, cost_price, selling_price, stock_quantity, low_stock_threshold, unit, location, is_combo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        [
+          tenantId,
+          rawName,
+          rawSku,
+          categoryId,
+          rawCost,
+          rawSelling,
+          rawStock,
+          rawAlert,
+          rawUnit,
+          rawLocation
+        ]
+      );
+
+      importedProductsCount++;
+    }
+
+    await connection.commit();
+
+    res.json({
+      message: `Bulk import completed successfully! ${importedProductsCount} products imported.`,
+      imported_count: importedProductsCount,
+      new_categories_created: createdCategoriesCount
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
+// Export Products List for Excel / CSV Backup
+exports.exportProducts = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const [products] = await db.query(
+      `SELECT p.name, p.sku, c.name AS category_name, p.cost_price, p.selling_price, p.stock_quantity, p.low_stock_threshold, p.unit, p.location
+       FROM products p
+       LEFT JOIN categories c ON p.category_id = c.id
+       WHERE p.tenant_id = ?
+       ORDER BY p.name ASC`,
+      [tenantId]
+    );
+
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+

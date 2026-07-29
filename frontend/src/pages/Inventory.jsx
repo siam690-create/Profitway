@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import * as XLSX from 'xlsx';
 import { useApp } from '../context/AppContext';
-import { Package, Plus, Search, Filter, AlertTriangle, Layers3, Edit2, Trash2, X, MapPin, Layers } from 'lucide-react';
+import { Package, Plus, Search, Filter, AlertTriangle, Layers3, Edit2, Trash2, X, MapPin, Layers, FileSpreadsheet, Download, Upload } from 'lucide-react';
+import { BulkImportModal } from '../components/BulkImportModal';
 
 export const Inventory = () => {
   const { products, categories, currency, formatCurrency, fetchCategories, authFetch, refreshAllData } = useApp();
@@ -8,7 +10,44 @@ export const Inventory = () => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+
+  // Export Current Products to Excel File
+  const handleExportProducts = async () => {
+    try {
+      const res = await authFetch('/api/products/export');
+      const data = await res.json();
+      if (!res.ok) return alert('Failed to export stock data.');
+
+      if (!data || data.length === 0) {
+        return alert('No products available in stock to export.');
+      }
+
+      const exportRows = data.map(p => ({
+        'Product Name': p.name,
+        'SKU': p.sku,
+        'Category': p.category_name || 'General',
+        'Cost Price (Buy)': Number(p.cost_price),
+        'Selling Price': Number(p.selling_price),
+        'Stock Quantity': Number(p.stock_quantity),
+        'Low Stock Warning': Number(p.low_stock_threshold || 5),
+        'Unit': p.unit || 'Pcs',
+        'Storage Location': p.location || ''
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      worksheet['!cols'] = [
+        { wch: 32 }, { wch: 18 }, { wch: 15 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 18 }, { wch: 10 }, { wch: 18 }
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock_Products');
+      XLSX.writeFile(workbook, `Profitway_Stock_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      alert(`Export error: ${err.message}`);
+    }
+  };
 
   // Category Manager State inside Inventory
   const [catName, setCatName] = useState('');
@@ -238,11 +277,23 @@ export const Inventory = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {/* Product Categories Manager Modal Button */}
-          <button onClick={() => setShowCategoryModal(true)} className="btn btn-secondary">
+          <button onClick={() => setShowCategoryModal(true)} className="btn btn-secondary" title="Manage Categories">
             <Layers size={16} />
-            <span>Categories Manager</span>
+            <span>Categories</span>
+          </button>
+
+          {/* Bulk Export Excel Button */}
+          <button onClick={handleExportProducts} className="btn btn-secondary" title="Export Current Stock to Excel File">
+            <Download size={16} />
+            <span>Export Stock</span>
+          </button>
+
+          {/* Bulk Import Excel/CSV Button */}
+          <button onClick={() => setShowBulkImportModal(true)} className="btn btn-secondary" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', border: '1px solid rgba(99, 102, 241, 0.3)', fontWeight: '700' }}>
+            <Upload size={16} />
+            <span>Import Excel / CSV</span>
           </button>
 
           <button onClick={handleOpenAddModal} className="btn btn-primary">
@@ -682,6 +733,16 @@ export const Inventory = () => {
           </div>
         </div>
       )}
+
+      {/* 📥 Bulk Excel / CSV Import Modal */}
+      <BulkImportModal
+        isOpen={showBulkImportModal}
+        onClose={() => setShowBulkImportModal(false)}
+        onImportSuccess={() => {
+          refreshAllData();
+        }}
+        authFetch={authFetch}
+      />
     </div>
   );
 };
