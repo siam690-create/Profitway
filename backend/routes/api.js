@@ -22,7 +22,15 @@ const settingController = require('../controllers/settingController');
 const supportController = require('../controllers/supportController');
 const subscriptionController = require('../controllers/subscriptionController');
 
+const storeApiKeyController = require('../controllers/storeApiKeyController');
+const externalOrderController = require('../controllers/externalOrderController');
+
 const { authenticate, requireSuperAdmin, checkActiveSubscription } = require('../middleware/authMiddleware');
+
+// -------------------------------------------------------------
+// PUBLIC EXTERNAL ORDER INGESTION API (AUTHENTICATED VIA API KEY)
+// -------------------------------------------------------------
+router.post('/v1/orders/import', externalOrderController.importExternalOrder);
 
 // -------------------------------------------------------------
 // PUBLIC AUTHENTICATION & LANDING APIS
@@ -74,6 +82,12 @@ router.get('/analytics/products', analyticsController.getProductAnalytics);
 // Shop Settings & Print Customization APIs
 router.get('/settings', settingController.getSettings);
 router.put('/settings', checkActiveSubscription, settingController.updateSettings);
+
+// Store API Keys Management APIs (External Order Ingestion Setup)
+router.get('/store-api-keys', storeApiKeyController.getStoreApiKeys);
+router.post('/store-api-keys', checkActiveSubscription, storeApiKeyController.createStoreApiKey);
+router.patch('/store-api-keys/:id/toggle', checkActiveSubscription, storeApiKeyController.toggleStoreApiKey);
+router.delete('/store-api-keys/:id', checkActiveSubscription, storeApiKeyController.deleteStoreApiKey);
 
 // Subscription & Plan Status APIs
 router.get('/subscription/my-plan', subscriptionController.getMySubscription);

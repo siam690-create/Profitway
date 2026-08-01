@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { ShieldCheck, Server, Settings2, Save, Info, Lock, Printer, FileText, CheckSquare, Eye, Sliders } from 'lucide-react';
+import { ShieldCheck, Server, Settings2, Save, Info, Lock, Printer, FileText, CheckSquare, Eye, Sliders, Globe } from 'lucide-react';
+import { StoreApiKeysManager } from '../components/StoreApiKeysManager';
 
 export const Settings = () => {
   const { tenant, shopSettings, fetchSettings, authFetch, refreshAllData } = useApp();
@@ -105,7 +106,7 @@ export const Settings = () => {
       </div>
 
       {/* Sub Tabs Bar */}
-      <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+      <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', flexWrap: 'wrap' }}>
         <button
           onClick={() => setActiveTab('store')}
           className={`btn ${activeTab === 'store' ? 'btn-primary' : 'btn-secondary'}`}
@@ -117,6 +118,13 @@ export const Settings = () => {
           className={`btn ${activeTab === 'receipt' ? 'btn-primary' : 'btn-secondary'}`}
         >
           🖨️ Paper Sizes & Header/Footer Display Toggles
+        </button>
+        <button
+          onClick={() => setActiveTab('apikeys')}
+          className={`btn ${activeTab === 'apikeys' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ background: activeTab === 'apikeys' ? 'linear-gradient(90deg, #6366f1, #4f46e5)' : undefined }}
+        >
+          🌐 Multi-Store Ingestion API Keys
         </button>
       </div>
 
@@ -459,6 +467,11 @@ export const Settings = () => {
             </button>
           </div>
         </form>
+      )}
+
+      {/* --- TAB 3: MULTI-STORE INGESTION API KEYS MANAGER --- */}
+      {activeTab === 'apikeys' && (
+        <StoreApiKeysManager />
       )}
     </div>
   );

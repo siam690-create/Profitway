@@ -104,8 +104,21 @@ CREATE TABLE `products` (
   FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 6.5 Store API Keys Table (Multi-Tenant External Order Ingestion)
+CREATE TABLE IF NOT EXISTS `store_api_keys` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `tenant_id` INT NOT NULL,
+  `store_name` VARCHAR(150) NOT NULL,
+  `store_domain` VARCHAR(255) DEFAULT NULL,
+  `api_key` VARCHAR(100) NOT NULL UNIQUE,
+  `is_active` TINYINT(1) DEFAULT 1,
+  `notes` TEXT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 7. Sales Table (Multi-Tenant)
-CREATE TABLE `sales` (
+CREATE TABLE IF NOT EXISTS `sales` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `tenant_id` INT NOT NULL,
   `invoice_no` VARCHAR(50) NOT NULL,
@@ -116,9 +129,17 @@ CREATE TABLE `sales` (
   `payment_method` VARCHAR(50) DEFAULT 'Cash',
   `notes` TEXT,
   `sale_date` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `store_api_key_id` INT DEFAULT NULL,
+  `source_website` VARCHAR(150) DEFAULT NULL,
+  `external_order_id` VARCHAR(100) DEFAULT NULL,
+  `customer_phone` VARCHAR(50) DEFAULT NULL,
+  `customer_email` VARCHAR(150) DEFAULT NULL,
+  `shipping_address` TEXT DEFAULT NULL,
+  `raw_payload` JSON DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY `tenant_invoice_unique` (`tenant_id`, `invoice_no`),
-  FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE CASCADE
+  FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`store_api_key_id`) REFERENCES `store_api_keys`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 8. Sale Items Table (Multi-Tenant)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Search, ShoppingBag, Calendar, Eye, Printer, Filter, CreditCard, DollarSign } from 'lucide-react';
+import { Search, ShoppingBag, Calendar, Eye, Printer, Filter, CreditCard, DollarSign, Globe } from 'lucide-react';
 import { ReceiptModal } from '../components/ReceiptModal';
 
 export const Orders = () => {
@@ -133,7 +133,20 @@ export const Orders = () => {
                 filteredSales.map(sale => (
                   <tr key={sale.id}>
                     <td>
-                      <strong style={{ fontSize: '14px', color: 'var(--accent-primary)' }}>{sale.invoice_no}</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <strong style={{ fontSize: '14px', color: 'var(--accent-primary)' }}>{sale.invoice_no}</strong>
+                        {sale.source_website && (
+                          <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '800' }}>
+                            <Globe size={11} />
+                            <span>{sale.source_website}</span>
+                          </span>
+                        )}
+                      </div>
+                      {sale.external_order_id && (
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
+                          Ext ID: #{sale.external_order_id}
+                        </span>
+                      )}
                     </td>
                     <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                       {new Date(sale.sale_date).toLocaleString()}
