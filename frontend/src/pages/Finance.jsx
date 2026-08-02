@@ -103,9 +103,12 @@ export const Finance = () => {
     }
   };
 
-  const handleOpenPawnaAudit = async (pawnaId) => {
+  const handleOpenPawnaAudit = async (pawnaItem) => {
     try {
-      const res = await authFetch(`/api/finance/receivables/${pawnaId}/audit`);
+      const sampleId = typeof pawnaItem === 'object' ? pawnaItem.sample_id : pawnaItem;
+      const partyName = typeof pawnaItem === 'object' ? pawnaItem.party_name : '';
+      const url = `/api/finance/receivables/${sampleId}/audit?party_name=${encodeURIComponent(partyName)}`;
+      const res = await authFetch(url);
       const data = await res.json();
       if (res.ok) setPawnaAuditData(data);
     } catch (err) {
@@ -274,16 +277,23 @@ export const Finance = () => {
     e.preventDefault();
     if (!showCollectPawnaModal) return;
     try {
-      const res = await authFetch(`/api/finance/receivables/${showCollectPawnaModal.id}/collect`, {
+      const res = await authFetch(`/api/finance/receivables/${showCollectPawnaModal.sample_id || showCollectPawnaModal.id}/collect`, {
         method: 'POST',
-        body: JSON.stringify({ collection_amount: collectPawnaAmt, account_id: collectPawnaAccId })
+        body: JSON.stringify({
+          collection_amount: collectPawnaAmt,
+          account_id: collectPawnaAccId,
+          party_name: showCollectPawnaModal.party_name
+        })
       });
+      const data = await res.json();
       if (res.ok) {
         setShowCollectPawnaModal(null);
         setCollectPawnaAmt('');
         setCollectPawnaAccId('');
         fetchFinance();
-        alert('Pawna collection processed successfully!');
+        alert(data.message || 'Pawna collection recorded & account balance updated!');
+      } else {
+        alert(`Error: ${data.error}`);
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
@@ -534,81 +544,118 @@ export const Finance = () => {
       )}
 
       {/* 2. Pawna / Receivables Section */}
-      {activeSubTab === 'pawna' && (
-        <div className="glass-card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Customer & Courier Pawna Dues (পাওনা খাত)</h3>
-            <button onClick={() => setShowPawnaModal(true)} className="btn btn-success btn-sm">
-              <Plus size={15} />
-              <span>+ Record New Pawna</span>
-            </button>
-          </div>
+      {activeSubTab === 'pawna' && (() => {
+        // Group Pawna receivables by Customer / Party Name
+        const groupedReceivablesMap = new Map();
+        receivables.forEach(r => {
+          const partyKey = (r.party_name || 'Walk-in Customer').trim();
+          if (!groupedReceivablesMap.has(partyKey)) {
+            groupedReceivablesMap.set(partyKey, {
+              party_name: partyKey,
+              party_type: r.party_type || 'customer',
+              total_amount: 0,
+              amount_collected: 0,
+              pending_pawna: 0,
+              entries: [],
+              latest_date: r.created_at || r.due_date,
+              sample_id: r.id
+            });
+          }
+          const partyObj = groupedReceivablesMap.get(partyKey);
+          const total = Number(r.total_amount || 0);
+          const collected = Number(r.amount_collected || 0);
+          const pending = Math.max(0, total - collected);
 
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Title & Description</th>
-                  <th>Party Name & Type</th>
-                  <th>Total Due</th>
-                  <th>Collected</th>
-                  <th>Pending Dues</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receivables.length === 0 ? (
+          partyObj.total_amount += total;
+          partyObj.amount_collected += collected;
+          partyObj.pending_pawna += pending;
+          partyObj.entries.push(r);
+          if (new Date(r.created_at) > new Date(partyObj.latest_date)) {
+            partyObj.latest_date = r.created_at;
+          }
+        });
+
+        const consolidatedReceivables = Array.from(groupedReceivablesMap.values());
+
+        return (
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Customer & Personal Pawna Dues (পাওনা খাত)</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Consolidated by Customer / Borrower Name. Click History to view complete Pawna addition & collection ledger.
+                </p>
+              </div>
+              <button onClick={() => setShowPawnaModal(true)} className="btn btn-success btn-sm">
+                <Plus size={15} />
+                <span>+ Record New Pawna</span>
+              </button>
+            </div>
+
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                      No Pawna (Receivable) records found.
-                    </td>
+                    <th>Customer / Person Name</th>
+                    <th>Type</th>
+                    <th>Total Pawna Due</th>
+                    <th>Total Collected</th>
+                    <th>Pending Pawna</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ) : (
-                  receivables.map(r => {
-                    const pending = Number(r.total_amount) - Number(r.amount_collected);
-                    return (
-                      <tr key={r.id}>
-                        <td>
-                          <strong>{r.title}</strong>
-                          {r.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.notes}</div>}
-                        </td>
+                </thead>
+                <tbody>
+                  {consolidatedReceivables.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        No Pawna (Receivable) records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    consolidatedReceivables.map((r, idx) => (
+                      <tr key={idx}>
                         <td>
                           <strong>{r.party_name}</strong>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>{r.party_type}</span>
-                        </td>
-                        <td style={{ fontWeight: '600' }}>{currency}{Number(r.total_amount).toFixed(2)}</td>
-                        <td style={{ color: 'var(--success)' }}>{currency}{Number(r.amount_collected).toFixed(2)}</td>
-                        <td style={{ fontWeight: '700', color: pending > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                          {currency}{pending.toFixed(2)}
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {r.entries.length} Pawna Record{r.entries.length > 1 ? 's' : ''} (Wholesale / Dhar)
+                          </div>
                         </td>
                         <td>
-                          <span className={`badge ${r.status === 'collected' ? 'badge-success' : 'badge-warning'}`}>
-                            {r.status.toUpperCase()}
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{r.party_type}</span>
+                        </td>
+                        <td style={{ fontWeight: '600' }}>{currency}{r.total_amount.toFixed(2)}</td>
+                        <td style={{ color: 'var(--success)' }}>{currency}{r.amount_collected.toFixed(2)}</td>
+                        <td style={{ fontWeight: '700', color: r.pending_pawna > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          {currency}{r.pending_pawna.toFixed(2)}
+                        </td>
+                        <td>
+                          <span className={`badge ${r.pending_pawna === 0 ? 'badge-success' : 'badge-warning'}`}>
+                            {r.pending_pawna === 0 ? 'COLLECTED' : 'PENDING'}
                           </span>
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={() => handleOpenPawnaAudit(r.id)} className="btn btn-secondary btn-sm" title="View Full History Statement">
+                            <button onClick={() => handleOpenPawnaAudit(r)} className="btn btn-secondary btn-sm" title="View Full History Statement">
                               <Eye size={14} />
                               <span>History</span>
                             </button>
-                            {pending > 0 && (
-                              <button onClick={() => { setShowCollectPawnaModal(r); setCollectPawnaAmt(pending); }} className="btn btn-success btn-sm">
+                            {r.pending_pawna > 0 && (
+                              <button onClick={() => { setShowCollectPawnaModal(r); setCollectPawnaAmt(r.pending_pawna); }} className="btn btn-success btn-sm">
                                 Collect Money
                               </button>
                             )}
                           </div>
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 3. Dena / Liabilities Section */}
       {activeSubTab === 'dena' && (() => {
@@ -1131,11 +1178,11 @@ export const Finance = () => {
       {/* 2. Pawna Audit History & Statement Modal */}
       {pawnaAuditData && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '780px' }}>
+          <div className="modal-content" style={{ maxWidth: '850px' }}>
             <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Customer Pawna Statement & Audit Trail</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Party: {pawnaAuditData.receivable.party_name}</span>
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Customer Pawna Statement & Audit Trail — {pawnaAuditData.party_name}</h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Consolidated Ledger for {pawnaAuditData.party_name}</span>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={handlePrintStatement} className="btn btn-secondary btn-sm">
@@ -1146,44 +1193,79 @@ export const Finance = () => {
               </div>
             </div>
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
-                <div>Customer Name: <strong style={{ display: 'block', fontSize: '15px' }}>{pawnaAuditData.receivable.party_name}</strong></div>
-                <div>Total Pawna: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--text-primary)' }}>{currency}{Number(pawnaAuditData.receivable.total_amount).toFixed(2)}</strong></div>
-                <div>Collected: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--success)' }}>{currency}{Number(pawnaAuditData.receivable.amount_collected).toFixed(2)}</strong></div>
-                <div>Pending Pawna: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--danger)' }}>{currency}{(Number(pawnaAuditData.receivable.total_amount) - Number(pawnaAuditData.receivable.amount_collected)).toFixed(2)}</strong></div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Summary Banner */}
+              {(() => {
+                const recList = pawnaAuditData.receivables || [pawnaAuditData.receivable];
+                const totalPawna = recList.reduce((sum, r) => sum + Number(r.total_amount || 0), 0);
+                const totalCollected = recList.reduce((sum, r) => sum + Number(r.amount_collected || 0), 0);
+                const pendingPawna = Math.max(0, totalPawna - totalCollected);
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
+                    <div>Customer / Person Name: <strong style={{ display: 'block', fontSize: '15px' }}>{pawnaAuditData.party_name}</strong></div>
+                    <div>Total Pawna Added: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--text-primary)' }}>{currency}{totalPawna.toFixed(2)}</strong></div>
+                    <div>Total Amount Collected: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--success)' }}>{currency}{totalCollected.toFixed(2)}</strong></div>
+                    <div>Pending Pawna Dues: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--danger)' }}>{currency}{pendingPawna.toFixed(2)}</strong></div>
+                  </div>
+                );
+              })()}
+
+              {/* 1. Pawna Addition History */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px', color: 'var(--success)' }}>
+                  📌 Pawna Addition History (কখন কত টাকা পাওনা যোগ হয়েছে - Wholesale / Dhar)
+                </h4>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Date Added</th>
+                      <th>Title / Order Description</th>
+                      <th>Total Pawna</th>
+                      <th>Collected</th>
+                      <th>Pending</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(!(pawnaAuditData.receivables || [pawnaAuditData.receivable]) || (pawnaAuditData.receivables || [pawnaAuditData.receivable]).length === 0) ? (
+                      <tr>
+                        <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                          No Pawna records found.
+                        </td>
+                      </tr>
+                    ) : (
+                      (pawnaAuditData.receivables || [pawnaAuditData.receivable]).map((r, idx) => {
+                        const pending = Number(r.total_amount) - Number(r.amount_collected);
+                        return (
+                          <tr key={idx}>
+                            <td style={{ fontSize: '12px' }}>{new Date(r.created_at || r.due_date).toLocaleString()}</td>
+                            <td>
+                              <strong>{r.title}</strong>
+                              {r.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.notes}</div>}
+                            </td>
+                            <td style={{ fontWeight: '600' }}>{currency}{Number(r.total_amount).toFixed(2)}</td>
+                            <td style={{ color: 'var(--success)' }}>{currency}{Number(r.amount_collected).toFixed(2)}</td>
+                            <td style={{ fontWeight: '700', color: pending > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                              {currency}{pending.toFixed(2)}
+                            </td>
+                            <td>
+                              <span className={`badge ${r.status === 'collected' ? 'badge-success' : 'badge-danger'}`}>
+                                {r.status.toUpperCase()}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
 
-              {/* Sold Items Breakdown */}
-              {pawnaAuditData.items && pawnaAuditData.items.length > 0 && (
-                <div>
-                  <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px' }}>Sold Products Breakdown (বিক্রি হওয়া প্রোডাক্টের তালিকা)</h4>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Product Name</th>
-                        <th>Qty Sold</th>
-                        <th>Unit Wholesale Price</th>
-                        <th>Line Total Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pawnaAuditData.items.map((item, idx) => (
-                        <tr key={idx}>
-                          <td><strong>{item.product_name}</strong></td>
-                          <td>{item.quantity}</td>
-                          <td>{currency}{Number(item.unit_wholesale_price || item.unit_price).toFixed(2)}</td>
-                          <td style={{ fontWeight: '700', color: 'var(--success)' }}>{currency}{Number(item.total_item_price || item.total_price).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Collection Logs Ledger */}
+              {/* 2. Collection Logs Ledger */}
               <div>
-                <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px' }}>Pawna Collection History Ledger (টাকা আদায়ের হিসাব)</h4>
+                <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px', color: 'var(--accent-primary)' }}>
+                  💳 Pawna Collection History Ledger (টাকা আদায়ের হিসাব)
+                </h4>
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -1197,16 +1279,16 @@ export const Finance = () => {
                     {(!pawnaAuditData.collection_logs || pawnaAuditData.collection_logs.length === 0) ? (
                       <tr>
                         <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
-                          No money collected against this Pawna yet.
+                          No money collected against this customer's Pawna yet.
                         </td>
                       </tr>
                     ) : (
                       pawnaAuditData.collection_logs.map(log => (
                         <tr key={log.id}>
                           <td style={{ fontSize: '12px' }}>{new Date(log.collection_date).toLocaleString()}</td>
-                          <td style={{ fontWeight: '700', color: 'var(--success)' }}>{currency}{Number(log.amount).toFixed(2)}</td>
+                          <td style={{ fontWeight: '700', color: 'var(--success)' }}>+{currency}{Number(log.amount).toFixed(2)}</td>
                           <td><strong>{log.account_name || 'Cash Box'}</strong></td>
-                          <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{log.notes || 'Collection'}</td>
+                          <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{log.notes || log.receivable_title || 'Pawna Collection'}</td>
                         </tr>
                       ))
                     )}

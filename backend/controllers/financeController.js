@@ -347,45 +347,42 @@ exports.createReceivable = async (req, res) => {
   }
 };
 
-// Collect Pawna (Receivable Collection)
+// Collect Pawna (Receivable Collection) by ID or Party Name
 exports.collectReceivable = async (req, res) => {
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
-    const { collection_amount, account_id, notes } = req.body;
+    const { collection_amount, account_id, notes, party_name } = req.body;
 
-    const collectAmt = Number(collection_amount);
+    let collectAmt = Number(collection_amount);
     if (isNaN(collectAmt) || collectAmt <= 0) {
       return res.status(400).json({ error: 'Valid collection amount is required.' });
     }
 
     await connection.beginTransaction();
 
-    const [receivables] = await connection.query(
-      'SELECT * FROM receivables WHERE id = ? AND tenant_id = ? FOR UPDATE',
-      [id, tenantId]
-    );
-
-    if (receivables.length === 0) throw new Error('Receivable record not found.');
-    const r = receivables[0];
-
-    const currentCollected = Number(r.amount_collected || 0);
-    const newCollected = currentCollected + collectAmt;
-    const totalAmt = Number(r.total_amount);
-
-    let newStatus = 'partially_collected';
-    if (newCollected >= totalAmt) {
-      newStatus = 'collected';
+    // Fetch pending receivables for party or by ID
+    let pendingReceivables = [];
+    if (party_name) {
+      const [rows] = await connection.query(
+        `SELECT * FROM receivables WHERE tenant_id = ? AND party_name = ? AND status != 'collected' ORDER BY created_at ASC FOR UPDATE`,
+        [tenantId, party_name]
+      );
+      pendingReceivables = rows;
     }
 
-    // 1. Update Receivable Record
-    await connection.query(
-      'UPDATE receivables SET amount_collected = ?, status = ? WHERE id = ? AND tenant_id = ?',
-      [newCollected, newStatus, id, tenantId]
-    );
+    if (pendingReceivables.length === 0 && id) {
+      const [rows] = await connection.query(
+        'SELECT * FROM receivables WHERE id = ? AND tenant_id = ? FOR UPDATE',
+        [id, tenantId]
+      );
+      pendingReceivables = rows;
+    }
 
-    // 2. Deposit Amount into Selected Account
+    if (pendingReceivables.length === 0) throw new Error('No pending Pawna receivable record found.');
+
+    // 1. Deposit Amount into Selected Account
     if (account_id) {
       await connection.query(
         'UPDATE finance_accounts SET balance = balance + ? WHERE id = ? AND tenant_id = ?',
@@ -393,16 +390,40 @@ exports.collectReceivable = async (req, res) => {
       );
     }
 
-    // 3. Insert Collection Log
-    await connection.query(
-      `INSERT INTO receivable_collections (tenant_id, receivable_id, amount, account_id, notes, collection_date)
-       VALUES (?, ?, ?, ?, ?, NOW())`,
-      [tenantId, id, collectAmt, account_id || null, notes || 'Pawna Collection Deposit']
-    );
+    // 2. Distribute collection across pending receivables
+    let remainingToCollect = collectAmt;
+    for (const r of pendingReceivables) {
+      if (remainingToCollect <= 0) break;
+
+      const currentCollected = Number(r.amount_collected || 0);
+      const totalAmt = Number(r.total_amount);
+      const dueOnThis = Math.max(0, totalAmt - currentCollected);
+
+      const allocation = Math.min(remainingToCollect, dueOnThis);
+      const newCollected = currentCollected + allocation;
+      const newStatus = newCollected >= totalAmt ? 'collected' : 'partially_collected';
+
+      await connection.query(
+        'UPDATE receivables SET amount_collected = ?, status = ? WHERE id = ? AND tenant_id = ?',
+        [newCollected, newStatus, r.id, tenantId]
+      );
+
+      // Insert collection log
+      await connection.query(
+        `INSERT INTO receivable_collections (tenant_id, receivable_id, amount, account_id, notes, collection_date)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
+        [tenantId, r.id, allocation, account_id || null, notes || null]
+      );
+
+      remainingToCollect -= allocation;
+    }
 
     await connection.commit();
 
-    res.json({ message: 'Receivable collection processed successfully' });
+    res.json({
+      message: `Pawna collection of ৳${collectAmt.toFixed(2)} processed successfully!`
+    });
+
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ error: error.message });
@@ -568,56 +589,69 @@ exports.getDenaAudit = async (req, res) => {
   }
 };
 
-// Get Detailed Pawna (Receivable) Audit History (Sale Items Breakdown + Collection Logs)
+// Get Detailed Pawna (Receivable) Audit History for Customer / Party
 exports.getPawnaAudit = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
+    const { party_name } = req.query;
 
-    const [receivables] = await db.query(
-      'SELECT * FROM receivables WHERE id = ? AND tenant_id = ?',
-      [id, tenantId]
-    );
+    let targetPartyName = party_name;
+
+    if (!targetPartyName && id) {
+      const [rows] = await db.query(
+        'SELECT party_name FROM receivables WHERE id = ? AND tenant_id = ?',
+        [id, tenantId]
+      );
+      if (rows.length > 0) targetPartyName = rows[0].party_name;
+    }
+
+    let receivables = [];
+    if (targetPartyName) {
+      const [rows] = await db.query(
+        'SELECT * FROM receivables WHERE party_name = ? AND tenant_id = ? ORDER BY created_at DESC',
+        [targetPartyName, tenantId]
+      );
+      receivables = rows;
+    } else {
+      const [rows] = await db.query(
+        'SELECT * FROM receivables WHERE id = ? AND tenant_id = ?',
+        [id, tenantId]
+      );
+      receivables = rows;
+    }
 
     if (receivables.length === 0) return res.status(404).json({ error: 'Pawna receivable record not found.' });
 
-    const receivable = receivables[0];
+    const partyName = targetPartyName || receivables[0].party_name;
+    const recIds = receivables.map(r => r.id);
 
     // 1. Fetch Collection Logs
-    const [collectionLogs] = await db.query(
-      `SELECT rc.*, fa.name as account_name 
-       FROM receivable_collections rc
-       LEFT JOIN finance_accounts fa ON fa.id = rc.account_id
-       WHERE rc.receivable_id = ? AND rc.tenant_id = ?
-       ORDER BY rc.collection_date DESC`,
-      [id, tenantId]
-    );
-
-    // 2. Fetch Linked Wholesale Sale & Items
-    let saleDetails = null;
-    let saleItems = [];
-
-    const codeMatch = receivable.title.match(/#WS-[A-Za-z0-9-]+/);
-    const invoiceCode = codeMatch ? codeMatch[0].replace('#', '') : null;
-
-    let [wsSales] = await db.query(
-      'SELECT * FROM wholesale_sales WHERE tenant_id = ? AND (invoice_no = ? OR customer_name = ? OR notes LIKE ?)',
-      [tenantId, invoiceCode, receivable.party_name, `%${receivable.title}%`]
-    );
-
-    if (wsSales.length > 0) {
-      saleDetails = wsSales[0];
-      const [items] = await db.query(
-        'SELECT * FROM wholesale_sale_items WHERE sale_id = ?',
-        [saleDetails.id]
+    let collectionLogs = [];
+    if (recIds.length > 0) {
+      const [logs] = await db.query(
+        `SELECT rc.*, fa.name as account_name, r.title as receivable_title 
+         FROM receivable_collections rc
+         LEFT JOIN finance_accounts fa ON fa.id = rc.account_id
+         JOIN receivables r ON r.id = rc.receivable_id
+         WHERE rc.receivable_id IN (?) AND rc.tenant_id = ?
+         ORDER BY rc.collection_date DESC`,
+        [recIds, tenantId]
       );
-      saleItems = items;
+      collectionLogs = logs;
     }
 
+    // 2. Fetch Linked Wholesale Sales for this Customer
+    const [wsSales] = await db.query(
+      'SELECT * FROM wholesale_sales WHERE tenant_id = ? AND customer_name = ? ORDER BY sale_date DESC',
+      [tenantId, partyName]
+    );
+
     res.json({
-      receivable,
-      sale: saleDetails,
-      items: saleItems,
+      party_name: partyName,
+      receivable: receivables[0],
+      receivables,
+      sales: wsSales,
       collection_logs: collectionLogs
     });
 
