@@ -70,6 +70,8 @@ export const Inventory = () => {
   const [comboItems, setComboItems] = useState([]);
   const [selectedChildId, setSelectedChildId] = useState('');
   const [childQty, setChildQty] = useState('1');
+  const [childSearchTerm, setChildSearchTerm] = useState('');
+  const [isChildSearchOpen, setIsChildSearchOpen] = useState(false);
 
   const handleOpenAddModal = () => {
     setEditingProduct(null);
@@ -130,7 +132,9 @@ export const Inventory = () => {
     ]);
 
     setSelectedChildId('');
+    setChildSearchTerm('');
     setChildQty('1');
+    setIsChildSearchOpen(false);
   };
 
   const handleRemoveChildFromCombo = (childId) => {
@@ -585,18 +589,103 @@ export const Inventory = () => {
                     </h4>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '10px', alignItems: 'flex-end', marginBottom: '12px' }}>
-                      <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Select Standard Child Product</label>
-                        <select
-                          className="form-select"
-                          value={selectedChildId}
-                          onChange={(e) => setSelectedChildId(e.target.value)}
-                        >
-                          <option value="">Select Product...</option>
-                          {products.filter(p => !p.is_combo).map(p => (
-                            <option key={p.id} value={p.id}>{p.name} (Buy Cost: {formatCurrency(p.cost_price)})</option>
-                          ))}
-                        </select>
+                      {/* Live Autocomplete Product Search Input */}
+                      <div className="form-group" style={{ margin: 0, position: 'relative' }}>
+                        <label className="form-label">Search Child Product (by Name or SKU)</label>
+                        <div style={{ position: 'relative' }}>
+                          <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="Type to search 200+ products..."
+                            value={childSearchTerm}
+                            onFocus={() => setIsChildSearchOpen(true)}
+                            onChange={(e) => {
+                              setChildSearchTerm(e.target.value);
+                              setIsChildSearchOpen(true);
+                            }}
+                            style={{ paddingLeft: '34px', paddingRight: childSearchTerm ? '28px' : '10px', fontSize: '13px' }}
+                          />
+                          {childSearchTerm && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChildSearchTerm('');
+                                setSelectedChildId('');
+                                setIsChildSearchOpen(true);
+                              }}
+                              style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '14px', fontWeight: '800' }}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Live Floating Results Menu */}
+                        {isChildSearchOpen && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              zIndex: 9999,
+                              background: 'var(--bg-primary)',
+                              border: '1px solid var(--accent-primary)',
+                              borderRadius: '10px',
+                              maxHeight: '220px',
+                              overflowY: 'auto',
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+                              marginTop: '4px'
+                            }}
+                          >
+                            {products.filter(p => !p.is_combo && (
+                              p.name.toLowerCase().includes(childSearchTerm.toLowerCase()) || 
+                              p.sku.toLowerCase().includes(childSearchTerm.toLowerCase())
+                            )).length === 0 ? (
+                              <div style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                No matching products found.
+                              </div>
+                            ) : (
+                              products
+                                .filter(p => !p.is_combo && (
+                                  p.name.toLowerCase().includes(childSearchTerm.toLowerCase()) || 
+                                  p.sku.toLowerCase().includes(childSearchTerm.toLowerCase())
+                                ))
+                                .slice(0, 50)
+                                .map(p => (
+                                  <div
+                                    key={p.id}
+                                    onClick={() => {
+                                      setSelectedChildId(p.id);
+                                      setChildSearchTerm(`${p.name} (${p.sku})`);
+                                      setIsChildSearchOpen(false);
+                                    }}
+                                    style={{
+                                      padding: '10px 12px',
+                                      borderBottom: '1px solid var(--border-color)',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      justify: 'space-between',
+                                      alignItems: 'center',
+                                      background: selectedChildId === p.id ? 'var(--bg-secondary)' : 'transparent'
+                                    }}
+                                  >
+                                    <div>
+                                      <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>{p.name}</strong>
+                                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>SKU: {p.sku} | Stock: {p.stock_quantity} left</span>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                      <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--accent-primary)', display: 'block' }}>
+                                        {formatCurrency(p.cost_price)}
+                                      </span>
+                                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Buy Cost</span>
+                                    </div>
+                                  </div>
+                                ))
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="form-group" style={{ margin: 0 }}>
