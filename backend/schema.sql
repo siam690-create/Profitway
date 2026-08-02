@@ -98,6 +98,8 @@ CREATE TABLE `products` (
   `stock_quantity` INT NOT NULL DEFAULT 0,
   `low_stock_threshold` INT NOT NULL DEFAULT 5,
   `unit` VARCHAR(20) DEFAULT 'pcs',
+  `location` VARCHAR(150) DEFAULT NULL,
+  `is_combo` TINYINT(1) DEFAULT 0,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY `tenant_sku_unique` (`tenant_id`, `sku`),
   FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE CASCADE,
