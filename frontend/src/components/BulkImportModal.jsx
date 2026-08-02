@@ -120,14 +120,24 @@ export const BulkImportModal = ({ isOpen, onClose, onImportSuccess, authFetch })
           return;
         }
 
-        // Standardize Column Mapping
+        // Standardize Column Mapping with Strict Collision Protection
         let invalid = 0;
         const mapped = rawJson.map((row, idx) => {
-          // Normalize key names (trim whitespace, lower case match)
-          const getVal = (possibleKeys) => {
-            for (const k of Object.keys(row)) {
-              const cleanKey = k.trim().toLowerCase();
-              if (possibleKeys.some(pk => cleanKey.includes(pk))) {
+          const getVal = (keywords, avoidKeywords = []) => {
+            const keys = Object.keys(row);
+            // 1. Try strict/prefix match first
+            for (const k of keys) {
+              const clean = k.trim().toLowerCase();
+              if (avoidKeywords.some(ak => clean.includes(ak))) continue;
+              if (keywords.some(kw => clean === kw || clean.startsWith(kw))) {
+                return row[k];
+              }
+            }
+            // 2. Try includes match second
+            for (const k of keys) {
+              const clean = k.trim().toLowerCase();
+              if (avoidKeywords.some(ak => clean.includes(ak))) continue;
+              if (keywords.some(kw => clean.includes(kw))) {
                 return row[k];
               }
             }
@@ -139,8 +149,10 @@ export const BulkImportModal = ({ isOpen, onClose, onImportSuccess, authFetch })
           const sku = getVal(['sku', 'barcode', 'code']);
           const rawCatVal = getVal(['category']);
           const category_name = fixMojibake(rawCatVal);
-          const cost_price = Number(getVal(['cost price', 'cost', 'buy price', 'purchase price']) || 0);
-          const selling_price = Number(getVal(['selling price', 'sale price', 'price', 'sell price']) || 0);
+
+          // Strictly separate Cost Price (Buy) vs Selling Price (Sell)
+          const cost_price = Number(getVal(['cost price', 'buy price', 'purchase price', 'cost', 'buy', 'buying'], ['sell', 'sale', 'mrp', 'retail']) || 0);
+          const selling_price = Number(getVal(['selling price', 'sale price', 'sell price', 'retail price', 'mrp', 'regular price', 'sell', 'sale', 'price'], ['cost', 'buy', 'purchase', 'buying']) || 0);
           const stock_quantity = Number(getVal(['stock quantity', 'stock', 'qty', 'quantity']) || 0);
           const low_stock_threshold = Number(getVal(['min stock', 'warning', 'low stock', 'threshold']) || 5);
           const unit = getVal(['unit']) || 'Pcs';
