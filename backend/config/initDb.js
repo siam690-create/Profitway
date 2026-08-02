@@ -92,7 +92,7 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // 8. Manual Deposits Table (Fixes Table manual_deposits doesn't exist error!)
+    // 8. Manual Deposits Table
     await db.query(`
       CREATE TABLE IF NOT EXISTS manual_deposits (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -104,6 +104,23 @@ async function autoMigrate() {
         deposit_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_md_tenant (tenant_id),
         INDEX idx_md_acc (account_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 8b. General Account Transactions Audit Ledger Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS account_transactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        account_id INT NOT NULL,
+        type VARCHAR(100) NOT NULL,
+        debit DECIMAL(12,2) DEFAULT 0.00,
+        credit DECIMAL(12,2) DEFAULT 0.00,
+        reference_no VARCHAR(100) NULL,
+        notes TEXT NULL,
+        transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_at_tenant (tenant_id),
+        INDEX idx_at_acc (account_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 

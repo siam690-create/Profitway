@@ -737,6 +737,16 @@ exports.getAccountStatement = async (req, res) => {
       manualDeposits = rows;
     } catch (e) { console.error('Statement manualDeposits error:', e.message); }
 
+    let accountTx = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT type, debit, credit, notes, transaction_date as date
+         FROM account_transactions WHERE account_id = ? AND tenant_id = ?`,
+        [id, tenantId]
+      );
+      accountTx = rows;
+    } catch (e) { console.error('Statement accountTx error:', e.message); }
+
     const allTransactions = [
       ...purchases,
       ...posSales,
@@ -745,7 +755,8 @@ exports.getAccountStatement = async (req, res) => {
       ...pawnaCollections,
       ...salaries,
       ...investments,
-      ...manualDeposits
+      ...manualDeposits,
+      ...accountTx
     ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.json({

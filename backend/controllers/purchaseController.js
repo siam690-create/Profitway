@@ -262,11 +262,25 @@ exports.deletePurchase = async (req, res) => {
       }
     }
 
-    // 2. Refund paid_amount back to financial account if applicable
+    // 2. Refund paid_amount back to financial account if applicable and log Passbook Reversal Entry
     if (Number(purchase.paid_amount || 0) > 0 && purchase.account_id) {
+      const refundAmt = Number(purchase.paid_amount);
       await connection.query(
         'UPDATE finance_accounts SET balance = balance + ? WHERE id = ? AND tenant_id = ?',
-        [Number(purchase.paid_amount), purchase.account_id, tenantId]
+        [refundAmt, purchase.account_id, tenantId]
+      );
+
+      // Insert Account Transaction Ledger Record for Passbook Reversal Entry
+      await connection.query(
+        `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+         VALUES (?, ?, 'Purchase Order Cancelled', 0.00, ?, ?, ?, NOW())`,
+        [
+          tenantId,
+          purchase.account_id,
+          refundAmt,
+          purchase.purchase_no,
+          `Reverted payment due to deletion of Purchase Order #${purchase.purchase_no} (Supplier: ${purchase.supplier_name || 'General Supplier'})`
+        ]
       );
     }
 
