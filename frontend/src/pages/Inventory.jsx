@@ -907,7 +907,7 @@ export const Inventory = () => {
 
       {/* 📊 Stock Audit History & Quick Corrector Modal */}
       {showStockAuditModal && selectedAuditProduct && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay">
           <div className="modal-content glass-card" style={{ maxWidth: '750px', width: '90%' }}>
             <div className="modal-header">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px' }}>
