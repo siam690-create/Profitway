@@ -90,8 +90,8 @@ CREATE TABLE `categories` (
 CREATE TABLE `products` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `tenant_id` INT NOT NULL,
-  `sku` VARCHAR(50) NOT NULL,
-  `name` VARCHAR(150) NOT NULL,
+  `sku` VARCHAR(100) NOT NULL,
+  `name` TEXT NOT NULL,
   `category_id` INT DEFAULT NULL,
   `cost_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `selling_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
