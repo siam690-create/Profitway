@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Truck, Plus, PackagePlus, CheckCircle, Eye, X, Building2, Phone, MapPin, DollarSign, Wallet, FileText } from 'lucide-react';
+import { ProductSelectSearch } from '../components/ProductSelectSearch';
 
 export const Purchases = () => {
   const { authFetch, products, currency, refreshAllData } = useApp();
@@ -500,22 +501,18 @@ export const Purchases = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1.5fr auto', gap: '10px', alignItems: 'flex-end' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Product</label>
-                      <select
-                        className="form-select"
-                        value={selectedProductId}
-                        onChange={(e) => {
-                          setSelectedProductId(e.target.value);
-                          const p = products.find(prod => String(prod.id) === e.target.value);
+                      <ProductSelectSearch
+                        products={products}
+                        selectedId={selectedProductId}
+                        onSelect={(id) => {
+                          setSelectedProductId(id);
+                          const p = products.find(prod => String(prod.id) === String(id));
                           if (p) {
                             setUnitBuyPrice(p.cost_price || '');
                           }
                         }}
-                      >
-                        <option value="">Select Product...</option>
-                        {products.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} (Current Stock: {p.stock_quantity})</option>
-                        ))}
-                      </select>
+                        placeholder="Type product name or SKU..."
+                      />
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>

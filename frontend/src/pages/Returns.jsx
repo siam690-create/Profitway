@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Undo2, Plus, PackagePlus, Truck, AlertOctagon, X, CheckCircle, Eye, Printer, FileText, Edit2, ShieldAlert, Calendar } from 'lucide-react';
 import { DateRangeFilter } from '../components/DateRangeFilter';
+import { ProductSelectSearch } from '../components/ProductSelectSearch';
 
 export const Returns = () => {
   const { authFetch, products, currency, refreshAllData, user } = useApp();
@@ -408,16 +409,12 @@ export const Returns = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr 1fr', gap: '10px', alignItems: 'flex-end' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Product</label>
-                      <select
-                        className="form-select"
-                        value={selectedProductId}
-                        onChange={(e) => setSelectedProductId(e.target.value)}
-                      >
-                        <option value="">Select Product...</option>
-                        {products.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-                        ))}
-                      </select>
+                      <ProductSelectSearch
+                        products={products}
+                        selectedId={selectedProductId}
+                        onSelect={(id) => setSelectedProductId(id)}
+                        placeholder="Type product name or SKU..."
+                      />
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
