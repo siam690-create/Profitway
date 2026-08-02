@@ -308,7 +308,15 @@ exports.bulkImportProducts = async (req, res) => {
       await connection.query(
         `INSERT INTO products 
          (tenant_id, name, sku, category_id, cost_price, selling_price, stock_quantity, low_stock_threshold, unit, location, is_combo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+         ON DUPLICATE KEY UPDATE
+           name = VALUES(name),
+           cost_price = VALUES(cost_price),
+           selling_price = VALUES(selling_price),
+           stock_quantity = stock_quantity + VALUES(stock_quantity),
+           low_stock_threshold = VALUES(low_stock_threshold),
+           unit = VALUES(unit),
+           location = COALESCE(VALUES(location), location)`,
         [
           tenantId,
           rawName,
