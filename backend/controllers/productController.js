@@ -41,12 +41,38 @@ exports.getProducts = async (req, res) => {
   }
 };
 
+const ensureComboTables = async (conn) => {
+  try {
+    const [cols] = await conn.query(`SHOW COLUMNS FROM products LIKE 'is_combo'`);
+    if (cols.length === 0) {
+      await conn.query(`ALTER TABLE products ADD COLUMN is_combo TINYINT(1) DEFAULT 0`);
+    }
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS combo_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        combo_product_id INT NOT NULL,
+        child_product_id INT NOT NULL,
+        quantity INT NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_combo_tenant (tenant_id),
+        INDEX idx_combo_parent (combo_product_id),
+        INDEX idx_combo_child (child_product_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+  } catch (e) {
+    // ignore safety
+  }
+};
+
 // Create a new Product or Combo Bundle
 exports.createProduct = async (req, res) => {
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
     const { name, sku, category_id, cost_price, selling_price, stock_quantity, min_stock_alert, low_stock_threshold, unit, location, is_combo, combo_items } = req.body;
+
+    await ensureComboTables(connection);
 
     if (!name || !selling_price) {
       return res.status(400).json({ error: 'Product name and selling price are required.' });
