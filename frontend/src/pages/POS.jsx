@@ -325,8 +325,13 @@ export const POS = () => {
                           <input
                             type="number"
                             step="0.01"
-                            value={pPrice}
+                            value={item.selling_price === undefined ? '' : item.selling_price}
                             onChange={(e) => updateCartPrice(pId, e.target.value)}
+                            onBlur={(e) => {
+                              if (e.target.value === '' || isNaN(Number(e.target.value))) {
+                                updateCartPrice(pId, Number(item.price || item.unit_price || 0));
+                              }
+                            }}
                             style={{
                               width: '75px',
                               padding: '2px 6px',
@@ -351,7 +356,7 @@ export const POS = () => {
                       {/* Quantity Controls: - / Editable Input / + */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-primary)', borderRadius: '6px', padding: '2px 4px', border: '1px solid var(--border-color)' }}>
                         <button 
-                          onClick={() => updateCartQty(pId, Math.max(1, pQty - 1))} 
+                          onClick={() => updateCartQty(pId, Math.max(1, (Number(item.qty || 1) - 1)))} 
                           style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', fontWeight: '800' }}
                           title="Decrease quantity by 1"
                         >
@@ -362,10 +367,15 @@ export const POS = () => {
                           type="number"
                           min="1"
                           max={item.stock_quantity || 9999}
-                          value={pQty}
+                          value={item.qty === undefined ? '' : item.qty}
                           onChange={(e) => updateCartQty(pId, e.target.value)}
+                          onBlur={(e) => {
+                            if (!e.target.value || Number(e.target.value) < 1) {
+                              updateCartQty(pId, 1);
+                            }
+                          }}
                           style={{
-                            width: '48px',
+                            width: '56px',
                             textAlign: 'center',
                             border: '1px solid var(--border-color)',
                             borderRadius: '4px',
@@ -373,13 +383,13 @@ export const POS = () => {
                             color: 'var(--text-primary)',
                             fontSize: '13px',
                             fontWeight: '800',
-                            padding: '2px 0'
+                            padding: '2px 4px'
                           }}
-                          title="Type custom quantity"
+                          title="Type custom quantity (e.g. 200, 300)"
                         />
 
                         <button 
-                          onClick={() => updateCartQty(pId, pQty + 1)} 
+                          onClick={() => updateCartQty(pId, (Number(item.qty || 1) + 1))} 
                           style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', fontWeight: '800' }}
                           title="Increase quantity by 1"
                         >

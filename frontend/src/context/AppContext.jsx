@@ -278,7 +278,14 @@ export const AppProvider = ({ children }) => {
       return prev.map(item => {
         const id = item.id || item.product_id;
         if (id === productId) {
-          const qtyVal = Math.max(1, Number(targetQty || 1));
+          if (targetQty === '' || targetQty === null || targetQty === undefined) {
+            return { ...item, qty: '', quantity: '' };
+          }
+          const parsed = parseInt(targetQty, 10);
+          if (isNaN(parsed)) {
+            return { ...item, qty: '', quantity: '' };
+          }
+          const qtyVal = Math.max(1, parsed);
           if (qtyVal > item.stock_quantity) {
             alert(`Stock limit reached (${item.stock_quantity} available for ${item.name || item.product_name}).`);
             return { ...item, qty: item.stock_quantity, quantity: item.stock_quantity };
@@ -295,8 +302,11 @@ export const AppProvider = ({ children }) => {
       return prev.map(item => {
         const id = item.id || item.product_id;
         if (id === productId) {
-          const priceVal = Math.max(0, Number(targetPrice || 0));
-          return { ...item, selling_price: priceVal, unit_price: priceVal };
+          if (targetPrice === '' || targetPrice === null || targetPrice === undefined) {
+            return { ...item, selling_price: '', unit_price: '' };
+          }
+          const priceVal = Number(targetPrice);
+          return { ...item, selling_price: isNaN(priceVal) ? '' : priceVal, unit_price: isNaN(priceVal) ? '' : priceVal };
         }
         return item;
       });
