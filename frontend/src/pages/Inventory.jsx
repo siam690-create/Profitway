@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useApp } from '../context/AppContext';
-import { Package, Plus, Search, Filter, AlertTriangle, Layers3, Edit2, Trash2, X, MapPin, Layers, FileSpreadsheet, Download, Upload } from 'lucide-react';
+import { Package, Plus, Search, Filter, AlertTriangle, Layers3, Edit2, Trash2, X, MapPin, Layers, FileSpreadsheet, Download, Upload, History, ArrowUpRight, ArrowDownRight, Check } from 'lucide-react';
 import { BulkImportModal } from '../components/BulkImportModal';
 
 export const Inventory = () => {
@@ -12,6 +12,66 @@ export const Inventory = () => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+
+  // Stock Audit History & Quick Corrector Modal States
+  const [selectedAuditProduct, setSelectedAuditProduct] = useState(null);
+  const [showStockAuditModal, setShowStockAuditModal] = useState(false);
+  const [stockHistory, setStockHistory] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [targetStockInput, setTargetStockInput] = useState('');
+  const [auditFixReason, setAuditFixReason] = useState('');
+  const [isFixingStock, setIsFixingStock] = useState(false);
+
+  const handleOpenStockAudit = async (product) => {
+    setSelectedAuditProduct(product);
+    setTargetStockInput(String(product.stock_quantity || 0));
+    setAuditFixReason('');
+    setShowStockAuditModal(true);
+    setIsLoadingHistory(true);
+
+    try {
+      const res = await authFetch(`/api/products/${product.id}/stock-history`);
+      const data = await res.json();
+      if (res.ok) {
+        setStockHistory(data.movements || []);
+      } else {
+        setStockHistory([]);
+      }
+    } catch (e) {
+      setStockHistory([]);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleFixStockSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedAuditProduct || targetStockInput === '') return;
+
+    setIsFixingStock(true);
+    try {
+      const res = await authFetch(`/api/products/${selectedAuditProduct.id}/adjust-stock`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          target_stock: Number(targetStockInput),
+          reason: auditFixReason || 'Manual stock correction by shop owner'
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Stock updated to ${data.new_stock} Pcs successfully!`);
+        refreshAllData();
+        handleOpenStockAudit({ ...selectedAuditProduct, stock_quantity: data.new_stock });
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setIsFixingStock(false);
+    }
+  };
 
   // Export Current Products to Excel File
   const handleExportProducts = async () => {
@@ -382,10 +442,22 @@ export const Inventory = () => {
                       </td>
                       <td>
                         {p.is_combo ? (
-                          <span className="badge badge-info">Auto Bundle Stock</span>
+                          <span
+                            onClick={() => handleOpenStockAudit(p)}
+                            className="badge badge-info"
+                            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            title="Click to view Stock Movement History & Audit Log"
+                          >
+                            <History size={12} /> Auto Bundle Stock ({p.stock_quantity} available)
+                          </span>
                         ) : (
-                          <span className={`badge ${isLowStock ? 'badge-danger' : 'badge-success'}`}>
-                            {p.stock_quantity} {p.unit || 'Pcs'} {isLowStock && ' (Low Stock!)'}
+                          <span
+                            onClick={() => handleOpenStockAudit(p)}
+                            className={`badge ${isLowStock ? 'badge-danger' : 'badge-success'}`}
+                            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}
+                            title="Click to view Stock Movement History & Adjust Stock"
+                          >
+                            <History size={12} /> {p.stock_quantity} {p.unit || 'Pcs'} {isLowStock && ' (Low Stock!)'}
                           </span>
                         )}
                       </td>
@@ -832,6 +904,130 @@ export const Inventory = () => {
         }}
         authFetch={authFetch}
       />
+
+      {/* 📊 Stock Audit History & Quick Corrector Modal */}
+      {showStockAuditModal && selectedAuditProduct && (
+        <div className="modal-backdrop">
+          <div className="modal-content glass-card" style={{ maxWidth: '750px', width: '90%' }}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px' }}>
+                <History size={18} color="var(--accent-primary)" />
+                <span>Stock Audit History & Movement Ledger</span>
+              </h3>
+              <button onClick={() => setShowStockAuditModal(false)} className="btn-icon">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Product Overview Bar */}
+              <div style={{ padding: '14px', background: 'var(--bg-secondary)', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '15px', color: 'var(--text-primary)' }}>{selectedAuditProduct.name}</h4>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>SKU: {selectedAuditProduct.sku}</span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Current Stock Level</span>
+                  <strong style={{ fontSize: '18px', color: 'var(--accent-primary)' }}>
+                    {selectedAuditProduct.stock_quantity} {selectedAuditProduct.unit || 'Pcs'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* 🛠️ Quick Stock Fix & Manual Corrector Form */}
+              {!selectedAuditProduct.is_combo && (
+                <form onSubmit={handleFixStockSubmit} style={{ padding: '14px', background: 'rgba(99, 102, 241, 0.08)', borderRadius: '10px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: '700', margin: '0 0 10px 0', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Check size={14} />
+                    <span>Quick Stock Fix & Manual Adjustment</span>
+                  </h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '10px', alignItems: 'flex-end' }}>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '11px' }}>Set Exact Stock (Pcs) *</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        required
+                        placeholder="e.g. 818"
+                        value={targetStockInput}
+                        onChange={(e) => setTargetStockInput(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '11px' }}>Audit Note / Reason (Optional)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. Stock count correction"
+                        value={auditFixReason}
+                        onChange={(e) => setAuditFixReason(e.target.value)}
+                      />
+                    </div>
+                    <button type="submit" disabled={isFixingStock} className="btn btn-primary" style={{ padding: '10px' }}>
+                      {isFixingStock ? 'Saving...' : 'Save Correct Stock'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Stock Movement Ledger Table */}
+              <div>
+                <h4 style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>Stock Movement Ledger History</h4>
+                {isLoadingHistory ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading stock history...</div>
+                ) : stockHistory.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                    No audit records logged yet. All future sales, deletions, returns and restocks will automatically log here!
+                  </div>
+                ) : (
+                  <div className="table-wrapper" style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Date & Time</th>
+                          <th>Action Type</th>
+                          <th>Change Qty</th>
+                          <th>Stock After</th>
+                          <th>Ref & Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stockHistory.map((m, idx) => {
+                          const isAdd = Number(m.change_qty) > 0;
+                          return (
+                            <tr key={idx}>
+                              <td style={{ fontSize: '12px' }}>{new Date(m.created_at).toLocaleString()}</td>
+                              <td>
+                                <span className="badge badge-secondary" style={{ fontSize: '10px' }}>
+                                  {m.movement_type.toUpperCase().replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td style={{ fontWeight: '700', color: isAdd ? 'var(--success)' : 'var(--danger)' }}>
+                                {isAdd ? '+' : ''}{m.change_qty}
+                              </td>
+                              <td style={{ fontWeight: '700' }}>{m.new_stock} Pcs</td>
+                              <td style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                {m.reference_no && <strong style={{ color: 'var(--text-primary)', marginRight: '4px' }}>[{m.reference_no}]</strong>}
+                                {m.notes || '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" onClick={() => setShowStockAuditModal(false)} className="btn btn-secondary">
+                Close Audit Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -72,6 +72,7 @@ router.get('/products', productController.getProducts);
 router.post('/products', checkActiveSubscription, productController.createProduct);
 router.post('/products/bulk-import', checkActiveSubscription, productController.bulkImportProducts);
 router.get('/products/export', productController.exportProducts);
+router.get('/products/:id/stock-history', productController.getStockHistory);
 router.put('/products/:id', checkActiveSubscription, productController.updateProduct);
 router.patch('/products/:id/adjust-stock', checkActiveSubscription, productController.adjustStock);
 router.delete('/products/:id', checkActiveSubscription, productController.deleteProduct);

@@ -164,15 +164,35 @@ exports.createSale = async (req, res) => {
 
         for (const child of comboChildItems) {
           const totalChildDeductQty = pItem.quantity * child.quantity;
+          const [pRows] = await connection.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [child.child_product_id, tenantId]);
+          const prevStock = pRows.length > 0 ? Number(pRows[0].stock_quantity) : 0;
+          const newStock = Math.max(0, prevStock - totalChildDeductQty);
+
           await connection.query(
             `UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ? AND tenant_id = ?`,
             [totalChildDeductQty, child.child_product_id, tenantId]
           );
+
+          await connection.query(
+            `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+             VALUES (?, ?, 'pos_combo_sale', ?, ?, ?, ?, ?)`,
+            [tenantId, child.child_product_id, -totalChildDeductQty, prevStock, newStock, invoice_no, `Deducted via POS combo sale #${invoice_no}`]
+          );
         }
       } else {
+        const [pRows] = await connection.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [pItem.product_id, tenantId]);
+        const prevStock = pRows.length > 0 ? Number(pRows[0].stock_quantity) : 0;
+        const newStock = Math.max(0, prevStock - pItem.quantity);
+
         await connection.query(
           `UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ? AND tenant_id = ?`,
           [pItem.quantity, pItem.product_id, tenantId]
+        );
+
+        await connection.query(
+          `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+           VALUES (?, ?, 'pos_sale', ?, ?, ?, ?, ?)`,
+          [tenantId, pItem.product_id, -pItem.quantity, prevStock, newStock, invoice_no, `Deducted via POS sale #${invoice_no}`]
         );
       }
     }
@@ -315,10 +335,51 @@ exports.deleteSale = async (req, res) => {
     const [items] = await connection.query('SELECT * FROM sale_items WHERE sale_id = ? AND tenant_id = ?', [id, tenantId]);
 
     for (const item of items) {
-      await connection.query(
-        'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?',
-        [item.quantity, item.product_id, tenantId]
+      // Check if product is a combo bundle with child items
+      const [comboChildren] = await connection.query(
+        'SELECT child_product_id, quantity FROM combo_items WHERE combo_product_id = ? AND tenant_id = ?',
+        [item.product_id, tenantId]
       );
+
+      if (comboChildren.length > 0) {
+        // Restore stock to each child item in the combo bundle
+        for (const child of comboChildren) {
+          const qtyToRestore = item.quantity * child.quantity;
+          
+          const [pRows] = await connection.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [child.child_product_id, tenantId]);
+          const prevStock = pRows.length > 0 ? Number(pRows[0].stock_quantity) : 0;
+          const newStock = prevStock + qtyToRestore;
+
+          await connection.query(
+            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?',
+            [qtyToRestore, child.child_product_id, tenantId]
+          );
+
+          // Log stock movement audit entry
+          await connection.query(
+            `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+             VALUES (?, ?, 'sale_deletion_refund', ?, ?, ?, ?, ?)`,
+            [tenantId, child.child_product_id, qtyToRestore, prevStock, newStock, sales[0].invoice_no, `Restored from deleted combo sale order #${sales[0].invoice_no}`]
+          );
+        }
+      } else {
+        // Restore stock to standard product
+        const [pRows] = await connection.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [item.product_id, tenantId]);
+        const prevStock = pRows.length > 0 ? Number(pRows[0].stock_quantity) : 0;
+        const newStock = prevStock + item.quantity;
+
+        await connection.query(
+          'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?',
+          [item.quantity, item.product_id, tenantId]
+        );
+
+        // Log stock movement audit entry
+        await connection.query(
+          `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+           VALUES (?, ?, 'sale_deletion_refund', ?, ?, ?, ?, ?)`,
+          [tenantId, item.product_id, item.quantity, prevStock, newStock, sales[0].invoice_no, `Restored from deleted sale order #${sales[0].invoice_no}`]
+        );
+      }
     }
 
     // Delete sale items & sale order

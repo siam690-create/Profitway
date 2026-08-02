@@ -232,28 +232,68 @@ exports.updateProduct = async (req, res) => {
   }
 };
 
-// Adjust stock quantity manually
+// Adjust stock quantity manually (support 'set', 'add', 'subtract')
 exports.adjustStock = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
-    const { adjustment_type, quantity } = req.body;
-
-    const qty = Number(quantity);
-    if (!adjustment_type || isNaN(qty) || qty <= 0) {
-      return res.status(400).json({ error: 'Valid adjustment type and quantity required.' });
-    }
+    const { adjustment_type, quantity, target_stock, reason, notes } = req.body;
 
     const [rows] = await db.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (rows.length === 0) return res.status(404).json({ error: 'Product not found.' });
 
     let currentStock = Number(rows[0].stock_quantity);
-    let newStock = adjustment_type === 'add' ? (currentStock + qty) : (currentStock - qty);
-    if (newStock < 0) newStock = 0;
+    let newStock = currentStock;
+    let changeQty = 0;
+
+    if (adjustment_type === 'set' || target_stock !== undefined) {
+      newStock = Math.max(0, Number(target_stock !== undefined ? target_stock : quantity));
+      changeQty = newStock - currentStock;
+    } else if (adjustment_type === 'add') {
+      const qty = Number(quantity || 0);
+      newStock = currentStock + qty;
+      changeQty = qty;
+    } else if (adjustment_type === 'subtract') {
+      const qty = Number(quantity || 0);
+      newStock = Math.max(0, currentStock - qty);
+      changeQty = -qty;
+    }
 
     await db.query('UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?', [newStock, id, tenantId]);
 
-    res.json({ message: 'Stock quantity adjusted successfully', new_stock: newStock });
+    // Log stock movement audit entry
+    await db.query(
+      `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+       VALUES (?, ?, 'manual_adjustment', ?, ?, ?, ?, ?)`,
+      [tenantId, id, changeQty, currentStock, newStock, 'Manual Adjustment', notes || reason || `Stock adjusted from ${currentStock} to ${newStock}`]
+    );
+
+    res.json({ message: 'Stock quantity adjusted successfully', new_stock: newStock, change_qty: changeQty });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Fetch Stock Movement History Audit Log for a specific Product
+exports.getStockHistory = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+
+    const [productRows] = await db.query('SELECT id, name, sku, stock_quantity, is_combo FROM products WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (productRows.length === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const [movements] = await db.query(
+      `SELECT * FROM stock_movements WHERE product_id = ? AND tenant_id = ? ORDER BY created_at DESC LIMIT 200`,
+      [id, tenantId]
+    );
+
+    res.json({
+      product: productRows[0],
+      movements
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

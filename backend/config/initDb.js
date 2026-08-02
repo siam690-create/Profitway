@@ -34,6 +34,24 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // Stock Movements History & Audit Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS stock_movements (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        product_id INT NOT NULL,
+        movement_type VARCHAR(50) NOT NULL,
+        change_qty INT NOT NULL,
+        previous_stock INT NOT NULL DEFAULT 0,
+        new_stock INT NOT NULL DEFAULT 0,
+        reference_no VARCHAR(100) NULL,
+        notes TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_sm_tenant (tenant_id),
+        INDEX idx_sm_prod (product_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // Sales table delivery & custom date columns
     await addColumnIfNotExists('sales', 'delivery_fee_charged', 'DECIMAL(10,2) DEFAULT 0');
     await addColumnIfNotExists('sales', 'courier_actual_cost', 'DECIMAL(10,2) DEFAULT 0');
