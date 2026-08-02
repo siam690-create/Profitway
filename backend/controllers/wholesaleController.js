@@ -80,12 +80,33 @@ exports.deleteWholesaleCustomer = async (req, res) => {
   }
 };
 
+const ensureWholesaleSalesColumns = async (conn) => {
+  const cols = [
+    { name: 'delivery_fee_charged', def: 'DECIMAL(10,2) DEFAULT 0' },
+    { name: 'courier_actual_cost', def: 'DECIMAL(10,2) DEFAULT 0' },
+    { name: 'delivery_profit', def: 'DECIMAL(10,2) DEFAULT 0' },
+    { name: 'sale_date', def: 'DATETIME NULL' }
+  ];
+  for (const c of cols) {
+    try {
+      const [colCheck] = await conn.query(`SHOW COLUMNS FROM wholesale_sales LIKE ?`, [c.name]);
+      if (colCheck.length === 0) {
+        await conn.query(`ALTER TABLE wholesale_sales ADD COLUMN \`${c.name}\` ${c.def}`);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+};
+
 // Create Wholesale Sales Order
 exports.createWholesaleSale = async (req, res) => {
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
     const { items, customer_id, customer_name, notes, payment_status, paid_amount, due_amount, account_id, sale_date } = req.body;
+
+    await ensureWholesaleSalesColumns(connection);
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Wholesale order must contain at least one product.' });

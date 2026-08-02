@@ -1,10 +1,32 @@
 const db = require('../config/db');
 
+const ensureSalesColumns = async (conn) => {
+  const cols = [
+    { name: 'delivery_fee_charged', def: 'DECIMAL(10,2) DEFAULT 0' },
+    { name: 'courier_actual_cost', def: 'DECIMAL(10,2) DEFAULT 0' },
+    { name: 'delivery_profit', def: 'DECIMAL(10,2) DEFAULT 0' },
+    { name: 'sale_date', def: 'DATETIME NULL' },
+    { name: 'store_api_key_id', def: 'INT NULL' }
+  ];
+  for (const c of cols) {
+    try {
+      const [colCheck] = await conn.query(`SHOW COLUMNS FROM sales LIKE ?`, [c.name]);
+      if (colCheck.length === 0) {
+        await conn.query(`ALTER TABLE sales ADD COLUMN \`${c.name}\` ${c.def}`);
+      }
+    } catch (e) {
+      // ignore safety
+    }
+  }
+};
+
 exports.createSale = async (req, res) => {
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
     const { items, customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date } = req.body;
+
+    await ensureSalesColumns(connection);
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Cart must contain at least one product.' });

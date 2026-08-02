@@ -30,6 +30,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error', message: err.message });
 });
 
-app.listen(PORT, () => {
+const autoMigrate = require('./config/initDb');
+
+app.listen(PORT, async () => {
   console.log(`🚀 Stock & Profit Management API running on http://localhost:${PORT}`);
+  await autoMigrate();
 });
