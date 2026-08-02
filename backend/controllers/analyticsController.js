@@ -40,7 +40,7 @@ exports.getProductAnalytics = async (req, res) => {
         COALESCE(SUM(courier_actual_cost), 0) as total_courier_actual_cost,
         COALESCE(SUM(delivery_profit), 0) as total_delivery_profit
        FROM sales 
-       WHERE tenant_id = ? AND DATE(sale_date) BETWEEN ? AND ?`,
+       WHERE tenant_id = ? AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?`,
       [tenantId, startDate, endDate]
     );
 
@@ -54,7 +54,7 @@ exports.getProductAnalytics = async (req, res) => {
        JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
        JOIN products p ON ri.product_id = p.id AND ri.tenant_id = p.tenant_id
        LEFT JOIN sales s ON r.invoice_no = s.invoice_no AND r.tenant_id = s.tenant_id
-       WHERE ri.tenant_id = ? AND DATE(r.return_date) BETWEEN ? AND ?`,
+       WHERE ri.tenant_id = ? AND DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?`,
       [tenantId, startDate, endDate]
     );
 
@@ -62,7 +62,7 @@ exports.getProductAnalytics = async (req, res) => {
     const [adsSummary] = await db.query(
       `SELECT COALESCE(SUM(total_bdt_cost), 0) as total_paid_ads_cost
        FROM paid_ads
-       WHERE tenant_id = ? AND ad_date BETWEEN ? AND ?`,
+       WHERE tenant_id = ? AND DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?`,
       [tenantId, startDate, endDate]
     );
 
@@ -72,7 +72,7 @@ exports.getProductAnalytics = async (req, res) => {
         COUNT(*) as total_returns_count,
         COALESCE(SUM(courier_charge), 0) as total_courier_return_cost
        FROM returns
-       WHERE tenant_id = ? AND DATE(return_date) BETWEEN ? AND ?`,
+       WHERE tenant_id = ? AND DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?`,
       [tenantId, startDate, endDate]
     );
 
@@ -81,7 +81,7 @@ exports.getProductAnalytics = async (req, res) => {
       `SELECT COALESCE(SUM(amount), 0) as total_other_expenses
        FROM expenses
        WHERE tenant_id = ? 
-         AND DATE(expense_date) BETWEEN ? AND ?
+         AND DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?
          AND category NOT IN ('Marketing', 'Transport')`,
       [tenantId, startDate, endDate]
     );
@@ -96,7 +96,7 @@ exports.getProductAnalytics = async (req, res) => {
         COALESCE(SUM(paid_amount), 0) as wholesale_cash_collected,
         COALESCE(SUM(due_amount), 0) as wholesale_pending_pawna
        FROM wholesale_sales
-       WHERE tenant_id = ? AND DATE(sale_date) BETWEEN ? AND ?`,
+       WHERE tenant_id = ? AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?`,
       [tenantId, startDate, endDate]
     );
 
@@ -113,7 +113,7 @@ exports.getProductAnalytics = async (req, res) => {
         COALESCE(SUM(ws.due_amount), 0) as current_pawna_due
        FROM wholesale_customers wc
        JOIN wholesale_sales ws ON wc.id = ws.customer_id AND ws.tenant_id = wc.tenant_id
-       WHERE wc.tenant_id = ? AND DATE(ws.sale_date) BETWEEN ? AND ?
+       WHERE wc.tenant_id = ? AND DATE(COALESCE(ws.sale_date, ws.created_at)) BETWEEN ? AND ?
        GROUP BY wc.id
        ORDER BY total_spent DESC LIMIT 10`,
       [tenantId, startDate, endDate]
@@ -178,7 +178,7 @@ exports.getProductAnalytics = async (req, res) => {
            SUM(s.delivery_profit) as product_delivery_profit
          FROM sale_items si
          JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
-         WHERE si.tenant_id = ? AND DATE(s.sale_date) BETWEEN ? AND ?
+         WHERE si.tenant_id = ? AND DATE(COALESCE(s.sale_date, s.created_at)) BETWEEN ? AND ?
          GROUP BY si.product_id
        ) sales_agg ON p.id = sales_agg.product_id
        LEFT JOIN (
@@ -192,7 +192,7 @@ exports.getProductAnalytics = async (req, res) => {
          JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
          JOIN products p_sub ON ri.product_id = p_sub.id AND ri.tenant_id = p_sub.tenant_id
          LEFT JOIN sales s_sub ON r.invoice_no = s_sub.invoice_no AND r.tenant_id = s_sub.tenant_id
-         WHERE ri.tenant_id = ? AND DATE(r.return_date) BETWEEN ? AND ?
+         WHERE ri.tenant_id = ? AND DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?
          GROUP BY ri.product_id
        ) returns_agg ON p.id = returns_agg.product_id
        LEFT JOIN (
@@ -200,7 +200,7 @@ exports.getProductAnalytics = async (req, res) => {
            product_id,
            SUM(total_bdt_cost) as ad_spend_bdt
          FROM paid_ads
-         WHERE tenant_id = ? AND ad_date BETWEEN ? AND ? AND product_id IS NOT NULL
+         WHERE tenant_id = ? AND DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ? AND product_id IS NOT NULL
          GROUP BY product_id
        ) ads_agg ON p.id = ads_agg.product_id
        WHERE p.tenant_id = ?`,
