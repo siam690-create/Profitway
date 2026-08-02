@@ -259,7 +259,16 @@ export const AppProvider = ({ children }) => {
           alert(`${product.name} is out of stock!`);
           return prev;
         }
-        return [...prev, { ...product, qty: 1 }];
+        const sellPrice = Number(product.selling_price || 0);
+        const costPrice = Number(product.cost_price || 0);
+        return [...prev, {
+          ...product,
+          qty: 1,
+          selling_price: sellPrice,
+          cost_price: costPrice,
+          unit_price: sellPrice,
+          unit_cost: costPrice
+        }];
       }
     });
   };

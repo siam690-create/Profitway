@@ -132,19 +132,26 @@ export const POS = () => {
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{product.category_name}</span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                  <div>
-                    <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)' }}>
-                      {currency}{price.toFixed(2)}
-                    </span>
-                    <span style={{ fontSize: '10px', color: 'var(--success)', display: 'block' }}>
-                      Profit: +{currency}{profit.toFixed(2)}
+                <div style={{ marginTop: '6px', borderTop: '1px dashed var(--border-color)', paddingTop: '6px' }}>
+                  {/* FOCUSED MAIN SELLING PRICE */}
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <div>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block' }}>Selling Price:</span>
+                      <span style={{ fontSize: '16px', fontWeight: '900', color: '#10b981' }}>
+                        {currency}{price.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <span className={`badge ${isOut ? 'badge-danger' : 'badge-success'}`} style={{ fontSize: '10px', padding: '3px 6px' }}>
+                      {isOut ? 'Out of Stock' : `${product.stock_quantity} left`}
                     </span>
                   </div>
 
-                  <span className={`badge ${isOut ? 'badge-danger' : 'badge-success'}`} style={{ fontSize: '10px', padding: '3px 6px' }}>
-                    {isOut ? 'Out of Stock' : `${product.stock_quantity} left`}
-                  </span>
+                  {/* SECONDARY INFO: BUY PRICE & PROFIT */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '10px', color: 'var(--text-muted)' }}>
+                    <span>Buy: <strong>{currency}{cost.toFixed(2)}</strong></span>
+                    <span style={{ color: 'var(--success)', fontWeight: '700' }}>Profit: +{currency}{profit.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
             );
