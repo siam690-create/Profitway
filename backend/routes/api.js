@@ -161,6 +161,7 @@ router.post('/sales', checkActiveSubscription, saleController.createSale);
 router.get('/sales', saleController.getSales);
 router.get('/sales/:id', saleController.getSaleById);
 router.put('/sales/:id', checkActiveSubscription, saleController.updateSale);
+router.delete('/sales/:id', checkActiveSubscription, saleController.deleteSale);
 
 // Expense APIs
 router.get('/expenses', expenseController.getExpenses);
