@@ -143,6 +143,35 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 10b. Liability Payments & Receivable Collections Audit Tables
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS liability_payments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        liability_id INT NOT NULL,
+        account_id INT DEFAULT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        notes TEXT DEFAULT NULL,
+        payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_lp_tenant (tenant_id),
+        INDEX idx_lp_liab (liability_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS receivable_collections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        receivable_id INT NOT NULL,
+        account_id INT DEFAULT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        notes TEXT DEFAULT NULL,
+        collection_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_rc_tenant (tenant_id),
+        INDEX idx_rc_rec (receivable_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // 11. Investments & Investment Transactions
     await db.query(`
       CREATE TABLE IF NOT EXISTS investments (

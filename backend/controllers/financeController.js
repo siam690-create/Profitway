@@ -605,69 +605,102 @@ exports.getAccountStatement = async (req, res) => {
     if (accounts.length === 0) return res.status(404).json({ error: 'Account not found.' });
 
     const account = accounts[0];
+    const accTypeKey = (account.account_type || '').toLowerCase();
+    const accNameKey = (account.name || '').toLowerCase();
 
-    // Aggregate transactions for this account
-    const [purchases] = await db.query(
-      `SELECT 'Stock Purchase' as type, paid_amount as debit, 0 as credit, CONCAT('Purchase Order #', purchase_no, ' (Supplier: ', supplier_name, ')') as notes, purchase_date as date
-       FROM purchases WHERE (account_id = ? OR account_id IS NULL) AND tenant_id = ? AND paid_amount > 0`,
-      [id, tenantId]
-    );
+    let purchases = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 'Stock Purchase' as type, paid_amount as debit, 0 as credit, CONCAT('Purchase Order #', purchase_no, ' (Supplier: ', supplier_name, ')') as notes, purchase_date as date
+         FROM purchases WHERE (account_id = ? OR account_id IS NULL) AND tenant_id = ? AND paid_amount > 0`,
+        [id, tenantId]
+      );
+      purchases = rows;
+    } catch (e) { console.error('Statement purchases error:', e.message); }
 
-    const accTypeKey = account.account_type.toLowerCase();
-    const [posSales] = await db.query(
-      `SELECT 'POS Retail Sale' as type, 0 as debit, total_amount as credit, CONCAT('POS Checkout #', invoice_no, ' (Customer: ', customer_name, ')') as notes, created_at as date
-       FROM sales WHERE tenant_id = ? AND total_amount > 0 AND (
-         LOWER(payment_method) LIKE CONCAT('%', ?, '%') OR 
-         (? = 'cash' AND LOWER(payment_method) LIKE '%cash%')
-       )`,
-      [tenantId, accTypeKey, accTypeKey]
-    );
+    let posSales = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 'POS Retail Sale' as type, 0 as debit, total_amount as credit, CONCAT('POS Checkout #', invoice_no, ' (Customer: ', customer_name, ')') as notes, created_at as date
+         FROM sales WHERE tenant_id = ? AND total_amount > 0 AND (
+           LOWER(payment_method) LIKE CONCAT('%', ?, '%') OR 
+           (? = 'cash' AND (LOWER(payment_method) LIKE '%cash%' OR payment_method IS NULL)) OR
+           (? LIKE CONCAT('%', LOWER(payment_method), '%'))
+         )`,
+        [tenantId, accTypeKey, accTypeKey, accNameKey]
+      );
+      posSales = rows;
+    } catch (e) { console.error('Statement posSales error:', e.message); }
 
-    const [wholesaleSales] = await db.query(
-      `SELECT 'Wholesale Sale' as type, 0 as debit, paid_amount as credit, CONCAT('Wholesale Order #', invoice_no, ' (Buyer: ', customer_name, ')') as notes, sale_date as date
-       FROM wholesale_sales WHERE (account_id = ? OR account_id IS NULL) AND tenant_id = ? AND paid_amount > 0`,
-      [id, tenantId]
-    );
+    let wholesaleSales = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 'Wholesale Sale' as type, 0 as debit, paid_amount as credit, CONCAT('Wholesale Order #', invoice_no, ' (Buyer: ', customer_name, ')') as notes, sale_date as date
+         FROM wholesale_sales WHERE (account_id = ? OR account_id IS NULL) AND tenant_id = ? AND paid_amount > 0`,
+        [id, tenantId]
+      );
+      wholesaleSales = rows;
+    } catch (e) { console.error('Statement wholesaleSales error:', e.message); }
 
-    const [denaPayments] = await db.query(
-      `SELECT 'Dena Repayment' as type, lp.amount as debit, 0 as credit, CONCAT('Dena Repayment to ', l.party_name, ' (', l.title, ')') as notes, lp.payment_date as date
-       FROM liability_payments lp
-       JOIN liabilities l ON l.id = lp.liability_id
-       WHERE lp.account_id = ? AND lp.tenant_id = ?`,
-      [id, tenantId]
-    );
+    let denaPayments = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 'Dena Repayment' as type, lp.amount as debit, 0 as credit, CONCAT('Dena Repayment to ', l.party_name, ' (', l.title, ')') as notes, lp.payment_date as date
+         FROM liability_payments lp
+         JOIN liabilities l ON l.id = lp.liability_id
+         WHERE lp.account_id = ? AND lp.tenant_id = ?`,
+        [id, tenantId]
+      );
+      denaPayments = rows;
+    } catch (e) { console.error('Statement denaPayments error:', e.message); }
 
-    const [pawnaCollections] = await db.query(
-      `SELECT 'Pawna Collection' as type, 0 as debit, rc.amount as credit, CONCAT('Pawna Collection from ', r.party_name, ' (', r.title, ')') as notes, rc.collection_date as date
-       FROM receivable_collections rc
-       JOIN receivables r ON r.id = rc.receivable_id
-       WHERE rc.account_id = ? AND rc.tenant_id = ?`,
-      [id, tenantId]
-    );
+    let pawnaCollections = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 'Pawna Collection' as type, 0 as debit, rc.amount as credit, CONCAT('Pawna Collection from ', r.party_name, ' (', r.title, ')') as notes, rc.collection_date as date
+         FROM receivable_collections rc
+         JOIN receivables r ON r.id = rc.receivable_id
+         WHERE rc.account_id = ? AND rc.tenant_id = ?`,
+        [id, tenantId]
+      );
+      pawnaCollections = rows;
+    } catch (e) { console.error('Statement pawnaCollections error:', e.message); }
 
-    const [salaries] = await db.query(
-      `SELECT 'Staff Salary' as type, net_salary_paid as debit, 0 as credit, CONCAT('Salary Disbursal to ', staff_name, ' (', month_year, ')') as notes, payment_date as date
-       FROM payroll WHERE account_id = ? AND tenant_id = ?`,
-      [id, tenantId]
-    );
+    let salaries = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 'Staff Salary' as type, net_salary_paid as debit, 0 as credit, CONCAT('Salary Disbursal to ', staff_name, ' (', month_year, ')') as notes, payment_date as date
+         FROM payroll WHERE account_id = ? AND tenant_id = ?`,
+        [id, tenantId]
+      );
+      salaries = rows;
+    } catch (e) { console.error('Statement salaries error:', e.message); }
 
-    const [investments] = await db.query(
-      `SELECT CASE WHEN type = 'deposit' THEN 'Investor Capital Deposit' ELSE 'Investment Capital Return' END as type,
-              CASE WHEN type = 'repayment' THEN amount ELSE 0 END as debit,
-              CASE WHEN type = 'deposit' THEN amount ELSE 0 END as credit,
-              CONCAT(CASE WHEN type = 'deposit' THEN 'Capital Raised from ' ELSE 'Capital Returned to ' END, i.investor_name) as notes,
-              it.transaction_date as date
-       FROM investment_transactions it
-       JOIN investments i ON i.id = it.investment_id
-       WHERE it.account_id = ? AND it.tenant_id = ?`,
-      [id, tenantId]
-    );
+    let investments = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT CASE WHEN type = 'deposit' THEN 'Investor Capital Deposit' ELSE 'Investment Capital Return' END as type,
+                CASE WHEN type = 'repayment' THEN amount ELSE 0 END as debit,
+                CASE WHEN type = 'deposit' THEN amount ELSE 0 END as credit,
+                CONCAT(CASE WHEN type = 'deposit' THEN 'Capital Raised from ' ELSE 'Capital Returned to ' END, i.investor_name) as notes,
+                it.transaction_date as date
+         FROM investment_transactions it
+         JOIN investments i ON i.id = it.investment_id
+         WHERE it.account_id = ? AND it.tenant_id = ?`,
+        [id, tenantId]
+      );
+      investments = rows;
+    } catch (e) { console.error('Statement investments error:', e.message); }
 
-    const [manualDeposits] = await db.query(
-      `SELECT 'Manual Cash Deposit' as type, 0 as debit, amount as credit, CONCAT('Direct Fund Deposit: ', source_title, IF(notes IS NOT NULL AND notes != '', CONCAT(' - ', notes), '')) as notes, deposit_date as date
-       FROM manual_deposits WHERE account_id = ? AND tenant_id = ?`,
-      [id, tenantId]
-    );
+    let manualDeposits = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 'Manual Cash Deposit' as type, 0 as debit, amount as credit, CONCAT('Direct Fund Deposit: ', source_title, IF(notes IS NOT NULL AND notes != '', CONCAT(' - ', notes), '')) as notes, deposit_date as date
+         FROM manual_deposits WHERE account_id = ? AND tenant_id = ?`,
+        [id, tenantId]
+      );
+      manualDeposits = rows;
+    } catch (e) { console.error('Statement manualDeposits error:', e.message); }
 
     const allTransactions = [
       ...purchases,
