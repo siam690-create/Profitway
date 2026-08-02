@@ -258,6 +258,26 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // Retroactive fix: Auto-insert missing cancellation log for past deleted purchases like #PUR-20260802-516
+    try {
+      const [accs] = await db.query("SELECT id, tenant_id FROM finance_accounts WHERE name LIKE '%UCB%' LIMIT 1");
+      if (accs.length > 0) {
+        const ucbId = accs[0].id;
+        const tenantId = accs[0].tenant_id;
+        await db.query(
+          `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+           SELECT ?, ?, 'Purchase Order Cancelled', 0.00, 19000.00, 'PUR-20260802-516', 
+                  'Reverted payment due to deletion of Purchase Order #PUR-20260802-516 (Supplier: Abdulla)', NOW()
+           WHERE NOT EXISTS (
+             SELECT 1 FROM account_transactions WHERE reference_no = 'PUR-20260802-516'
+           )`,
+          [tenantId, ucbId]
+        );
+      }
+    } catch (e) {
+      console.warn('Retroactive purchase cancellation log check:', e.message);
+    }
+
     console.log('✅ Database schema auto-migration complete! All missing tables created.');
   } catch (err) {
     console.error('⚠️ DB Auto-migration failed:', err.message);
