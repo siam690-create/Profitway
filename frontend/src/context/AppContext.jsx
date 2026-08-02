@@ -17,9 +17,18 @@ export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(safeJsonParse('user'));
   const [tenant, setTenant] = useState(safeJsonParse('tenant'));
 
-  // App Navigation View
+  // App Navigation View & Tab Persistence
   const [view, setView] = useState(token ? 'dashboard' : 'landing');
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTabState] = useState(() => {
+    return localStorage.getItem('profitway_active_tab') || 'dashboard';
+  });
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    if (tab) {
+      localStorage.setItem('profitway_active_tab', tab);
+    }
+  };
 
   const [dashboardData, setDashboardData] = useState(null);
   const [products, setProducts] = useState([]);
@@ -159,6 +168,8 @@ export const AppProvider = ({ children }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('tenant');
+    localStorage.removeItem('profitway_active_tab');
+    setActiveTabState('dashboard');
     setView('landing');
   };
 
