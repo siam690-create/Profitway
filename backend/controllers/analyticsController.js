@@ -232,7 +232,7 @@ exports.getProductAnalytics = async (req, res) => {
            SUM(si.total_price) as gross_revenue,
            SUM(si.total_cost) as cogs,
            SUM(si.item_profit) as gross_profit,
-           SUM(s.delivery_profit) as product_delivery_profit
+           SUM(CASE WHEN s.total_amount > 0 THEN (s.delivery_profit * (si.total_price / s.total_amount)) ELSE 0 END) as product_delivery_profit
          FROM sale_items si
          JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
          ${prodSalesWhere}
@@ -251,7 +251,7 @@ exports.getProductAnalytics = async (req, res) => {
            ri.product_id,
            SUM(ri.quantity) as units_returned,
            SUM(ri.quantity * (p_sub.selling_price - p_sub.cost_price)) as returned_profit_reversal,
-           SUM(s_sub.delivery_profit) as returned_deliv_profit_reversal,
+           SUM(CASE WHEN s_sub.total_amount > 0 THEN (s_sub.delivery_profit * ((ri.quantity * p_sub.selling_price) / s_sub.total_amount)) ELSE 0 END) as returned_deliv_profit_reversal,
            SUM(r.courier_charge) as return_charges
          FROM return_items ri
          JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
