@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X } from 'lucide-react';
 
+import { ProductSelectSearch } from '../components/ProductSelectSearch';
+
 export const PaidAds = () => {
   const { authFetch, products, currency, refreshAllData, user } = useApp();
   const [adsList, setAdsList] = useState([]);
@@ -209,16 +211,12 @@ export const PaidAds = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '12px' }}>
                   <div className="form-group">
                     <label className="form-label">Target Product (Optional)</label>
-                    <select
-                      className="form-select"
-                      value={selectedProductId}
-                      onChange={(e) => setSelectedProductId(e.target.value)}
-                    >
-                      <option value="">General Shop Campaign</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-                      ))}
-                    </select>
+                    <ProductSelectSearch
+                      products={products}
+                      selectedId={selectedProductId}
+                      onSelect={(id) => setSelectedProductId(id)}
+                      placeholder="Type product name or code/SKU..."
+                    />
                   </div>
 
                   <div className="form-group">
