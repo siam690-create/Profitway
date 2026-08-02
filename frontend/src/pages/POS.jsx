@@ -20,12 +20,14 @@ export const POS = () => {
   const [completedSale, setCompletedSale] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Filter products for POS grid
+  // Filter products for POS grid (Limit to top 20 products for super fast loading & compact layout)
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = selectedCategory ? String(p.category_id) === String(selectedCategory) : true;
     return matchesSearch && matchesCategory;
   });
+
+  const displayedProducts = (search || selectedCategory) ? filteredProducts.slice(0, 60) : filteredProducts.slice(0, 20);
 
   // Real-time Cart Calculations
   const cartSubtotal = cart.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
@@ -51,17 +53,17 @@ export const POS = () => {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 390px', gap: '20px', minHeight: 'calc(100vh - 120px)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '20px', alignItems: 'start' }}>
       {/* Left Column: Product Selector Grid */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {/* Search & Category Filter */}
-        <div className="glass-card" style={{ padding: '16px', display: 'flex', gap: '12px' }}>
+        <div className="glass-card" style={{ padding: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={{ flex: 1, position: 'relative' }}>
             <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
               className="form-input"
-              placeholder="Search products by name or SKU..."
+              placeholder="Search 200+ products by name or SKU..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ paddingLeft: '36px' }}
@@ -80,9 +82,21 @@ export const POS = () => {
           </select>
         </div>
 
+        {/* Quick Notice Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)', padding: '0 4px' }}>
+          <span>
+            {search || selectedCategory 
+              ? `Found ${filteredProducts.length} matching products` 
+              : `Showing Top ${displayedProducts.length} Quick Products (Use search above to find any item)`}
+          </span>
+          {products.length > 20 && !search && !selectedCategory && (
+            <span style={{ color: 'var(--accent-primary)', fontWeight: '600' }}>⚡ Total {products.length} Products in Shop</span>
+          )}
+        </div>
+
         {/* Product Cards Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px' }}>
-          {filteredProducts.map(product => {
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '12px' }}>
+          {displayedProducts.map(product => {
             const isOut = product.stock_quantity <= 0;
             return (
               <div
@@ -90,24 +104,24 @@ export const POS = () => {
                 onClick={() => !isOut && addToCart(product)}
                 className="glass-card"
                 style={{
-                  padding: '16px',
+                  padding: '14px',
                   cursor: isOut ? 'not-allowed' : 'pointer',
                   opacity: isOut ? 0.5 : 1,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
-                  gap: '10px'
+                  gap: '8px'
                 }}
               >
                 <div>
                   <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--accent-primary)' }}>{product.sku}</span>
-                  <h4 style={{ fontSize: '14px', fontWeight: '700', margin: '4px 0', color: 'var(--text-primary)' }}>{product.name}</h4>
+                  <h4 style={{ fontSize: '13px', fontWeight: '700', margin: '3px 0', color: 'var(--text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{product.name}</h4>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{product.category_name}</span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
                   <div>
-                    <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)' }}>
                       {currency}{Number(product.selling_price).toFixed(2)}
                     </span>
                     <span style={{ fontSize: '10px', color: 'var(--success)', display: 'block' }}>
@@ -115,7 +129,7 @@ export const POS = () => {
                     </span>
                   </div>
 
-                  <span className={`badge ${isOut ? 'badge-danger' : 'badge-success'}`}>
+                  <span className={`badge ${isOut ? 'badge-danger' : 'badge-success'}`} style={{ fontSize: '10px', padding: '3px 6px' }}>
                     {isOut ? 'Out of Stock' : `${product.stock_quantity} left`}
                   </span>
                 </div>
@@ -125,8 +139,8 @@ export const POS = () => {
         </div>
       </div>
 
-      {/* Right Column: POS Cart & Realtime Profit Counter */}
-      <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Right Column: POS Cart & Realtime Profit Counter (STICKY PANEL AT TOP) */}
+      <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', position: 'sticky', top: '80px', maxHeight: 'calc(100vh - 100px)', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShoppingBag size={20} color="var(--accent-primary)" />
