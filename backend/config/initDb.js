@@ -273,9 +273,40 @@ async function autoMigrate() {
            )`,
           [tenantId, ucbId]
         );
+    // Retroactive fix: Merge duplicate investor profile rows into 1 single investor row
+    try {
+      const [dupRows] = await db.query(`
+        SELECT tenant_id, LOWER(TRIM(investor_name)) as inv_name, COUNT(*) as cnt 
+        FROM investments 
+        GROUP BY tenant_id, LOWER(TRIM(investor_name)) 
+        HAVING cnt > 1
+      `);
+      for (const r of dupRows) {
+        const [allInvs] = await db.query(
+          `SELECT * FROM investments WHERE tenant_id = ? AND LOWER(TRIM(investor_name)) = ? ORDER BY id ASC`,
+          [r.tenant_id, r.inv_name]
+        );
+        if (allInvs.length > 1) {
+          const primary = allInvs[0];
+          const duplicates = allInvs.slice(1);
+          const totalInv = allInvs.reduce((sum, i) => sum + Number(i.invested_amount || 0), 0);
+          const totalRet = allInvs.reduce((sum, i) => sum + Number(i.returned_amount || 0), 0);
+          const status = (totalInv - totalRet) <= 0 ? 'returned' : 'active';
+
+          await db.query(
+            `UPDATE investments SET invested_amount = ?, returned_amount = ?, status = ? WHERE id = ?`,
+            [totalInv, totalRet, status, primary.id]
+          );
+
+          const dupIds = duplicates.map(i => i.id);
+          if (dupIds.length > 0) {
+            await db.query(`UPDATE investment_transactions SET investment_id = ? WHERE investment_id IN (?)`, [primary.id, dupIds]);
+            await db.query(`DELETE FROM investments WHERE id IN (?)`, [dupIds]);
+          }
+        }
       }
     } catch (e) {
-      console.warn('Retroactive purchase cancellation log check:', e.message);
+      console.warn('Investor deduplication check:', e.message);
     }
 
     console.log('✅ Database schema auto-migration complete! All missing tables created.');

@@ -37,7 +37,7 @@ exports.getInvestments = async (req, res) => {
   }
 };
 
-// Record New Investment (Deposit Capital into Account)
+// Record New Investment (Deposit Capital into Investor Profile)
 exports.createInvestment = async (req, res) => {
   const connection = await db.getConnection();
   try {
@@ -51,14 +51,38 @@ exports.createInvestment = async (req, res) => {
 
     await connection.beginTransaction();
 
-    // 1. Insert Investment
-    const [invResult] = await connection.query(
-      `INSERT INTO investments (tenant_id, investor_name, phone, email, invested_amount, returned_amount, status, account_id, notes, created_at)
-       VALUES (?, ?, ?, ?, ?, 0.00, 'active', ?, ?, NOW())`,
-      [tenantId, investor_name, phone || null, email || null, amountNum, account_id || null, notes || null]
+    const cleanName = investor_name.trim();
+
+    // Check if Investor Profile already exists for this tenant
+    const [existing] = await connection.query(
+      'SELECT * FROM investments WHERE tenant_id = ? AND LOWER(TRIM(investor_name)) = LOWER(?) FOR UPDATE',
+      [tenantId, cleanName]
     );
 
-    const investmentId = invResult.insertId;
+    let investmentId;
+    if (existing.length > 0) {
+      investmentId = existing[0].id;
+      const newInvested = Number(existing[0].invested_amount || 0) + amountNum;
+      const newReturned = Number(existing[0].returned_amount || 0);
+      const newStatus = (newInvested - newReturned) > 0 ? 'active' : 'returned';
+
+      await connection.query(
+        `UPDATE investments 
+         SET invested_amount = ?, 
+             phone = COALESCE(?, phone), 
+             email = COALESCE(?, email), 
+             status = ?
+         WHERE id = ? AND tenant_id = ?`,
+        [newInvested, phone || null, email || null, newStatus, investmentId, tenantId]
+      );
+    } else {
+      const [invResult] = await connection.query(
+        `INSERT INTO investments (tenant_id, investor_name, phone, email, invested_amount, returned_amount, status, account_id, notes, created_at)
+         VALUES (?, ?, ?, ?, ?, 0.00, 'active', ?, ?, NOW())`,
+        [tenantId, cleanName, phone || null, email || null, amountNum, account_id || null, notes || null]
+      );
+      investmentId = invResult.insertId;
+    }
 
     // 2. Deposit Funds into Selected Liquid Account
     if (account_id) {
@@ -72,13 +96,13 @@ exports.createInvestment = async (req, res) => {
     await connection.query(
       `INSERT INTO investment_transactions (tenant_id, investment_id, type, amount, account_id, notes, transaction_date)
        VALUES (?, ?, 'deposit', ?, ?, ?, NOW())`,
-      [tenantId, investmentId, amountNum, account_id || null, notes || 'Initial Capital Investment Deposit']
+      [tenantId, investmentId, amountNum, account_id || null, notes || 'Capital Investment Deposit']
     );
 
     await connection.commit();
 
     res.status(201).json({
-      message: 'New investment capital recorded successfully! Liquid account balance updated.',
+      message: `৳${amountNum.toFixed(2)} investment capital recorded for "${cleanName}"! Liquid account balance updated.`,
       investment_id: investmentId
     });
   } catch (error) {

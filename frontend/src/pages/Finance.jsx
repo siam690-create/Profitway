@@ -124,9 +124,21 @@ export const Finance = () => {
   };
 
   const handleOpenInvestAudit = (investRecord) => {
-    const relatedLogs = investmentData.transactions.filter(t => t.investment_id === investRecord.id);
+    const investorName = investRecord.investor_name;
+    const relatedLogs = (investmentData.transactions || []).filter(t => 
+      (t.investor_name && t.investor_name.toLowerCase() === investorName.toLowerCase()) ||
+      (investRecord.entries && investRecord.entries.some(e => e.id === t.investment_id)) ||
+      (investRecord.sample_id && investRecord.sample_id === t.investment_id)
+    );
+
+    const deposits = relatedLogs.filter(t => t.type === 'deposit');
+    const repayments = relatedLogs.filter(t => t.type === 'repayment');
+
     setInvestAuditData({
+      investor_name: investorName,
       investment: investRecord,
+      deposits,
+      repayments,
       transactions: relatedLogs
     });
   };
@@ -713,68 +725,95 @@ export const Finance = () => {
       })()}
 
       {/* 4. Business Investment Section */}
-      {activeSubTab === 'investments' && (
-        <div className="glass-card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div>
-              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Business Investments & Investor Capital (বিনিয়োগ খাত)</h3>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Track external investments, investor funding deposits, and capital repayments
-              </p>
+      {activeSubTab === 'investments' && (() => {
+        // Group Investments by Investor Name
+        const groupedInvestmentsMap = new Map();
+        investments.forEach(inv => {
+          const invKey = (inv.investor_name || 'General Investor').trim();
+          if (!groupedInvestmentsMap.has(invKey)) {
+            groupedInvestmentsMap.set(invKey, {
+              investor_name: invKey,
+              phone: inv.phone || '',
+              email: inv.email || '',
+              invested_amount: 0,
+              returned_amount: 0,
+              active_capital: 0,
+              entries: [],
+              latest_date: inv.created_at,
+              sample_id: inv.id
+            });
+          }
+          const invObj = groupedInvestmentsMap.get(invKey);
+          const invested = Number(inv.invested_amount || 0);
+          const returned = Number(inv.returned_amount || 0);
+          invObj.invested_amount += invested;
+          invObj.returned_amount += returned;
+          invObj.active_capital += Math.max(0, invested - returned);
+          if (inv.phone && !invObj.phone) invObj.phone = inv.phone;
+          if (inv.email && !invObj.email) invObj.email = inv.email;
+          invObj.entries.push(inv);
+        });
+
+        const consolidatedInvestments = Array.from(groupedInvestmentsMap.values());
+
+        return (
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Business Investments & Investor Capital (বিনিয়োগ খাত)</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Consolidated by Investor Profile. Click History to view complete investment deposit & return ledger.
+                </p>
+              </div>
+
+              <button onClick={() => setShowInvestModal(true)} className="btn btn-primary btn-sm" style={{ background: '#8b5cf6', borderColor: '#8b5cf6' }}>
+                <Plus size={15} />
+                <span>+ Record New Investment</span>
+              </button>
             </div>
 
-            <button onClick={() => setShowInvestModal(true)} className="btn btn-primary btn-sm" style={{ background: '#8b5cf6', borderColor: '#8b5cf6' }}>
-              <Plus size={15} />
-              <span>+ Record New Investment</span>
-            </button>
-          </div>
-
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Investor Name</th>
-                  <th>Contact Info</th>
-                  <th>Invested Amount</th>
-                  <th>Returned Capital</th>
-                  <th>Net Active Capital</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {investments.length === 0 ? (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                      No business investments recorded yet.
-                    </td>
+                    <th>Investor Profile Name</th>
+                    <th>Contact Info</th>
+                    <th>Total Invested</th>
+                    <th>Returned Capital</th>
+                    <th>Net Active Capital</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ) : (
-                  investments.map(inv => {
-                    const activeCapital = Number(inv.invested_amount) - Number(inv.returned_amount);
-                    return (
-                      <tr key={inv.id}>
+                </thead>
+                <tbody>
+                  {consolidatedInvestments.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        No business investments recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    consolidatedInvestments.map((inv, idx) => (
+                      <tr key={idx}>
                         <td>
                           <strong>{inv.investor_name}</strong>
-                          {inv.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{inv.notes}</div>}
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {inv.entries.length} Capital Deposit{inv.entries.length > 1 ? 's' : ''}
+                          </div>
                         </td>
                         <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                           <div>{inv.phone || 'N/A'}</div>
                           <div>{inv.email || ''}</div>
                         </td>
-                        <td style={{ fontWeight: '700', color: '#8b5cf6' }}>{currency}{Number(inv.invested_amount).toFixed(2)}</td>
-                        <td style={{ color: 'var(--success)' }}>{currency}{Number(inv.returned_amount).toFixed(2)}</td>
-                        <td style={{ fontWeight: '800', color: activeCapital > 0 ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
-                          {currency}{activeCapital.toFixed(2)}
+                        <td style={{ fontWeight: '700', color: '#8b5cf6' }}>{currency}{inv.invested_amount.toFixed(2)}</td>
+                        <td style={{ color: 'var(--success)' }}>{currency}{inv.returned_amount.toFixed(2)}</td>
+                        <td style={{ fontWeight: '800', color: inv.active_capital > 0 ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
+                          {currency}{inv.active_capital.toFixed(2)}
                         </td>
                         <td>
-                          <span className={`badge ${inv.status === 'returned' ? 'badge-success' : 'badge-warning'}`}>
-                            {inv.status.replace('_', ' ').toUpperCase()}
+                          <span className={`badge ${inv.active_capital <= 0 ? 'badge-success' : 'badge-warning'}`}>
+                            {inv.active_capital <= 0 ? 'RETURNED' : 'ACTIVE'}
                           </span>
-                        </td>
-                        <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          {new Date(inv.created_at).toLocaleDateString()}
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: '8px' }}>
@@ -782,22 +821,22 @@ export const Finance = () => {
                               <Eye size={14} />
                               <span>History</span>
                             </button>
-                            {activeCapital > 0 && (
-                              <button onClick={() => { setShowRepayInvestModal(inv); setRepayInvestAmt(activeCapital); }} className="btn btn-secondary btn-sm">
+                            {inv.active_capital > 0 && (
+                              <button onClick={() => { setShowRepayInvestModal({ ...inv, id: inv.sample_id }); setRepayInvestAmt(inv.active_capital); }} className="btn btn-secondary btn-sm">
                                 Return Capital
                               </button>
                             )}
                           </div>
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 5. Staff Salary & Payroll Section */}
       {activeSubTab === 'payroll' && (
@@ -1248,11 +1287,11 @@ export const Finance = () => {
       {/* 4. Investor Capital Audit Modal */}
       {investAuditData && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '720px' }}>
+          <div className="modal-content" style={{ maxWidth: '820px' }}>
             <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Investor Capital Audit — {investAuditData.investment.investor_name}</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Phone: {investAuditData.investment.phone || 'N/A'}</span>
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Investor Capital Audit — {investAuditData.investor_name}</h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Contact: {investAuditData.investment.phone || 'N/A'}</span>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={handlePrintStatement} className="btn btn-secondary btn-sm">
@@ -1263,39 +1302,75 @@ export const Finance = () => {
               </div>
             </div>
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
-                <div>Total Invested: <strong style={{ display: 'block', fontSize: '16px', color: '#8b5cf6' }}>{currency}{Number(investAuditData.investment.invested_amount).toFixed(2)}</strong></div>
-                <div>Capital Returned: <strong style={{ display: 'block', fontSize: '16px', color: 'var(--success)' }}>{currency}{Number(investAuditData.investment.returned_amount).toFixed(2)}</strong></div>
-                <div>Net Outstanding: <strong style={{ display: 'block', fontSize: '16px', color: 'var(--accent-primary)' }}>{currency}{(Number(investAuditData.investment.invested_amount) - Number(investAuditData.investment.returned_amount)).toFixed(2)}</strong></div>
+                <div>Total Invested Capital: <strong style={{ display: 'block', fontSize: '16px', color: '#8b5cf6' }}>{currency}{Number(investAuditData.investment.invested_amount).toFixed(2)}</strong></div>
+                <div>Returned Capital: <strong style={{ display: 'block', fontSize: '16px', color: 'var(--success)' }}>{currency}{Number(investAuditData.investment.returned_amount).toFixed(2)}</strong></div>
+                <div>Net Active Capital: <strong style={{ display: 'block', fontSize: '16px', color: (Number(investAuditData.investment.invested_amount) - Number(investAuditData.investment.returned_amount)) > 0 ? 'var(--accent-primary)' : 'var(--text-muted)' }}>{currency}{(Number(investAuditData.investment.invested_amount) - Number(investAuditData.investment.returned_amount)).toFixed(2)}</strong></div>
               </div>
 
+              {/* 1. Deposit History */}
               <div>
-                <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px' }}>Capital Transaction History Ledger</h4>
+                <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px', color: '#8b5cf6' }}>
+                  📌 Investment Deposit History (কখন কত টাকা ইনভেস্ট যোগ হয়েছে)
+                </h4>
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Type</th>
-                      <th>Amount</th>
-                      <th>Notes</th>
+                      <th>Deposit Date</th>
+                      <th>Amount Invested</th>
+                      <th>Notes / Reference</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {investAuditData.transactions.map((t, idx) => (
-                      <tr key={idx}>
-                        <td style={{ fontSize: '12px' }}>{new Date(t.transaction_date).toLocaleString()}</td>
-                        <td>
-                          <span className={`badge ${t.type === 'deposit' ? 'badge-success' : 'badge-warning'}`}>
-                            {t.type.toUpperCase()}
-                          </span>
+                    {(!investAuditData.deposits || investAuditData.deposits.length === 0) ? (
+                      <tr>
+                        <td colSpan="3" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                          No deposit transactions recorded.
                         </td>
-                        <td style={{ fontWeight: '700', color: t.type === 'deposit' ? 'var(--success)' : 'var(--danger)' }}>
-                          {t.type === 'deposit' ? '+' : '-'}{currency}{Number(t.amount).toFixed(2)}
-                        </td>
-                        <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.notes}</td>
                       </tr>
-                    ))}
+                    ) : (
+                      investAuditData.deposits.map((t, idx) => (
+                        <tr key={idx}>
+                          <td style={{ fontSize: '12px' }}>{new Date(t.transaction_date).toLocaleString()}</td>
+                          <td style={{ fontWeight: '700', color: '#8b5cf6' }}>+{currency}{Number(t.amount).toFixed(2)}</td>
+                          <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.notes || 'Investment Deposit'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 2. Return History */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px', color: 'var(--success)' }}>
+                  💳 Capital Return / Repayment History (কখন কত টাকা ফেরত/Return দেওয়া হয়েছে)
+                </h4>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Return Date</th>
+                      <th>Amount Returned</th>
+                      <th>Notes / Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(!investAuditData.repayments || investAuditData.repayments.length === 0) ? (
+                      <tr>
+                        <td colSpan="3" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                          No capital repayments recorded against this investor yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      investAuditData.repayments.map((t, idx) => (
+                        <tr key={idx}>
+                          <td style={{ fontSize: '12px' }}>{new Date(t.transaction_date).toLocaleString()}</td>
+                          <td style={{ fontWeight: '700', color: 'var(--success)' }}>-{currency}{Number(t.amount).toFixed(2)}</td>
+                          <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.notes || 'Capital Repayment'}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
