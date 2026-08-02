@@ -226,39 +226,36 @@ exports.payLiability = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
-    const { payment_amount, account_id, notes } = req.body;
+    const { payment_amount, account_id, notes, party_name } = req.body;
 
-    const payAmt = Number(payment_amount);
+    let payAmt = Number(payment_amount);
     if (isNaN(payAmt) || payAmt <= 0) {
       return res.status(400).json({ error: 'Valid payment amount is required.' });
     }
 
     await connection.beginTransaction();
 
-    const [liabilities] = await connection.query(
-      'SELECT * FROM liabilities WHERE id = ? AND tenant_id = ? FOR UPDATE',
-      [id, tenantId]
-    );
-
-    if (liabilities.length === 0) throw new Error('Liability record not found.');
-    const l = liabilities[0];
-
-    const currentPaid = Number(l.amount_paid || 0);
-    const newPaid = currentPaid + payAmt;
-    const totalAmt = Number(l.total_amount);
-
-    let newStatus = 'partially_paid';
-    if (newPaid >= totalAmt) {
-      newStatus = 'paid';
+    // Fetch pending liabilities for party or by ID
+    let pendingLiabilities = [];
+    if (party_name) {
+      const [rows] = await connection.query(
+        `SELECT * FROM liabilities WHERE tenant_id = ? AND party_name = ? AND status != 'paid' ORDER BY created_at ASC FOR UPDATE`,
+        [tenantId, party_name]
+      );
+      pendingLiabilities = rows;
     }
 
-    // 1. Update Liability Record
-    await connection.query(
-      'UPDATE liabilities SET amount_paid = ?, status = ? WHERE id = ? AND tenant_id = ?',
-      [newPaid, newStatus, id, tenantId]
-    );
+    if (pendingLiabilities.length === 0 && id) {
+      const [rows] = await connection.query(
+        'SELECT * FROM liabilities WHERE id = ? AND tenant_id = ? FOR UPDATE',
+        [id, tenantId]
+      );
+      pendingLiabilities = rows;
+    }
 
-    // 2. Deduct Amount from Selected Account
+    if (pendingLiabilities.length === 0) throw new Error('No pending Dena liability record found.');
+
+    // 1. Deduct Amount from Selected Account
     if (account_id) {
       const [accRows] = await connection.query(
         'SELECT balance, name FROM finance_accounts WHERE id = ? AND tenant_id = ? FOR UPDATE',
@@ -275,16 +272,40 @@ exports.payLiability = async (req, res) => {
       );
     }
 
-    // 3. Insert Payment Log
-    await connection.query(
-      `INSERT INTO liability_payments (tenant_id, liability_id, amount, account_id, notes, payment_date)
-       VALUES (?, ?, ?, ?, ?, NOW())`,
-      [tenantId, id, payAmt, account_id || null, notes || 'Dena Repayment']
-    );
+    // 2. Distribute payment across pending liabilities
+    let remainingToPay = payAmt;
+    for (const l of pendingLiabilities) {
+      if (remainingToPay <= 0) break;
+
+      const currentPaid = Number(l.amount_paid || 0);
+      const totalAmt = Number(l.total_amount);
+      const dueOnThis = Math.max(0, totalAmt - currentPaid);
+
+      const allocation = Math.min(remainingToPay, dueOnThis);
+      const newPaid = currentPaid + allocation;
+      const newStatus = newPaid >= totalAmt ? 'paid' : 'partially_paid';
+
+      await connection.query(
+        'UPDATE liabilities SET amount_paid = ?, status = ? WHERE id = ? AND tenant_id = ?',
+        [newPaid, newStatus, l.id, tenantId]
+      );
+
+      // Insert payment log
+      await connection.query(
+        `INSERT INTO liability_payments (tenant_id, liability_id, amount, account_id, notes, payment_date)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
+        [tenantId, l.id, allocation, account_id || null, notes || null]
+      );
+
+      remainingToPay -= allocation;
+    }
 
     await connection.commit();
 
-    res.json({ message: 'Liability payment processed successfully' });
+    res.json({
+      message: `Dena payment of ৳${payAmt.toFixed(2)} processed successfully!`
+    });
+
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ error: error.message });
@@ -476,55 +497,69 @@ exports.paySalary = async (req, res) => {
 // AUDIT HISTORY & LEDGER STATEMENT APIS
 // ------------------------------------------------------------------
 
-// Get Detailed Dena (Liability) Audit History (Product Purchase Breakdown + Payment Logs)
+// Get Detailed Dena (Liability) Audit History for Supplier / Party
 exports.getDenaAudit = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
+    const { party_name } = req.query;
 
-    const [liabilities] = await db.query(
-      'SELECT * FROM liabilities WHERE id = ? AND tenant_id = ?',
-      [id, tenantId]
-    );
+    let targetPartyName = party_name;
+
+    if (!targetPartyName && id) {
+      const [rows] = await db.query(
+        'SELECT party_name FROM liabilities WHERE id = ? AND tenant_id = ?',
+        [id, tenantId]
+      );
+      if (rows.length > 0) targetPartyName = rows[0].party_name;
+    }
+
+    let liabilities = [];
+    if (targetPartyName) {
+      const [rows] = await db.query(
+        'SELECT * FROM liabilities WHERE party_name = ? AND tenant_id = ? ORDER BY created_at DESC',
+        [targetPartyName, tenantId]
+      );
+      liabilities = rows;
+    } else {
+      const [rows] = await db.query(
+        'SELECT * FROM liabilities WHERE id = ? AND tenant_id = ?',
+        [id, tenantId]
+      );
+      liabilities = rows;
+    }
 
     if (liabilities.length === 0) return res.status(404).json({ error: 'Dena liability record not found.' });
 
-    const liability = liabilities[0];
+    const partyName = targetPartyName || liabilities[0].party_name;
+    const liabIds = liabilities.map(l => l.id);
 
-    // 1. Fetch Payment Logs made against this Dena
-    const [paymentLogs] = await db.query(
-      `SELECT lp.*, fa.name as account_name 
-       FROM liability_payments lp
-       LEFT JOIN finance_accounts fa ON fa.id = lp.account_id
-       WHERE lp.liability_id = ? AND lp.tenant_id = ?
-       ORDER BY lp.payment_date DESC`,
-      [id, tenantId]
-    );
-
-    // 2. Fetch Linked Purchase Order & Items if title contains purchase code or matches supplier
-    let purchaseDetails = null;
-    let purchaseItems = [];
-
-    // Extract code like #PUR-20260726-186
-    const codeMatch = liability.title.match(/#PUR-[A-Za-z0-9-]+/);
-    const purchaseCode = codeMatch ? codeMatch[0].replace('#', '') : null;
-
-    let purchaseQuery = 'SELECT * FROM purchases WHERE tenant_id = ? AND (purchase_no = ? OR supplier_name = ? OR notes LIKE ?)';
-    let [purchases] = await db.query(purchaseQuery, [tenantId, purchaseCode, liability.party_name, `%${liability.title}%`]);
-
-    if (purchases.length > 0) {
-      purchaseDetails = purchases[0];
-      const [items] = await db.query(
-        'SELECT * FROM purchase_items WHERE purchase_id = ?',
-        [purchaseDetails.id]
+    // 1. Fetch Payment Logs made against this Supplier / Party
+    let paymentLogs = [];
+    if (liabIds.length > 0) {
+      const [logs] = await db.query(
+        `SELECT lp.*, fa.name as account_name, l.title as liability_title 
+         FROM liability_payments lp
+         LEFT JOIN finance_accounts fa ON fa.id = lp.account_id
+         JOIN liabilities l ON l.id = lp.liability_id
+         WHERE lp.liability_id IN (?) AND lp.tenant_id = ?
+         ORDER BY lp.payment_date DESC`,
+        [liabIds, tenantId]
       );
-      purchaseItems = items;
+      paymentLogs = logs;
     }
 
+    // 2. Fetch Linked Purchase Orders & Items for this Supplier
+    const [purchases] = await db.query(
+      'SELECT * FROM purchases WHERE tenant_id = ? AND supplier_name = ? ORDER BY purchase_date DESC',
+      [tenantId, partyName]
+    );
+
     res.json({
-      liability,
-      purchase: purchaseDetails,
-      items: purchaseItems,
+      party_name: partyName,
+      liability: liabilities[0],
+      liabilities,
+      purchases,
       payment_logs: paymentLogs
     });
 

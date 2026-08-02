@@ -90,9 +90,12 @@ export const Finance = () => {
     fetchFinance();
   }, []);
 
-  const handleOpenDenaAudit = async (denaId) => {
+  const handleOpenDenaAudit = async (denaItem) => {
     try {
-      const res = await authFetch(`/api/finance/liabilities/${denaId}/audit`);
+      const sampleId = typeof denaItem === 'object' ? denaItem.sample_id : denaItem;
+      const partyName = typeof denaItem === 'object' ? denaItem.party_name : '';
+      const url = `/api/finance/liabilities/${sampleId}/audit?party_name=${encodeURIComponent(partyName)}`;
+      const res = await authFetch(url);
       const data = await res.json();
       if (res.ok) setDenaAuditData(data);
     } catch (err) {
@@ -232,16 +235,23 @@ export const Finance = () => {
     e.preventDefault();
     if (!showPayDenaModal) return;
     try {
-      const res = await authFetch(`/api/finance/liabilities/${showPayDenaModal.id}/pay`, {
+      const res = await authFetch(`/api/finance/liabilities/${showPayDenaModal.sample_id || showPayDenaModal.id}/pay`, {
         method: 'POST',
-        body: JSON.stringify({ payment_amount: payDenaAmt, account_id: payDenaAccId })
+        body: JSON.stringify({
+          payment_amount: payDenaAmt,
+          account_id: payDenaAccId,
+          party_name: showPayDenaModal.party_name
+        })
       });
+      const data = await res.json();
       if (res.ok) {
         setShowPayDenaModal(null);
         setPayDenaAmt('');
         setPayDenaAccId('');
         fetchFinance();
-        alert('Dena payment processed successfully!');
+        alert(data.message || 'Dena payment recorded & account balance updated!');
+      } else {
+        alert(`Error: ${data.error}`);
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
@@ -589,81 +599,118 @@ export const Finance = () => {
       )}
 
       {/* 3. Dena / Liabilities Section */}
-      {activeSubTab === 'dena' && (
-        <div className="glass-card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Supplier & Vendor Dena Liabilities (দেনা খাত)</h3>
-            <button onClick={() => setShowDenaModal(true)} className="btn btn-danger btn-sm">
-              <Plus size={15} />
-              <span>+ Record New Dena</span>
-            </button>
-          </div>
+      {activeSubTab === 'dena' && (() => {
+        // Group Dena liabilities by Supplier / Party Name
+        const groupedLiabilitiesMap = new Map();
+        liabilities.forEach(l => {
+          const partyKey = (l.party_name || 'General Supplier').trim();
+          if (!groupedLiabilitiesMap.has(partyKey)) {
+            groupedLiabilitiesMap.set(partyKey, {
+              party_name: partyKey,
+              party_type: l.party_type || 'supplier',
+              total_amount: 0,
+              amount_paid: 0,
+              pending_dena: 0,
+              entries: [],
+              latest_date: l.created_at || l.due_date,
+              sample_id: l.id
+            });
+          }
+          const partyObj = groupedLiabilitiesMap.get(partyKey);
+          const total = Number(l.total_amount || 0);
+          const paid = Number(l.amount_paid || 0);
+          const pending = Math.max(0, total - paid);
 
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Title & Description</th>
-                  <th>Party Name & Type</th>
-                  <th>Total Dena</th>
-                  <th>Paid Amount</th>
-                  <th>Pending Dena</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {liabilities.length === 0 ? (
+          partyObj.total_amount += total;
+          partyObj.amount_paid += paid;
+          partyObj.pending_dena += pending;
+          partyObj.entries.push(l);
+          if (new Date(l.created_at) > new Date(partyObj.latest_date)) {
+            partyObj.latest_date = l.created_at;
+          }
+        });
+
+        const consolidatedLiabilities = Array.from(groupedLiabilitiesMap.values());
+
+        return (
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Supplier & Vendor Dena Liabilities (দেনা খাত)</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Consolidated by Supplier / Party Name. Click History to view complete addition & payment ledger.
+                </p>
+              </div>
+              <button onClick={() => setShowDenaModal(true)} className="btn btn-danger btn-sm">
+                <Plus size={15} />
+                <span>+ Record New Dena</span>
+              </button>
+            </div>
+
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                      No Dena (Liability) records found.
-                    </td>
+                    <th>Supplier / Party Name</th>
+                    <th>Type</th>
+                    <th>Total Dena</th>
+                    <th>Total Paid</th>
+                    <th>Pending Dena</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ) : (
-                  liabilities.map(l => {
-                    const pending = Number(l.total_amount) - Number(l.amount_paid);
-                    return (
-                      <tr key={l.id}>
-                        <td>
-                          <strong>{l.title}</strong>
-                          {l.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{l.notes}</div>}
-                        </td>
+                </thead>
+                <tbody>
+                  {consolidatedLiabilities.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        No Dena (Liability) records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    consolidatedLiabilities.map((l, idx) => (
+                      <tr key={idx}>
                         <td>
                           <strong>{l.party_name}</strong>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>{l.party_type}</span>
-                        </td>
-                        <td style={{ fontWeight: '600' }}>{currency}{Number(l.total_amount).toFixed(2)}</td>
-                        <td style={{ color: 'var(--success)' }}>{currency}{Number(l.amount_paid).toFixed(2)}</td>
-                        <td style={{ fontWeight: '700', color: pending > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                          {currency}{pending.toFixed(2)}
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {l.entries.length} Dena Bill{l.entries.length > 1 ? 's' : ''} Record
+                          </div>
                         </td>
                         <td>
-                          <span className={`badge ${l.status === 'paid' ? 'badge-success' : 'badge-danger'}`}>
-                            {l.status.toUpperCase()}
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{l.party_type}</span>
+                        </td>
+                        <td style={{ fontWeight: '600' }}>{currency}{l.total_amount.toFixed(2)}</td>
+                        <td style={{ color: 'var(--success)' }}>{currency}{l.amount_paid.toFixed(2)}</td>
+                        <td style={{ fontWeight: '700', color: l.pending_dena > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          {currency}{l.pending_dena.toFixed(2)}
+                        </td>
+                        <td>
+                          <span className={`badge ${l.pending_dena === 0 ? 'badge-success' : 'badge-danger'}`}>
+                            {l.pending_dena === 0 ? 'PAID' : 'PENDING'}
                           </span>
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={() => handleOpenDenaAudit(l.id)} className="btn btn-secondary btn-sm" title="View Full Detailed History Statement">
+                            <button onClick={() => handleOpenDenaAudit(l)} className="btn btn-secondary btn-sm" title="View Full Detailed History Statement">
                               <Eye size={14} />
                               <span>History</span>
                             </button>
-                            {pending > 0 && (
-                              <button onClick={() => { setShowPayDenaModal(l); setPayDenaAmt(pending); }} className="btn btn-primary btn-sm">
+                            {l.pending_dena > 0 && (
+                              <button onClick={() => { setShowPayDenaModal(l); setPayDenaAmt(l.pending_dena); }} className="btn btn-primary btn-sm">
                                 Pay Dena
                               </button>
                             )}
                           </div>
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 4. Business Investment Section */}
       {activeSubTab === 'investments' && (
@@ -919,11 +966,13 @@ export const Finance = () => {
       {/* 1. Dena Audit History & Statement Modal */}
       {denaAuditData && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '780px' }}>
+          <div className="modal-content" style={{ maxWidth: '850px' }}>
             <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Supplier Dena Statement & Audit Trail</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Party: {denaAuditData.liability.party_name}</span>
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>
+                  Supplier Dena Statement & Audit Trail — {denaAuditData.party_name}
+                </h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Consolidated Ledger for {denaAuditData.party_name}</span>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={handlePrintStatement} className="btn btn-secondary btn-sm">
@@ -934,45 +983,78 @@ export const Finance = () => {
               </div>
             </div>
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Summary Banner */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
-                <div>Supplier Name: <strong style={{ display: 'block', fontSize: '15px' }}>{denaAuditData.liability.party_name}</strong></div>
-                <div>Total Dena: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--text-primary)' }}>{currency}{Number(denaAuditData.liability.total_amount).toFixed(2)}</strong></div>
-                <div>Paid Amount: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--success)' }}>{currency}{Number(denaAuditData.liability.amount_paid).toFixed(2)}</strong></div>
-                <div>Pending Dena: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--danger)' }}>{currency}{(Number(denaAuditData.liability.total_amount) - Number(denaAuditData.liability.amount_paid)).toFixed(2)}</strong></div>
+              {(() => {
+                const totalDena = (denaAuditData.liabilities || [denaAuditData.liability]).reduce((sum, l) => sum + Number(l.total_amount || 0), 0);
+                const totalPaid = (denaAuditData.liabilities || [denaAuditData.liability]).reduce((sum, l) => sum + Number(l.amount_paid || 0), 0);
+                const pendingDena = Math.max(0, totalDena - totalPaid);
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
+                    <div>Supplier Name: <strong style={{ display: 'block', fontSize: '15px' }}>{denaAuditData.party_name}</strong></div>
+                    <div>Total Dena Added: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--text-primary)' }}>{currency}{totalDena.toFixed(2)}</strong></div>
+                    <div>Total Paid Amount: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--success)' }}>{currency}{totalPaid.toFixed(2)}</strong></div>
+                    <div>Pending Dena Due: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--danger)' }}>{currency}{pendingDena.toFixed(2)}</strong></div>
+                  </div>
+                );
+              })()}
+
+              {/* 1. Dena Addition History */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px', color: 'var(--accent-primary)' }}>
+                  📌 Dena Addition History (কখন কত টাকা দেনা যোগ হয়েছে)
+                </h4>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Date Added</th>
+                      <th>Title / Order Description</th>
+                      <th>Total Dena</th>
+                      <th>Paid</th>
+                      <th>Pending</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(!denaAuditData.liabilities || denaAuditData.liabilities.length === 0) ? (
+                      <tr>
+                        <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                          No Dena records found.
+                        </td>
+                      </tr>
+                    ) : (
+                      denaAuditData.liabilities.map((l, idx) => {
+                        const pending = Number(l.total_amount) - Number(l.amount_paid);
+                        return (
+                          <tr key={idx}>
+                            <td style={{ fontSize: '12px' }}>{new Date(l.created_at || l.due_date).toLocaleString()}</td>
+                            <td>
+                              <strong>{l.title}</strong>
+                              {l.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{l.notes}</div>}
+                            </td>
+                            <td style={{ fontWeight: '600' }}>{currency}{Number(l.total_amount).toFixed(2)}</td>
+                            <td style={{ color: 'var(--success)' }}>{currency}{Number(l.amount_paid).toFixed(2)}</td>
+                            <td style={{ fontWeight: '700', color: pending > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                              {currency}{pending.toFixed(2)}
+                            </td>
+                            <td>
+                              <span className={`badge ${l.status === 'paid' ? 'badge-success' : 'badge-danger'}`}>
+                                {l.status.toUpperCase()}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
 
-              {/* Purchase Order Products Breakdown */}
-              {denaAuditData.items && denaAuditData.items.length > 0 && (
-                <div>
-                  <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px' }}>Purchased Products Breakdown (কেনা প্রোডাক্টের তালিকা)</h4>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Product Name</th>
-                        <th>Qty Purchased</th>
-                        <th>Unit Buy Price</th>
-                        <th>Line Total Cost</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {denaAuditData.items.map((item, idx) => (
-                        <tr key={idx}>
-                          <td><strong>{item.product_name}</strong></td>
-                          <td>{item.quantity}</td>
-                          <td>{currency}{Number(item.unit_buy_price).toFixed(2)}</td>
-                          <td style={{ fontWeight: '700' }}>{currency}{Number(item.total_cost).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Payment Logs Ledger */}
+              {/* 2. Dena Repayment History */}
               <div>
-                <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px' }}>Dena Repayment History Ledger (টাকা ফেরতের হিসাব)</h4>
+                <h4 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '8px', color: 'var(--success)' }}>
+                  💳 Dena Repayment History (কখন কত টাকা পরিশোধ/Pay করা হয়েছে)
+                </h4>
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -986,7 +1068,7 @@ export const Finance = () => {
                     {(!denaAuditData.payment_logs || denaAuditData.payment_logs.length === 0) ? (
                       <tr>
                         <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
-                          No payments made against this Dena yet.
+                          No repayments recorded against this supplier yet.
                         </td>
                       </tr>
                     ) : (
@@ -995,7 +1077,7 @@ export const Finance = () => {
                           <td style={{ fontSize: '12px' }}>{new Date(log.payment_date).toLocaleString()}</td>
                           <td style={{ fontWeight: '700', color: 'var(--success)' }}>{currency}{Number(log.amount).toFixed(2)}</td>
                           <td><strong>{log.account_name || 'Cash Box'}</strong></td>
-                          <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{log.notes || 'Repayment'}</td>
+                          <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{log.notes || 'Dena Repayment'}</td>
                         </tr>
                       ))
                     )}
