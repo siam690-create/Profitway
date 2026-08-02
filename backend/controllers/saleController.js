@@ -291,3 +291,47 @@ exports.updateSale = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Delete Sale Order & Restore Product Stock to Inventory (RESTRICTED TO SHOP OWNER)
+exports.deleteSale = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const userRole = req.user.role;
+    const { id } = req.params;
+
+    if (userRole !== 'owner' && userRole !== 'superadmin') {
+      return res.status(403).json({ error: 'Permission Denied. Only Shop Owners can delete sales orders.' });
+    }
+
+    const [sales] = await connection.query('SELECT * FROM sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (sales.length === 0) {
+      return res.status(404).json({ error: 'Sales order not found' });
+    }
+
+    await connection.beginTransaction();
+
+    // Fetch items for this sale to restore stock back to inventory
+    const [items] = await connection.query('SELECT * FROM sale_items WHERE sale_id = ? AND tenant_id = ?', [id, tenantId]);
+
+    for (const item of items) {
+      await connection.query(
+        'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?',
+        [item.quantity, item.product_id, tenantId]
+      );
+    }
+
+    // Delete sale items & sale order
+    await connection.query('DELETE FROM sale_items WHERE sale_id = ? AND tenant_id = ?', [id, tenantId]);
+    await connection.query('DELETE FROM sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+
+    await connection.commit();
+
+    res.json({ message: 'Sales order deleted and product stock restored to inventory successfully.' });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};

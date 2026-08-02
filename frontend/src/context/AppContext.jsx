@@ -443,6 +443,25 @@ export const AppProvider = ({ children }) => {
     return `${currency}${amount.toFixed(precision)}`;
   };
 
+  const deleteSale = async (saleId) => {
+    try {
+      const res = await authFetch(`/api/sales/${saleId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchSales();
+        fetchProducts();
+        fetchDashboard();
+        return { success: true, message: data.message };
+      } else {
+        return { success: false, error: data.error };
+      }
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -484,6 +503,7 @@ export const AppProvider = ({ children }) => {
         removeFromCart,
         clearCart,
         checkoutSale,
+        deleteSale,
         addProduct,
         updateProduct,
         deleteProduct,

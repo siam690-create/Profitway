@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Search, ShoppingBag, Calendar, Eye, Printer, Filter, CreditCard, DollarSign, Globe } from 'lucide-react';
+import { Search, ShoppingBag, Calendar, Eye, Printer, Filter, CreditCard, DollarSign, Globe, Trash2, Edit2 } from 'lucide-react';
 import { ReceiptModal } from '../components/ReceiptModal';
 
 export const Orders = () => {
-  const { authFetch, currency, sales, fetchSales } = useApp();
+  const { authFetch, currency, sales, fetchSales, deleteSale, user } = useApp();
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [selectedSale, setSelectedSale] = useState(null);
-  const [loading, setLoading] = useState(false);
+
+  const isOwner = user?.role === 'owner' || user?.role === 'superadmin';
 
   useEffect(() => {
     fetchSales();
@@ -28,9 +29,20 @@ export const Orders = () => {
     }
   };
 
+  const handleDeleteSale = async (sale) => {
+    if (window.confirm(`Are you sure you want to delete Invoice #${sale.invoice_no}? Product quantities will be restored back to inventory stock.`)) {
+      const res = await deleteSale(sale.id);
+      if (res.success) {
+        alert('Order deleted and product stock restored to inventory successfully!');
+      } else {
+        alert(`Delete failed: ${res.error}`);
+      }
+    }
+  };
+
   // Filter Sales locally
   const filteredSales = sales.filter(s => {
-    const matchesSearch = s.invoice_no.toLowerCase().includes(search.toLowerCase()) || 
+    const matchesSearch = (s.invoice_no && s.invoice_no.toLowerCase().includes(search.toLowerCase())) || 
                           (s.customer_name && s.customer_name.toLowerCase().includes(search.toLowerCase()));
     const matchesPayment = paymentMethod ? s.payment_method === paymentMethod : true;
     
@@ -43,8 +55,8 @@ export const Orders = () => {
     return matchesSearch && matchesPayment && matchesDate;
   });
 
-  const totalFilteredAmount = filteredSales.reduce((sum, s) => sum + Number(s.total_amount), 0);
-  const totalFilteredProfit = filteredSales.reduce((sum, s) => sum + Number(s.gross_profit), 0);
+  const totalFilteredAmount = filteredSales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+  const totalFilteredProfit = filteredSales.reduce((sum, s) => sum + Number(s.gross_profit || 0), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -149,25 +161,41 @@ export const Orders = () => {
                       )}
                     </td>
                     <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                      {new Date(sale.sale_date).toLocaleString()}
+                      {sale.sale_date ? new Date(sale.sale_date).toLocaleString() : 'N/A'}
                     </td>
                     <td style={{ fontSize: '14px', fontWeight: '500' }}>{sale.customer_name || 'Walk-in Customer'}</td>
                     <td>
                       <span className="badge badge-info">{sale.payment_method}</span>
                     </td>
                     <td style={{ fontSize: '14px', fontWeight: '800' }}>
-                      {currency}{Number(sale.total_amount).toFixed(2)}
+                      {currency}{Number(sale.total_amount || 0).toFixed(2)}
                     </td>
                     <td>
                       <span className="badge badge-success">
-                        +{currency}{Number(sale.gross_profit).toFixed(2)}
+                        +{currency}{Number(sale.gross_profit || 0).toFixed(2)}
                       </span>
                     </td>
                     <td>
-                      <button onClick={() => handleViewReceipt(sale.id)} className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                        <Eye size={14} />
-                        <span>View Invoice</span>
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button onClick={() => handleViewReceipt(sale.id)} className="btn btn-secondary btn-sm" title="View & Print Receipt">
+                          <Eye size={14} />
+                          <span>View Invoice</span>
+                        </button>
+
+                        {isOwner && (
+                          <>
+                            <button onClick={() => handleViewReceipt(sale.id)} className="btn btn-secondary btn-sm" title="Edit Order Information">
+                              <Edit2 size={14} color="var(--accent-primary)" />
+                              <span>Edit</span>
+                            </button>
+
+                            <button onClick={() => handleDeleteSale(sale)} className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} title="Delete Order & Restore Stock">
+                              <Trash2 size={14} color="var(--danger)" />
+                              <span>Delete</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
