@@ -140,6 +140,7 @@ router.post('/purchases', checkActiveSubscription, purchaseController.createPurc
 router.get('/purchases', purchaseController.getPurchases);
 router.get('/purchases/:id', purchaseController.getPurchaseById);
 router.put('/purchases/:id', checkActiveSubscription, purchaseController.updatePurchase);
+router.delete('/purchases/:id', checkActiveSubscription, purchaseController.deletePurchase);
 
 // Courier Returns & Product Restock APIs
 router.post('/returns', checkActiveSubscription, returnController.createReturn);

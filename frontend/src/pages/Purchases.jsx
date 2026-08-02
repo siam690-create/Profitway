@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Truck, Plus, PackagePlus, CheckCircle, Eye, X, Building2, Phone, MapPin, DollarSign, Wallet, FileText } from 'lucide-react';
+import { Truck, Plus, PackagePlus, CheckCircle, Eye, X, Building2, Phone, MapPin, DollarSign, Wallet, FileText, Trash2 } from 'lucide-react';
 import { ProductSelectSearch } from '../components/ProductSelectSearch';
 
 export const Purchases = () => {
@@ -193,6 +193,25 @@ export const Purchases = () => {
     }
   };
 
+  const handleDeletePurchase = async (purchase) => {
+    if (!window.confirm(`Are you sure you want to delete Purchase Order #${purchase.purchase_no}? Product stock added during this purchase will be reverted back.`)) {
+      return;
+    }
+    try {
+      const res = await authFetch(`/api/purchases/${purchase.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'Purchase order deleted successfully.');
+        fetchData();
+        refreshAllData();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error deleting purchase order: ${err.message}`);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header Banner */}
@@ -280,10 +299,15 @@ export const Purchases = () => {
                         {new Date(p.purchase_date).toLocaleString()}
                       </td>
                       <td>
-                        <button onClick={() => handleViewDetails(p.id)} className="btn btn-secondary btn-sm">
-                          <Eye size={14} />
-                          <span>Details</span>
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button onClick={() => handleViewDetails(p.id)} className="btn btn-secondary btn-sm" title="View Details">
+                            <Eye size={14} />
+                            <span>Details</span>
+                          </button>
+                          <button onClick={() => handleDeletePurchase(p)} className="btn btn-danger btn-sm btn-icon" title="Delete Purchase Order">
+                            <Trash2 size={14} color="#fff" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

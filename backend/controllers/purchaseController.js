@@ -201,3 +201,94 @@ exports.updatePurchase = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Delete Purchase Order & Revert Stock & Financial Accounts
+exports.deletePurchase = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+
+    const [purchases] = await connection.query(
+      'SELECT * FROM purchases WHERE id = ? AND tenant_id = ? FOR UPDATE',
+      [id, tenantId]
+    );
+
+    if (purchases.length === 0) {
+      return res.status(404).json({ error: 'Purchase order record not found.' });
+    }
+
+    const purchase = purchases[0];
+
+    await connection.beginTransaction();
+
+    // 1. Fetch purchase items to revert stock
+    const [pItems] = await connection.query(
+      'SELECT * FROM purchase_items WHERE purchase_id = ? AND tenant_id = ?',
+      [id, tenantId]
+    );
+
+    for (const item of pItems) {
+      const [prodRows] = await connection.query(
+        'SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+        [item.product_id, tenantId]
+      );
+
+      if (prodRows.length > 0) {
+        const prevStock = Number(prodRows[0].stock_quantity || 0);
+        const changeQty = Number(item.quantity || 0);
+        const newStock = Math.max(0, prevStock - changeQty);
+
+        // Deduct purchased stock
+        await connection.query(
+          'UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?',
+          [newStock, item.product_id, tenantId]
+        );
+
+        // Log stock movement audit
+        await connection.query(
+          `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+           VALUES (?, ?, 'purchase_deletion', ?, ?, ?, ?, ?)`,
+          [
+            tenantId,
+            item.product_id,
+            -changeQty,
+            prevStock,
+            newStock,
+            purchase.purchase_no,
+            `Reverted stock due to deletion of Purchase Order #${purchase.purchase_no}`
+          ]
+        );
+      }
+    }
+
+    // 2. Refund paid_amount back to financial account if applicable
+    if (Number(purchase.paid_amount || 0) > 0 && purchase.account_id) {
+      await connection.query(
+        'UPDATE finance_accounts SET balance = balance + ? WHERE id = ? AND tenant_id = ?',
+        [Number(purchase.paid_amount), purchase.account_id, tenantId]
+      );
+    }
+
+    // 3. Remove auto-created Dena (Liability) if created for this purchase order
+    await connection.query(
+      `DELETE FROM liabilities WHERE tenant_id = ? AND (title LIKE ? OR notes LIKE ?)`,
+      [tenantId, `%${purchase.purchase_no}%`, `%${purchase.purchase_no}%`]
+    );
+
+    // 4. Delete purchase items and purchase order
+    await connection.query('DELETE FROM purchase_items WHERE purchase_id = ? AND tenant_id = ?', [id, tenantId]);
+    await connection.query('DELETE FROM purchases WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+
+    await connection.commit();
+
+    res.json({ message: `Purchase Order #${purchase.purchase_no} deleted successfully and inventory stock reverted!` });
+
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
