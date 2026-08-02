@@ -459,14 +459,23 @@ export const AppProvider = ({ children }) => {
       const res = await authFetch(`/api/sales/${saleId}`, {
         method: 'DELETE'
       });
-      const data = await res.json();
+
+      let data = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        data = { error: `Server returned non-JSON response (${res.status}). Please restart PM2 backend.` };
+      }
+
       if (res.ok) {
         fetchSales();
         fetchProducts();
         fetchDashboard();
-        return { success: true, message: data.message };
+        return { success: true, message: data.message || 'Order deleted successfully' };
       } else {
-        return { success: false, error: data.error };
+        return { success: false, error: data.error || `HTTP Error ${res.status}` };
       }
     } catch (err) {
       return { success: false, error: err.message };
