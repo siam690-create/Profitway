@@ -4,7 +4,7 @@ import { Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle, Truck } from 'lu
 import { ReceiptModal } from '../components/ReceiptModal';
 
 export const POS = () => {
-  const { products, categories, cart, currency, addToCart, updateCartQty, removeFromCart, clearCart, checkoutSale } = useApp();
+  const { products, categories, cart, currency, addToCart, updateCartQty, updateCartPrice, removeFromCart, clearCart, checkoutSale } = useApp();
   
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -314,29 +314,81 @@ export const POS = () => {
                 const pTotal = pPrice * pQty;
 
                 return (
-                  <div key={pId} style={{ background: 'var(--bg-secondary)', padding: '10px 12px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid var(--border-color)' }}>
+                  <div key={pId} style={{ background: 'var(--bg-secondary)', padding: '10px 12px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--border-color)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1, paddingRight: '8px' }}>
                         <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>{pName}</strong>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{currency}{pPrice.toFixed(2)} each</span>
+                        
+                        {/* Editable Unit Selling Price Input */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Unit Price ({currency}):</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={pPrice}
+                            onChange={(e) => updateCartPrice(pId, e.target.value)}
+                            style={{
+                              width: '75px',
+                              padding: '2px 6px',
+                              fontSize: '12px',
+                              fontWeight: '800',
+                              borderRadius: '4px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-primary)',
+                              color: 'var(--accent-primary)'
+                            }}
+                            title="Click to change custom selling price"
+                          />
+                        </div>
                       </div>
-                      <button onClick={() => removeFromCart(pId)} style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '2px' }}>
+
+                      <button onClick={() => removeFromCart(pId)} style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '2px' }} title="Remove item">
                         <Trash2 size={15} />
                       </button>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', borderRadius: '6px', padding: '2px 6px', border: '1px solid var(--border-color)' }}>
-                        <button onClick={() => updateCartQty(pId, pQty - 1)} style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                          <Minus size={13} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--border-color)', paddingTop: '6px' }}>
+                      {/* Quantity Controls: - / Editable Input / + */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-primary)', borderRadius: '6px', padding: '2px 4px', border: '1px solid var(--border-color)' }}>
+                        <button 
+                          onClick={() => updateCartQty(pId, Math.max(1, pQty - 1))} 
+                          style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', fontWeight: '800' }}
+                          title="Decrease quantity by 1"
+                        >
+                          -
                         </button>
-                        <span style={{ fontSize: '13px', fontWeight: '700', minWidth: '18px', textAlign: 'center' }}>{pQty}</span>
-                        <button onClick={() => updateCartQty(pId, pQty + 1)} style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                          <Plus size={13} />
+
+                        <input
+                          type="number"
+                          min="1"
+                          max={item.stock_quantity || 9999}
+                          value={pQty}
+                          onChange={(e) => updateCartQty(pId, e.target.value)}
+                          style={{
+                            width: '48px',
+                            textAlign: 'center',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
+                            background: 'var(--bg-secondary)',
+                            color: 'var(--text-primary)',
+                            fontSize: '13px',
+                            fontWeight: '800',
+                            padding: '2px 0'
+                          }}
+                          title="Type custom quantity"
+                        />
+
+                        <button 
+                          onClick={() => updateCartQty(pId, pQty + 1)} 
+                          style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', fontWeight: '800' }}
+                          title="Increase quantity by 1"
+                        >
+                          +
                         </button>
                       </div>
 
-                      <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--accent-primary)' }}>
+                      {/* Line Item Total */}
+                      <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--success)' }}>
                         {currency}{pTotal.toFixed(2)}
                       </span>
                     </div>

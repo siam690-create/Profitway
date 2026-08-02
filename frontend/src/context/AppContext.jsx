@@ -273,19 +273,33 @@ export const AppProvider = ({ children }) => {
     });
   };
 
-  const updateCartQty = (productId, delta) => {
+  const updateCartQty = (productId, targetQty) => {
     setCart(prev => {
       return prev.map(item => {
-        if (item.id === productId) {
-          const newQty = item.qty + delta;
-          if (newQty > item.stock_quantity) {
-            alert(`Stock limit reached (${item.stock_quantity} available).`);
-            return item;
+        const id = item.id || item.product_id;
+        if (id === productId) {
+          const qtyVal = Math.max(1, Number(targetQty || 1));
+          if (qtyVal > item.stock_quantity) {
+            alert(`Stock limit reached (${item.stock_quantity} available for ${item.name || item.product_name}).`);
+            return { ...item, qty: item.stock_quantity, quantity: item.stock_quantity };
           }
-          return newQty > 0 ? { ...item, qty: newQty } : null;
+          return { ...item, qty: qtyVal, quantity: qtyVal };
         }
         return item;
-      }).filter(Boolean);
+      });
+    });
+  };
+
+  const updateCartPrice = (productId, targetPrice) => {
+    setCart(prev => {
+      return prev.map(item => {
+        const id = item.id || item.product_id;
+        if (id === productId) {
+          const priceVal = Math.max(0, Number(targetPrice || 0));
+          return { ...item, selling_price: priceVal, unit_price: priceVal };
+        }
+        return item;
+      });
     });
   };
 
@@ -456,6 +470,7 @@ export const AppProvider = ({ children }) => {
         refreshAllData,
         addToCart,
         updateCartQty,
+        updateCartPrice,
         removeFromCart,
         clearCart,
         checkoutSale,
