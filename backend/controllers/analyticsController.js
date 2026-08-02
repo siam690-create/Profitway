@@ -8,6 +8,7 @@ exports.getProductAnalytics = async (req, res) => {
 
     let startDate, endDate;
     const now = new Date();
+    const isAllTime = range === 'all' || !range || range === 'All Time';
 
     if (range === 'today') {
       startDate = now.toISOString().slice(0, 10);
@@ -24,9 +25,29 @@ exports.getProductAnalytics = async (req, res) => {
       startDate = start_date;
       endDate = end_date;
     } else {
-      // All Time
       startDate = '2000-01-01';
       endDate = '2099-12-31';
+    }
+
+    let salesWhere = 'WHERE tenant_id = ?';
+    let returnsWhere = 'WHERE ri.tenant_id = ?';
+    let returnsOnlyWhere = 'WHERE tenant_id = ?';
+    let adsWhere = 'WHERE tenant_id = ?';
+    let expensesWhere = 'WHERE tenant_id = ? AND category NOT IN (\'Marketing\', \'Transport\')';
+    let wholesaleWhere = 'WHERE tenant_id = ?';
+    let wholesaleBuyersWhere = 'WHERE wc.tenant_id = ?';
+    
+    let baseParams = [tenantId];
+
+    if (!isAllTime) {
+      salesWhere += ' AND (sale_date IS NULL OR DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?)';
+      returnsWhere += ' AND (r.return_date IS NULL OR DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?)';
+      returnsOnlyWhere += ' AND (return_date IS NULL OR DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?)';
+      adsWhere += ' AND (ad_date IS NULL OR DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?)';
+      expensesWhere += ' AND (expense_date IS NULL OR DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?)';
+      wholesaleWhere += ' AND (sale_date IS NULL OR DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?)';
+      wholesaleBuyersWhere += ' AND (ws.sale_date IS NULL OR DATE(COALESCE(ws.sale_date, ws.created_at)) BETWEEN ? AND ?)';
+      baseParams.push(startDate, endDate);
     }
 
     // 1. Overall Gross Sales Financials & Delivery Charge Profits
@@ -39,9 +60,8 @@ exports.getProductAnalytics = async (req, res) => {
         COALESCE(SUM(delivery_fee_charged), 0) as total_delivery_charged,
         COALESCE(SUM(courier_actual_cost), 0) as total_courier_actual_cost,
         COALESCE(SUM(delivery_profit), 0) as total_delivery_profit
-       FROM sales 
-       WHERE tenant_id = ? AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?`,
-      [tenantId, startDate, endDate]
+       FROM sales ${salesWhere}`,
+      baseParams
     );
 
     // 2. Returned Sales Value & Unearned Product Profit Reversal
@@ -54,36 +74,31 @@ exports.getProductAnalytics = async (req, res) => {
        JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
        JOIN products p ON ri.product_id = p.id AND ri.tenant_id = p.tenant_id
        LEFT JOIN sales s ON r.invoice_no = s.invoice_no AND r.tenant_id = s.tenant_id
-       WHERE ri.tenant_id = ? AND DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?`,
-      [tenantId, startDate, endDate]
+       ${returnsWhere}`,
+      baseParams
     );
 
     // 3. Total Paid Ads Cost & ROAS Calculation
     const [adsSummary] = await db.query(
       `SELECT COALESCE(SUM(total_bdt_cost), 0) as total_paid_ads_cost
-       FROM paid_ads
-       WHERE tenant_id = ? AND DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?`,
-      [tenantId, startDate, endDate]
+       FROM paid_ads ${adsWhere}`,
+      baseParams
     );
 
-    // 4. Total Courier Return Charges (Delivery Fee Loss on Returns) & Count
+    // 4. Total Courier Return Charges & Count
     const [returnsSummary] = await db.query(
       `SELECT 
         COUNT(*) as total_returns_count,
         COALESCE(SUM(courier_charge), 0) as total_courier_return_cost
-       FROM returns
-       WHERE tenant_id = ? AND DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?`,
-      [tenantId, startDate, endDate]
+       FROM returns ${returnsOnlyWhere}`,
+      baseParams
     );
 
-    // 5. Total Operating Expenses (excluding Marketing and Transport)
+    // 5. Total Operating Expenses
     const [expensesSummary] = await db.query(
       `SELECT COALESCE(SUM(amount), 0) as total_other_expenses
-       FROM expenses
-       WHERE tenant_id = ? 
-         AND DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?
-         AND category NOT IN ('Marketing', 'Transport')`,
-      [tenantId, startDate, endDate]
+       FROM expenses ${expensesWhere}`,
+      baseParams
     );
 
     // 6. Wholesale B2B Analytics Summary
@@ -95,9 +110,8 @@ exports.getProductAnalytics = async (req, res) => {
         COALESCE(SUM(gross_profit), 0) as wholesale_profit,
         COALESCE(SUM(paid_amount), 0) as wholesale_cash_collected,
         COALESCE(SUM(due_amount), 0) as wholesale_pending_pawna
-       FROM wholesale_sales
-       WHERE tenant_id = ? AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?`,
-      [tenantId, startDate, endDate]
+       FROM wholesale_sales ${wholesaleWhere}`,
+      baseParams
     );
 
     // 7. Top Wholesale Buyers Performance Ranking
@@ -113,10 +127,10 @@ exports.getProductAnalytics = async (req, res) => {
         COALESCE(SUM(ws.due_amount), 0) as current_pawna_due
        FROM wholesale_customers wc
        JOIN wholesale_sales ws ON wc.id = ws.customer_id AND ws.tenant_id = wc.tenant_id
-       WHERE wc.tenant_id = ? AND DATE(COALESCE(ws.sale_date, ws.created_at)) BETWEEN ? AND ?
+       ${wholesaleBuyersWhere}
        GROUP BY wc.id
        ORDER BY total_spent DESC LIMIT 10`,
-      [tenantId, startDate, endDate]
+      baseParams
     );
 
     const grossSalesRev = Number(salesSummary[0].gross_sales_revenue || 0);
@@ -148,6 +162,17 @@ exports.getProductAnalytics = async (req, res) => {
     const netRealProfit = netRealizedGrossProfit + netDeliveryProfit - paidAdsCost - returnChargesCost - otherExpensesCost;
 
     // 8. Itemized Product-wise Breakdown with Delivery Profits
+    let prodSalesWhere = 'WHERE si.tenant_id = ?';
+    let prodReturnsWhere = 'WHERE ri.tenant_id = ?';
+    let prodAdsWhere = 'WHERE tenant_id = ? AND product_id IS NOT NULL';
+    let prodParams = [tenantId];
+    if (!isAllTime) {
+      prodSalesWhere += ' AND (s.sale_date IS NULL OR DATE(COALESCE(s.sale_date, s.created_at)) BETWEEN ? AND ?)';
+      prodReturnsWhere += ' AND (r.return_date IS NULL OR DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?)';
+      prodAdsWhere += ' AND (ad_date IS NULL OR DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?)';
+      prodParams.push(startDate, endDate);
+    }
+
     const [productBreakdown] = await db.query(
       `SELECT 
         p.id as product_id,
@@ -178,7 +203,7 @@ exports.getProductAnalytics = async (req, res) => {
            SUM(s.delivery_profit) as product_delivery_profit
          FROM sale_items si
          JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
-         WHERE si.tenant_id = ? AND DATE(COALESCE(s.sale_date, s.created_at)) BETWEEN ? AND ?
+         ${prodSalesWhere}
          GROUP BY si.product_id
        ) sales_agg ON p.id = sales_agg.product_id
        LEFT JOIN (
@@ -192,7 +217,7 @@ exports.getProductAnalytics = async (req, res) => {
          JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
          JOIN products p_sub ON ri.product_id = p_sub.id AND ri.tenant_id = p_sub.tenant_id
          LEFT JOIN sales s_sub ON r.invoice_no = s_sub.invoice_no AND r.tenant_id = s_sub.tenant_id
-         WHERE ri.tenant_id = ? AND DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?
+         ${prodReturnsWhere}
          GROUP BY ri.product_id
        ) returns_agg ON p.id = returns_agg.product_id
        LEFT JOIN (
@@ -200,11 +225,13 @@ exports.getProductAnalytics = async (req, res) => {
            product_id,
            SUM(total_bdt_cost) as ad_spend_bdt
          FROM paid_ads
-         WHERE tenant_id = ? AND DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ? AND product_id IS NOT NULL
+         ${prodAdsWhere}
          GROUP BY product_id
        ) ads_agg ON p.id = ads_agg.product_id
        WHERE p.tenant_id = ?`,
-      [tenantId, startDate, endDate, tenantId, startDate, endDate, tenantId, startDate, endDate, tenantId]
+      isAllTime 
+        ? [tenantId, tenantId, tenantId, tenantId] 
+        : [tenantId, startDate, endDate, tenantId, startDate, endDate, tenantId, startDate, endDate, tenantId]
     );
 
     const formattedProducts = productBreakdown.map(p => {
@@ -290,12 +317,12 @@ exports.getProductAnalytics = async (req, res) => {
           risk_recommendation
         };
       })
-      .sort((a, b) => a.net_real_profit - b.net_real_profit); // Worst losses first!
+      .sort((a, b) => a.net_real_profit - b.net_real_profit);
 
     const totalRiskLoss = riskProducts.reduce((sum, p) => sum + (p.net_real_profit < 0 ? Math.abs(p.net_real_profit) : 0), 0);
 
     res.json({
-      date_range: { range, startDate, endDate },
+      date_range: { range, startDate: isAllTime ? 'All Time' : startDate, endDate: isAllTime ? 'All Time' : endDate },
       summary: {
         gross_sales_revenue: Number(grossSalesRev.toFixed(2)),
         gross_cogs: Number(grossCogs.toFixed(2)),

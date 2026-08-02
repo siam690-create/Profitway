@@ -5,15 +5,20 @@ exports.getProfitLossReport = async (req, res) => {
     const tenantId = req.user.tenantId;
     const { start_date, end_date } = req.query;
 
-    let startDate, endDate;
-    const now = new Date();
+    const isAllTime = !start_date || !end_date || start_date === '2000-01-01';
 
-    if (start_date && end_date) {
-      startDate = start_date;
-      endDate = end_date;
-    } else {
-      startDate = '2000-01-01';
-      endDate = '2099-12-31';
+    let salesWhere = 'WHERE tenant_id = ?';
+    let returnsWhere = 'WHERE tenant_id = ?';
+    let expensesWhere = 'WHERE tenant_id = ?';
+    let adsWhere = 'WHERE tenant_id = ?';
+    let queryParams = [tenantId];
+
+    if (!isAllTime) {
+      salesWhere += ' AND (sale_date IS NULL OR DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?)';
+      returnsWhere += ' AND (return_date IS NULL OR DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?)';
+      expensesWhere += ' AND (expense_date IS NULL OR DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?)';
+      adsWhere += ' AND (ad_date IS NULL OR DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?)';
+      queryParams.push(start_date, end_date);
     }
 
     // 1. Total Sales Revenue, COGS, Gross Product Profit & Delivery Charge Profit
@@ -25,43 +30,38 @@ exports.getProfitLossReport = async (req, res) => {
         COALESCE(SUM(delivery_fee_charged), 0) as total_delivery_fee_charged,
         COALESCE(SUM(courier_actual_cost), 0) as total_courier_actual_cost,
         COALESCE(SUM(delivery_profit), 0) as gross_delivery_profit
-       FROM sales
-       WHERE tenant_id = ? AND DATE(sale_date) BETWEEN ? AND ?`,
-      [tenantId, startDate, endDate]
+       FROM sales ${salesWhere}`,
+      queryParams
     );
 
-    // 2. Returned Orders Delivery Profit Reversals (Direct sum of return_delivery_loss from returns)
+    // 2. Returned Orders Delivery Profit Reversals
     const [returnedDeliverySummary] = await db.query(
       `SELECT 
-        COALESCE(SUM(r.return_delivery_loss), 0) as returned_delivery_profit_reversal
-       FROM returns r
-       WHERE r.tenant_id = ? AND DATE(r.return_date) BETWEEN ? AND ?`,
-      [tenantId, startDate, endDate]
+        COALESCE(SUM(r.courier_charge), 0) as returned_delivery_profit_reversal
+       FROM returns r ${returnsWhere.replace('WHERE tenant_id = ?', 'WHERE r.tenant_id = ?')}`,
+      queryParams
     );
 
     // 3. Total Operating Expenses Categorized
     const [expenseCategoryRows] = await db.query(
       `SELECT category, COALESCE(SUM(amount), 0) as total
-       FROM expenses
-       WHERE tenant_id = ? AND DATE(expense_date) BETWEEN ? AND ?
+       FROM expenses ${expensesWhere}
        GROUP BY category`,
-      [tenantId, startDate, endDate]
+      queryParams
     );
 
     // 4. Total Courier Return Fees from returns table
     const [returnFeesResult] = await db.query(
       `SELECT COALESCE(SUM(courier_charge), 0) as total_courier_return_charges
-       FROM returns
-       WHERE tenant_id = ? AND DATE(return_date) BETWEEN ? AND ?`,
-      [tenantId, startDate, endDate]
+       FROM returns ${returnsWhere}`,
+      queryParams
     );
 
     // 5. Total Paid Ads Spend
     const [adsResult] = await db.query(
       `SELECT COALESCE(SUM(total_bdt_cost), 0) as total_paid_ads_cost
-       FROM paid_ads
-       WHERE tenant_id = ? AND ad_date BETWEEN ? AND ?`,
-      [tenantId, startDate, endDate]
+       FROM paid_ads ${adsWhere}`,
+      queryParams
     );
 
     const grossSalesRevenue = Number(salesResult[0].total_sales_revenue || 0);
@@ -85,11 +85,11 @@ exports.getProfitLossReport = async (req, res) => {
     const totalReturnFees = Number(returnFeesResult[0].total_courier_return_charges || 0);
     const totalAdsCost = Number(adsResult[0].total_paid_ads_cost || 0);
 
-    const netOperatingProfit = totalOperatingGrossIncome - totalOperatingExpenses;
+    const netOperatingProfit = totalOperatingGrossIncome - totalOperatingExpenses - totalReturnFees - totalAdsCost;
     const profitMarginPct = grossSalesRevenue > 0 ? ((netOperatingProfit / grossSalesRevenue) * 100).toFixed(2) : 0;
 
     res.json({
-      date_range: { startDate, endDate },
+      date_range: { startDate: start_date || 'All Time', endDate: end_date || 'All Time' },
       financial_summary: {
         total_sales_revenue: Number(grossSalesRevenue.toFixed(2)),
         total_cogs: Number(totalCogs.toFixed(2)),
@@ -99,12 +99,12 @@ exports.getProfitLossReport = async (req, res) => {
         net_delivery_profit: Number(netDeliveryProfit.toFixed(2)),
         total_operating_gross_income: Number(totalOperatingGrossIncome.toFixed(2)),
         total_operating_expenses: Number(totalOperatingExpenses.toFixed(2)),
+        total_return_fees: Number(totalReturnFees.toFixed(2)),
+        total_ads_cost: Number(totalAdsCost.toFixed(2)),
         net_operating_profit: Number(netOperatingProfit.toFixed(2)),
         profit_margin_pct: Number(profitMarginPct)
       },
-      expense_breakdown: expenseBreakdown,
-      paid_ads_total: totalAdsCost,
-      courier_returns_total: totalReturnFees
+      expense_breakdown: expenseBreakdown
     });
 
   } catch (error) {
