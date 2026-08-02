@@ -273,6 +273,11 @@ async function autoMigrate() {
            )`,
           [tenantId, ucbId]
         );
+      }
+    } catch (e) {
+      console.warn('Retroactive purchase cancellation log check:', e.message);
+    }
+
     // Retroactive fix: Merge duplicate investor profile rows into 1 single investor row
     try {
       const [dupRows] = await db.query(`
