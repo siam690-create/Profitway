@@ -79,7 +79,7 @@ export const BulkImportModal = ({ isOpen, onClose, onImportSuccess, authFetch })
     XLSX.writeFile(workbook, 'Profitway_Sample_Products_Template.xlsx');
   };
 
-  // 2. Parse Excel/CSV File
+  // 2. Parse Excel/CSV File with 100% UTF-8 Encoding Preservation
   const handleFileUpload = (e) => {
     const uploadedFile = e.target.files[0];
     if (!uploadedFile) return;
@@ -90,8 +90,8 @@ export const BulkImportModal = ({ isOpen, onClose, onImportSuccess, authFetch })
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target.result;
-        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
@@ -151,7 +151,7 @@ export const BulkImportModal = ({ isOpen, onClose, onImportSuccess, authFetch })
       }
     };
 
-    reader.readAsBinaryString(uploadedFile);
+    reader.readAsArrayBuffer(uploadedFile);
   };
 
   // 3. Confirm Import to API
