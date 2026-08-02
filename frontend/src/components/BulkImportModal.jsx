@@ -12,6 +12,25 @@ import {
   FileText
 } from 'lucide-react';
 
+// Helper to fix garbled Mojibake UTF-8 strings
+const fixMojibake = (str) => {
+  if (!str) return '';
+  const inputStr = String(str).trim();
+  try {
+    if (/[\u00C0-\u00FF]/.test(inputStr)) {
+      const bytes = new Uint8Array([...inputStr].map(c => c.charCodeAt(0) & 0xFF));
+      const decoder = new TextDecoder('utf-8');
+      const decoded = decoder.decode(bytes);
+      if (decoded && !decoded.includes('')) {
+        return decoded;
+      }
+    }
+  } catch (e) {
+    // fallback to original
+  }
+  return inputStr;
+};
+
 export const BulkImportModal = ({ isOpen, onClose, onImportSuccess, authFetch }) => {
   const [file, setFile] = useState(null);
   const [parsedProducts, setParsedProducts] = useState([]);
@@ -79,7 +98,7 @@ export const BulkImportModal = ({ isOpen, onClose, onImportSuccess, authFetch })
     XLSX.writeFile(workbook, 'Profitway_Sample_Products_Template.xlsx');
   };
 
-  // 2. Parse Excel/CSV File with 100% UTF-8 Encoding Preservation
+  // 2. Parse Excel/CSV File with 100% UTF-8 Encoding Preservation & Mojibake Auto-Fix
   const handleFileUpload = (e) => {
     const uploadedFile = e.target.files[0];
     if (!uploadedFile) return;
@@ -91,7 +110,7 @@ export const BulkImportModal = ({ isOpen, onClose, onImportSuccess, authFetch })
     reader.onload = (evt) => {
       try {
         const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
+        const workbook = XLSX.read(data, { type: 'array', codepage: 65001 });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
@@ -115,9 +134,11 @@ export const BulkImportModal = ({ isOpen, onClose, onImportSuccess, authFetch })
             return '';
           };
 
-          const name = getVal(['product name', 'name', 'title', 'item']);
+          const rawNameVal = getVal(['product name', 'name', 'title', 'item']);
+          const name = fixMojibake(rawNameVal);
           const sku = getVal(['sku', 'barcode', 'code']);
-          const category_name = getVal(['category']);
+          const rawCatVal = getVal(['category']);
+          const category_name = fixMojibake(rawCatVal);
           const cost_price = Number(getVal(['cost price', 'cost', 'buy price', 'purchase price']) || 0);
           const selling_price = Number(getVal(['selling price', 'sale price', 'price', 'sell price']) || 0);
           const stock_quantity = Number(getVal(['stock quantity', 'stock', 'qty', 'quantity']) || 0);

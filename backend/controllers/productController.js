@@ -261,6 +261,7 @@ exports.bulkImportProducts = async (req, res) => {
       });
     }
 
+    await connection.query('SET NAMES utf8mb4;');
     await connection.beginTransaction();
 
     // 2. Load existing categories map
