@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Search, ShoppingBag, Calendar, Eye, Printer, Filter, CreditCard, DollarSign, Globe, Trash2, Edit2 } from 'lucide-react';
 import { ReceiptModal } from '../components/ReceiptModal';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Orders = () => {
   const { authFetch, currency, sales, fetchSales, deleteSale, user } = useApp();
@@ -101,20 +102,11 @@ export const Orders = () => {
             <option value="Card">Card</option>
           </select>
 
-          <input
-            type="date"
-            className="form-input"
-            style={{ width: '140px' }}
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-          <span style={{ color: 'var(--text-muted)' }}>-</span>
-          <input
-            type="date"
-            className="form-input"
-            style={{ width: '140px' }}
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+          <DateRangeFilter
+            onFilterChange={({ startDate: s, endDate: e }) => {
+              setStartDate(s);
+              setEndDate(e);
+            }}
           />
         </div>
       </div>

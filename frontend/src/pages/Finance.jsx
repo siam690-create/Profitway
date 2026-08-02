@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Landmark, Wallet, ArrowUpRight, ArrowDownRight, Plus, RefreshCw, DollarSign, Send, CheckCircle, UserCheck, ShieldAlert, X, TrendingUp, HandCoins, Eye, Printer, FileText, Calendar, Building2, Download } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Finance = () => {
   const { authFetch, currency, tenant, refreshAllData } = useApp();
   const [activeSubTab, setActiveSubTab] = useState('accounts');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [financeData, setFinanceData] = useState(null);
   const [staffList, setStaffList] = useState([]);
   const [suppliersList, setSuppliersList] = useState([]);
@@ -367,7 +370,14 @@ export const Finance = () => {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <DateRangeFilter
+            onFilterChange={({ startDate: s, endDate: e }) => {
+              setStartDate(s);
+              setEndDate(e);
+            }}
+          />
+
           <button onClick={() => setShowDepositModal(true)} className="btn btn-success btn-sm">
             <Plus size={15} />
             <span>+ Deposit Funds (ফান্ড জমা)</span>

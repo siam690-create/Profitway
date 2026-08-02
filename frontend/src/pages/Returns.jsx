@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Undo2, Plus, PackagePlus, Truck, AlertOctagon, X, CheckCircle, Eye, Printer, FileText, Edit2, ShieldAlert, Calendar } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Returns = () => {
   const { authFetch, products, currency, refreshAllData, user } = useApp();
   const [returnsList, setReturnsList] = useState([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [selectedReturnDetails, setSelectedReturnDetails] = useState(null);
 
@@ -178,7 +181,7 @@ export const Returns = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header Banner */}
-      <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Undo2 size={24} color="var(--warning)" />
@@ -189,10 +192,19 @@ export const Returns = () => {
           </p>
         </div>
 
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={16} />
-          <span>+ Process Courier Return</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <DateRangeFilter
+            onFilterChange={({ startDate: s, endDate: e }) => {
+              setStartDate(s);
+              setEndDate(e);
+            }}
+          />
+
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={16} />
+            <span>+ Process Courier Return</span>
+          </button>
+        </div>
       </div>
 
       {/* Returns History Table */}
@@ -214,14 +226,24 @@ export const Returns = () => {
               </tr>
             </thead>
             <tbody>
-              {returnsList.length === 0 ? (
-                <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    No courier returns recorded yet. Click "+ Process Courier Return" to add one.
-                  </td>
-                </tr>
-              ) : (
-                returnsList.map(ret => (
+              {(() => {
+                const filteredReturns = returnsList.filter(ret => {
+                  if (!startDate || !endDate) return true;
+                  const d = new Date(ret.return_date || ret.created_at).toISOString().slice(0, 10);
+                  return d >= startDate && d <= endDate;
+                });
+
+                if (filteredReturns.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        No courier returns recorded for this selected date period.
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return filteredReturns.map(ret => (
                   <tr key={ret.id}>
                     <td style={{ fontSize: '13px', fontWeight: '600' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -259,8 +281,8 @@ export const Returns = () => {
                       </button>
                     </td>
                   </tr>
-                ))
-              )}
+                ));
+              })()}
             </tbody>
           </table>
         </div>

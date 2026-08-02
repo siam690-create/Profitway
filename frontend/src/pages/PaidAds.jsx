@@ -3,10 +3,13 @@ import { useApp } from '../context/AppContext';
 import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X } from 'lucide-react';
 
 import { ProductSelectSearch } from '../components/ProductSelectSearch';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const PaidAds = () => {
   const { authFetch, products, currency, refreshAllData, user } = useApp();
   const [adsList, setAdsList] = useState([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [showModal, setShowModal] = useState(false);
 
   // Form State
@@ -80,9 +83,15 @@ export const PaidAds = () => {
     }
   };
 
-  // Metrics
-  const totalUsdSpent = adsList.reduce((sum, ad) => sum + Number(ad.amount_usd), 0);
-  const totalBdtSpent = adsList.reduce((sum, ad) => sum + Number(ad.total_bdt_cost), 0);
+  // Metrics Filtered by Date
+  const filteredAdsList = adsList.filter(ad => {
+    if (!startDate || !endDate) return true;
+    const d = new Date(ad.ad_date).toISOString().slice(0, 10);
+    return d >= startDate && d <= endDate;
+  });
+
+  const totalUsdSpent = filteredAdsList.reduce((sum, ad) => sum + Number(ad.amount_usd), 0);
+  const totalBdtSpent = filteredAdsList.reduce((sum, ad) => sum + Number(ad.total_bdt_cost), 0);
   const isOwner = user?.role === 'owner' || user?.role === 'superadmin';
 
   // Live Conversion Calculation for Form
@@ -93,7 +102,7 @@ export const PaidAds = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header Banner */}
-      <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Megaphone size={24} color="var(--accent-primary)" />
@@ -104,10 +113,19 @@ export const PaidAds = () => {
           </p>
         </div>
 
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={16} />
-          <span>+ Log Paid Ad Expense</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <DateRangeFilter
+            onFilterChange={({ startDate: s, endDate: e }) => {
+              setStartDate(s);
+              setEndDate(e);
+            }}
+          />
+
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={16} />
+            <span>+ Log Paid Ad Expense</span>
+          </button>
+        </div>
       </div>
 
       {/* Overview Cards */}
@@ -147,14 +165,14 @@ export const PaidAds = () => {
               </tr>
             </thead>
             <tbody>
-              {adsList.length === 0 ? (
+              {filteredAdsList.length === 0 ? (
                 <tr>
                   <td colSpan={isOwner ? 8 : 7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    No paid ad campaigns logged yet. Click "+ Log Paid Ad Expense" to record marketing costs.
+                    No paid ad campaigns recorded for this selected date period.
                   </td>
                 </tr>
               ) : (
-                adsList.map(ad => (
+                filteredAdsList.map(ad => (
                   <tr key={ad.id}>
                     <td style={{ fontSize: '13px', fontWeight: '600' }}>
                       {new Date(ad.ad_date).toLocaleDateString()}

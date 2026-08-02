@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { TrendingUp, DollarSign, Calendar, Printer, Award, FileText, Truck, RotateCcw } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Reports = () => {
   const { currency, authFetch } = useApp();
@@ -55,31 +56,12 @@ export const Reports = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Top Filter & Print Bar */}
       <div className="glass-card" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Calendar size={16} color="var(--text-muted)" />
-            <input
-              type="date"
-              className="form-input"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
-          <span style={{ color: 'var(--text-muted)' }}>to</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <input
-              type="date"
-              className="form-input"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
-          {(startDate || endDate) && (
-            <button onClick={() => { setStartDate(''); setEndDate(''); }} className="btn btn-secondary btn-sm">
-              Clear Filter
-            </button>
-          )}
-        </div>
+        <DateRangeFilter
+          onFilterChange={({ startDate: s, endDate: e }) => {
+            setStartDate(s);
+            setEndDate(e);
+          }}
+        />
 
         <button onClick={handlePrint} className="btn btn-primary">
           <Printer size={16} />
