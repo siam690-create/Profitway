@@ -22,7 +22,7 @@ exports.getProducts = async (req, res) => {
       prod.unit_profit = Number(profit.toFixed(2));
       prod.profit_margin = Number(marginPercent.toFixed(1));
 
-      // Attach combo child items if product is a combo bundle
+      // Attach combo child items & calculate dynamic virtual stock based on child products availability
       if (prod.is_combo) {
         const [comboItems] = await db.query(
           `SELECT ci.*, p.name as child_name, p.cost_price as child_cost, p.selling_price as child_selling, p.stock_quantity as child_stock
@@ -32,6 +32,21 @@ exports.getProducts = async (req, res) => {
           [prod.id, tenantId]
         );
         prod.combo_items = comboItems;
+
+        if (comboItems.length > 0) {
+          let maxComboPossible = Infinity;
+          for (const cItem of comboItems) {
+            const childAvailable = Number(cItem.child_stock || 0);
+            const requiredPerCombo = Number(cItem.quantity || 1);
+            const possibleFromThisChild = Math.floor(childAvailable / requiredPerCombo);
+            if (possibleFromThisChild < maxComboPossible) {
+              maxComboPossible = possibleFromThisChild;
+            }
+          }
+          prod.stock_quantity = maxComboPossible === Infinity ? 0 : maxComboPossible;
+        } else {
+          prod.stock_quantity = 0;
+        }
       }
     }
 
