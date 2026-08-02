@@ -287,23 +287,23 @@ export const AppProvider = ({ children }) => {
   const clearCart = () => setCart([]);
 
   // Checkout Action (Create Sale)
-  const checkoutSale = async (customerName, paymentMethod, paidAmount = null) => {
+  const checkoutSale = async (customerName, paymentMethod, notes = '', customerDeliveryFee = 0, courierFee = 0, saleDate = null) => {
     if (cart.length === 0) return { success: false, error: 'Cart is empty' };
 
     try {
       const payload = {
         customer_name: customerName,
         payment_method: paymentMethod,
+        notes,
+        customer_delivery_fee: Number(customerDeliveryFee || 0),
+        courier_fee: Number(courierFee || 0),
+        sale_date: saleDate,
         items: cart.map(item => ({
           product_id: item.id,
-          quantity: item.qty,
-          price: Number(item.selling_price)
+          quantity: item.qty || item.quantity || 1,
+          unit_price: Number(item.selling_price || item.unit_price || 0)
         }))
       };
-
-      if (paidAmount !== null) {
-        payload.paid_amount = Number(paidAmount);
-      }
 
       const res = await authFetch('/api/sales', {
         method: 'POST',
@@ -314,7 +314,7 @@ export const AppProvider = ({ children }) => {
       if (res.ok) {
         clearCart();
         refreshAllData();
-        return { success: true, sale: data.sale };
+        return { success: true, sale: data };
       }
       return { success: false, error: data.error };
     } catch (err) {

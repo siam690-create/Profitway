@@ -15,6 +15,7 @@ export const Wholesale = () => {
   // Form State for Wholesale Sale Order
   const [customerId, setCustomerId] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('paid'); // 'paid', 'partial', 'due'
   const [paidAmount, setPaidAmount] = useState('0');
@@ -155,6 +156,7 @@ export const Wholesale = () => {
         body: JSON.stringify({
           customer_id: customerId ? Number(customerId) : null,
           customer_name: customerName,
+          sale_date: saleDate,
           notes,
           payment_status: paymentStatus,
           paid_amount: computedPaid,
@@ -562,6 +564,17 @@ export const Wholesale = () => {
                         setCustomerId('');
                       }}
                     />
+
+                    <div style={{ flex: 0.8 }}>
+                      <input
+                        type="date"
+                        className="form-input"
+                        title="Sale / Invoice Date"
+                        value={saleDate}
+                        onChange={(e) => setSaleDate(e.target.value)}
+                        style={{ borderColor: 'var(--accent-primary)' }}
+                      />
+                    </div>
                   </div>
                 </div>
 

@@ -85,7 +85,7 @@ exports.createWholesaleSale = async (req, res) => {
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { items, customer_id, customer_name, notes, payment_status, paid_amount, due_amount, account_id } = req.body;
+    const { items, customer_id, customer_name, notes, payment_status, paid_amount, due_amount, account_id, sale_date } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Wholesale order must contain at least one product.' });
@@ -99,7 +99,7 @@ exports.createWholesaleSale = async (req, res) => {
 
     for (const item of items) {
       const [productRows] = await connection.query(
-        'SELECT id, name, cost_price, stock_quantity FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+        'SELECT id, name, cost_price, selling_price, stock_quantity FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
         [item.product_id, tenantId]
       );
 
@@ -109,13 +109,13 @@ exports.createWholesaleSale = async (req, res) => {
 
       const product = productRows[0];
       const sellQty = Number(item.quantity);
-      const unitCost = Number(product.cost_price || 0);
-      const unitWholesalePrice = Number(item.unit_wholesale_price);
 
-      if (sellQty <= 0) throw new Error(`Invalid quantity for product ${product.name}`);
-      if (Number(product.stock_quantity) < sellQty) {
-        throw new Error(`Insufficient stock for "${product.name}". Available: ${product.stock_quantity}, Requested: ${sellQty}`);
+      if (product.stock_quantity < sellQty) {
+        throw new Error(`Insufficient stock for product "${product.name}". Available: ${product.stock_quantity}, Requested: ${sellQty}`);
       }
+
+      const unitCost = Number(product.cost_price || 0);
+      const unitWholesalePrice = Number(item.unit_wholesale_price || product.selling_price || 0);
 
       const itemTotalCost = sellQty * unitCost;
       const itemTotalPrice = sellQty * unitWholesalePrice;
@@ -149,10 +149,19 @@ exports.createWholesaleSale = async (req, res) => {
 
     const invoiceNo = `WS-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    let customSaleDate = null;
+    if (sale_date) {
+      const d = new Date(sale_date);
+      if (!isNaN(d.getTime())) {
+        const timeStr = String(sale_date).length <= 10 ? ' 12:00:00' : '';
+        customSaleDate = String(sale_date).replace('T', ' ') + timeStr;
+      }
+    }
+
     // 1. Insert Wholesale Sale Header
     const [saleResult] = await connection.query(
       `INSERT INTO wholesale_sales (tenant_id, invoice_no, customer_id, customer_name, total_amount, total_cost, gross_profit, payment_status, paid_amount, due_amount, account_id, notes, sale_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tenantId,
         invoiceNo,
@@ -165,7 +174,8 @@ exports.createWholesaleSale = async (req, res) => {
         paidAmt,
         dueAmt,
         account_id || null,
-        notes || null
+        notes || null,
+        customSaleDate || new Date()
       ]
     );
 

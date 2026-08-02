@@ -4,7 +4,7 @@ exports.createSale = async (req, res) => {
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { items, customer_name, payment_method, notes, customer_delivery_fee, courier_fee } = req.body;
+    const { items, customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Cart must contain at least one product.' });
@@ -65,23 +65,54 @@ exports.createSale = async (req, res) => {
     const randomNum = Math.floor(100 + Math.random() * 900);
     const invoice_no = `INV-${dateStr}-${randomNum}`;
 
-    const [saleResult] = await connection.query(
-      `INSERT INTO sales (tenant_id, invoice_no, customer_name, total_amount, total_cost, gross_profit, payment_method, notes, delivery_fee_charged, courier_actual_cost, delivery_profit)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        tenantId,
-        invoice_no,
-        customer_name || 'Walk-in Customer',
-        total_amount,
-        total_cost,
-        gross_profit,
-        payment_method || 'Cash',
-        notes || null,
-        deliveryFeeCharged,
-        courierActualCost,
-        deliveryProfit
-      ]
-    );
+    let customSaleDate = null;
+    if (sale_date) {
+      const d = new Date(sale_date);
+      if (!isNaN(d.getTime())) {
+        const timeStr = String(sale_date).length <= 10 ? ' 12:00:00' : '';
+        customSaleDate = String(sale_date).replace('T', ' ') + timeStr;
+      }
+    }
+
+    let saleResult;
+    if (customSaleDate) {
+      [saleResult] = await connection.query(
+        `INSERT INTO sales (tenant_id, invoice_no, customer_name, total_amount, total_cost, gross_profit, payment_method, notes, delivery_fee_charged, courier_actual_cost, delivery_profit, sale_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tenantId,
+          invoice_no,
+          customer_name || 'Walk-in Customer',
+          total_amount,
+          total_cost,
+          gross_profit,
+          payment_method || 'Cash',
+          notes || null,
+          deliveryFeeCharged,
+          courierActualCost,
+          deliveryProfit,
+          customSaleDate
+        ]
+      );
+    } else {
+      [saleResult] = await connection.query(
+        `INSERT INTO sales (tenant_id, invoice_no, customer_name, total_amount, total_cost, gross_profit, payment_method, notes, delivery_fee_charged, courier_actual_cost, delivery_profit)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tenantId,
+          invoice_no,
+          customer_name || 'Walk-in Customer',
+          total_amount,
+          total_cost,
+          gross_profit,
+          payment_method || 'Cash',
+          notes || null,
+          deliveryFeeCharged,
+          courierActualCost,
+          deliveryProfit
+        ]
+      );
+    }
 
     const sale_id = saleResult.insertId;
 

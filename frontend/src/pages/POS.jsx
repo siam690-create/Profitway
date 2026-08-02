@@ -15,6 +15,7 @@ export const POS = () => {
   // Manual Delivery Charge & Courier Bill Inputs (above Customer Name as requested!)
   const [customerDeliveryFee, setCustomerDeliveryFee] = useState('120');
   const [courierFee, setCourierFee] = useState('120');
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 10));
 
   const [completedSale, setCompletedSale] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,7 +40,7 @@ export const POS = () => {
   const handleCheckout = async () => {
     if (cart.length === 0) return alert('Cart is empty!');
     setIsSubmitting(true);
-    const result = await checkoutSale(customerName, paymentMethod, notes, customerDeliveryFee, courierFee);
+    const result = await checkoutSale(customerName, paymentMethod, notes, customerDeliveryFee, courierFee, saleDate);
     setIsSubmitting(false);
 
     if (result.success) {
@@ -218,16 +219,30 @@ export const POS = () => {
           </div>
         </div>
 
-        {/* Customer & Payment Config */}
+        {/* Customer, Sale Date & Payment Config */}
         <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginBottom: '14px' }}>
-          <div className="form-group" style={{ marginBottom: '10px' }}>
-            <label className="form-label">Customer Name</label>
-            <input
-              type="text"
-              className="form-input"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: '11px' }}>Customer Name</label>
+              <input
+                type="text"
+                className="form-input"
+                style={{ padding: '6px 10px', fontSize: '13px' }}
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: '11px', color: 'var(--accent-primary)', fontWeight: '700' }}>📅 Sale Date (তারিখ)</label>
+              <input
+                type="date"
+                className="form-input"
+                style={{ padding: '6px 10px', fontSize: '13px', borderColor: 'var(--accent-primary)' }}
+                value={saleDate}
+                onChange={(e) => setSaleDate(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="form-group" style={{ marginBottom: '0' }}>
