@@ -161,106 +161,104 @@ exports.getProductAnalytics = async (req, res) => {
     // NET REAL PROFIT = Realized Product Profit + Net Delivery Profit - Paid Ads - Courier Return Charges - Other Expenses
     const netRealProfit = netRealizedGrossProfit + netDeliveryProfit - paidAdsCost - returnChargesCost - otherExpensesCost;
 
-    // 8. Itemized Product-wise Breakdown with Delivery Profits
+    // 8. Itemized Product-wise Breakdown
+    let salesAggParams = [tenantId];
+    let returnsAggParams = [tenantId];
+    let adsAggParams = [tenantId];
+
     let prodSalesWhere = 'WHERE si.tenant_id = ?';
     let prodReturnsWhere = 'WHERE ri.tenant_id = ?';
     let prodAdsWhere = 'WHERE tenant_id = ? AND product_id IS NOT NULL';
-    let prodParams = [tenantId];
+
     if (!isAllTime) {
       prodSalesWhere += ' AND (s.sale_date IS NULL OR DATE(COALESCE(s.sale_date, s.created_at)) BETWEEN ? AND ?)';
+      salesAggParams.push(startDate, endDate);
+
       prodReturnsWhere += ' AND (r.return_date IS NULL OR DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?)';
+      returnsAggParams.push(startDate, endDate);
+
       prodAdsWhere += ' AND (ad_date IS NULL OR DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?)';
-      prodParams.push(startDate, endDate);
+      adsAggParams.push(startDate, endDate);
     }
 
-    const [productBreakdown] = await db.query(
+    const [salesAgg] = await db.query(
       `SELECT 
-        p.id as product_id,
-        p.name as product_name,
-        p.sku,
-        p.is_combo,
-        p.stock_quantity,
-        p.cost_price,
-        p.selling_price,
-        COALESCE(sales_agg.units_sold, 0) as units_sold,
-        COALESCE(sales_agg.gross_revenue, 0) as gross_revenue,
-        COALESCE(sales_agg.cogs, 0) as cogs,
-        COALESCE(sales_agg.gross_profit, 0) as gross_profit,
-        COALESCE(sales_agg.product_delivery_profit, 0) as product_delivery_profit,
-        COALESCE(returns_agg.units_returned, 0) as units_returned,
-        COALESCE(returns_agg.returned_profit_reversal, 0) as returned_profit_reversal,
-        COALESCE(returns_agg.returned_deliv_profit_reversal, 0) as returned_deliv_profit_reversal,
-        COALESCE(returns_agg.return_charges, 0) as return_charges,
-        COALESCE(ads_agg.ad_spend_bdt, 0) as ad_spend_bdt
-       FROM products p
-       LEFT JOIN (
-         SELECT 
-           si.product_id,
-           SUM(si.quantity) as units_sold,
-           SUM(si.total_price) as gross_revenue,
-           SUM(si.total_cost) as cogs,
-           SUM(si.item_profit) as gross_profit,
-           SUM(s.delivery_profit) as product_delivery_profit
-         FROM sale_items si
-         JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
-         ${prodSalesWhere}
-         GROUP BY si.product_id
-       ) sales_agg ON p.id = sales_agg.product_id
-       LEFT JOIN (
-         SELECT 
-           ri.product_id,
-           SUM(ri.quantity) as units_returned,
-           SUM(ri.quantity * (p_sub.selling_price - p_sub.cost_price)) as returned_profit_reversal,
-           SUM(s_sub.delivery_profit) as returned_deliv_profit_reversal,
-           SUM(r.courier_charge) as return_charges
-         FROM return_items ri
-         JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
-         JOIN products p_sub ON ri.product_id = p_sub.id AND ri.tenant_id = p_sub.tenant_id
-         LEFT JOIN sales s_sub ON r.invoice_no = s_sub.invoice_no AND r.tenant_id = s_sub.tenant_id
-         ${prodReturnsWhere}
-         GROUP BY ri.product_id
-       ) returns_agg ON p.id = returns_agg.product_id
-       LEFT JOIN (
-         SELECT 
-           product_id,
-           SUM(total_bdt_cost) as ad_spend_bdt
-         FROM paid_ads
-         ${prodAdsWhere}
-         GROUP BY product_id
-       ) ads_agg ON p.id = ads_agg.product_id
-       WHERE p.tenant_id = ?`,
-      isAllTime 
-        ? [tenantId, tenantId, tenantId, tenantId] 
-        : [tenantId, startDate, endDate, tenantId, startDate, endDate, tenantId, startDate, endDate, tenantId]
+         si.product_id,
+         SUM(si.quantity) as units_sold,
+         SUM(si.total_price) as gross_revenue,
+         SUM(si.total_cost) as cogs,
+         SUM(si.item_profit) as gross_profit,
+         SUM(s.delivery_profit) as product_delivery_profit
+       FROM sale_items si
+       JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
+       ${prodSalesWhere}
+       GROUP BY si.product_id`,
+      salesAggParams
     );
 
-    const formattedProducts = productBreakdown.map(p => {
-      const gProfit = Number(p.gross_profit || 0);
-      const delivProfit = Number(p.product_delivery_profit || 0);
-      const revProductProfit = Number(p.returned_profit_reversal || 0);
-      const revDelivProfit = Number(p.returned_deliv_profit_reversal || 0);
-      const adSpend = Number(p.ad_spend_bdt || 0);
-      const returnCharge = Number(p.return_charges || 0);
+    const [returnsAgg] = await db.query(
+      `SELECT 
+         ri.product_id,
+         SUM(ri.quantity) as units_returned,
+         SUM(ri.quantity * (p_sub.selling_price - p_sub.cost_price)) as returned_profit_reversal,
+         SUM(s_sub.delivery_profit) as returned_deliv_profit_reversal,
+         SUM(r.courier_charge) as return_charges
+       FROM return_items ri
+       JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
+       JOIN products p_sub ON ri.product_id = p_sub.id AND ri.tenant_id = p_sub.tenant_id
+       LEFT JOIN sales s_sub ON r.invoice_no = s_sub.invoice_no AND r.tenant_id = s_sub.tenant_id
+       ${prodReturnsWhere}
+       GROUP BY ri.product_id`,
+      returnsAggParams
+    );
+
+    const [adsAgg] = await db.query(
+      `SELECT 
+         product_id,
+         SUM(total_bdt_cost) as ad_spend_bdt
+       FROM paid_ads
+       ${prodAdsWhere}
+       GROUP BY product_id`,
+      adsAggParams
+    );
+
+    const [allProducts] = await db.query('SELECT id, name, sku, is_combo, stock_quantity, cost_price, selling_price FROM products WHERE tenant_id = ?', [tenantId]);
+
+    const salesMap = new Map(salesAgg.map(s => [s.product_id, s]));
+    const returnsMap = new Map(returnsAgg.map(r => [r.product_id, r]));
+    const adsMap = new Map(adsAgg.map(a => [a.product_id, a]));
+
+    const formattedProducts = allProducts.map(p => {
+      const s = salesMap.get(p.id) || {};
+      const r = returnsMap.get(p.id) || {};
+      const a = adsMap.get(p.id) || {};
+
+      const gProfit = Number(s.gross_profit || 0);
+      const delivProfit = Number(s.product_delivery_profit || 0);
+      const revProductProfit = Number(r.returned_profit_reversal || 0);
+      const revDelivProfit = Number(r.returned_deliv_profit_reversal || 0);
+      const adSpend = Number(a.ad_spend_bdt || 0);
+      const returnCharge = Number(r.return_charges || 0);
 
       const netProfit = gProfit + delivProfit - revProductProfit - revDelivProfit - adSpend - returnCharge;
-      const cogs = Number(p.cogs || 0);
+      const cogs = Number(s.cogs || 0);
       const marginPct = cogs > 0 ? ((netProfit / cogs) * 100).toFixed(1) : '0.0';
 
-      const grossRev = Number(p.gross_revenue || 0);
-      const unitsSold = Number(p.units_sold || 0);
+      const grossRev = Number(s.gross_revenue || 0);
+      const unitsSold = Number(s.units_sold || 0);
       const roasVal = adSpend > 0 ? Number((grossRev / adSpend).toFixed(2)) : 0;
       const cpaVal = unitsSold > 0 && adSpend > 0 ? Number((adSpend / unitsSold).toFixed(2)) : 0;
 
       return {
-        product_id: p.product_id,
-        product_name: p.product_name,
+        product_id: p.id,
+        product_name: p.name,
         sku: p.sku,
         is_combo: p.is_combo,
         stock_quantity: p.stock_quantity,
         cost_price: Number(p.cost_price),
         selling_price: Number(p.selling_price),
         units_sold: unitsSold,
-        units_returned: Number(p.units_returned || 0),
+        units_returned: Number(r.units_returned || 0),
         gross_revenue: grossRev,
         cogs: cogs,
         gross_profit: gProfit,
@@ -364,6 +362,7 @@ exports.getProductAnalytics = async (req, res) => {
     });
 
   } catch (error) {
+    console.error('Analytics Error:', error);
     res.status(500).json({ error: error.message });
   }
 };
