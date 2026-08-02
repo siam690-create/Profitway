@@ -51,87 +51,129 @@ exports.getProductAnalytics = async (req, res) => {
     }
 
     // 1. Overall Gross Sales Financials & Delivery Charge Profits
-    const [salesSummary] = await db.query(
-      `SELECT 
-        COUNT(*) as total_pos_orders,
-        COALESCE(SUM(total_amount), 0) as gross_sales_revenue,
-        COALESCE(SUM(total_cost), 0) as gross_cogs,
-        COALESCE(SUM(gross_profit), 0) as gross_projected_profit,
-        COALESCE(SUM(delivery_fee_charged), 0) as total_delivery_charged,
-        COALESCE(SUM(courier_actual_cost), 0) as total_courier_actual_cost,
-        COALESCE(SUM(delivery_profit), 0) as total_delivery_profit
-       FROM sales ${salesWhere}`,
-      baseParams
-    );
+    let salesSummary = [{ gross_sales_revenue: 0, gross_cogs: 0, gross_projected_profit: 0, total_delivery_charged: 0, total_courier_actual_cost: 0, total_delivery_profit: 0, total_pos_orders: 0 }];
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+          COUNT(*) as total_pos_orders,
+          COALESCE(SUM(total_amount), 0) as gross_sales_revenue,
+          COALESCE(SUM(total_cost), 0) as gross_cogs,
+          COALESCE(SUM(gross_profit), 0) as gross_projected_profit,
+          COALESCE(SUM(delivery_fee_charged), 0) as total_delivery_charged,
+          COALESCE(SUM(courier_actual_cost), 0) as total_courier_actual_cost,
+          COALESCE(SUM(delivery_profit), 0) as total_delivery_profit
+         FROM sales ${salesWhere}`,
+        baseParams
+      );
+      if (rows.length > 0) salesSummary = rows;
+    } catch (e) {
+      console.error('Analytics salesSummary Query Error:', e.message);
+    }
 
     // 2. Returned Sales Value & Unearned Product Profit Reversal
-    const [returnedSalesSummary] = await db.query(
-      `SELECT 
-        COALESCE(SUM(ri.quantity * p.selling_price), 0) as returned_sales_revenue,
-        COALESCE(SUM(ri.quantity * p.cost_price), 0) as returned_cogs,
-        COALESCE(SUM(s.delivery_profit), 0) as returned_delivery_profit_reversal
-       FROM return_items ri
-       JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
-       JOIN products p ON ri.product_id = p.id AND ri.tenant_id = p.tenant_id
-       LEFT JOIN sales s ON r.invoice_no = s.invoice_no AND r.tenant_id = s.tenant_id
-       ${returnsWhere}`,
-      baseParams
-    );
+    let returnedSalesSummary = [{ returned_sales_revenue: 0, returned_cogs: 0, returned_delivery_profit_reversal: 0 }];
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+          COALESCE(SUM(ri.quantity * p.selling_price), 0) as returned_sales_revenue,
+          COALESCE(SUM(ri.quantity * p.cost_price), 0) as returned_cogs,
+          COALESCE(SUM(s.delivery_profit), 0) as returned_delivery_profit_reversal
+         FROM return_items ri
+         JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
+         JOIN products p ON ri.product_id = p.id AND ri.tenant_id = p.tenant_id
+         LEFT JOIN sales s ON r.invoice_no = s.invoice_no AND r.tenant_id = s.tenant_id
+         ${returnsWhere}`,
+        baseParams
+      );
+      if (rows.length > 0) returnedSalesSummary = rows;
+    } catch (e) {
+      console.error('Analytics returnedSalesSummary Query Error:', e.message);
+    }
 
     // 3. Total Paid Ads Cost & ROAS Calculation
-    const [adsSummary] = await db.query(
-      `SELECT COALESCE(SUM(total_bdt_cost), 0) as total_paid_ads_cost
-       FROM paid_ads ${adsWhere}`,
-      baseParams
-    );
+    let adsSummary = [{ total_paid_ads_cost: 0 }];
+    try {
+      const [rows] = await db.query(
+        `SELECT COALESCE(SUM(total_bdt_cost), 0) as total_paid_ads_cost
+         FROM paid_ads ${adsWhere}`,
+        baseParams
+      );
+      if (rows.length > 0) adsSummary = rows;
+    } catch (e) {
+      console.error('Analytics adsSummary Query Error:', e.message);
+    }
 
     // 4. Total Courier Return Charges & Count
-    const [returnsSummary] = await db.query(
-      `SELECT 
-        COUNT(*) as total_returns_count,
-        COALESCE(SUM(courier_charge), 0) as total_courier_return_cost
-       FROM returns ${returnsOnlyWhere}`,
-      baseParams
-    );
+    let returnsSummary = [{ total_returns_count: 0, total_courier_return_cost: 0 }];
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+          COUNT(*) as total_returns_count,
+          COALESCE(SUM(courier_charge), 0) as total_courier_return_cost
+         FROM returns ${returnsOnlyWhere}`,
+        baseParams
+      );
+      if (rows.length > 0) returnsSummary = rows;
+    } catch (e) {
+      console.error('Analytics returnsSummary Query Error:', e.message);
+    }
 
     // 5. Total Operating Expenses
-    const [expensesSummary] = await db.query(
-      `SELECT COALESCE(SUM(amount), 0) as total_other_expenses
-       FROM expenses ${expensesWhere}`,
-      baseParams
-    );
+    let expensesSummary = [{ total_other_expenses: 0 }];
+    try {
+      const [rows] = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) as total_other_expenses
+         FROM expenses ${expensesWhere}`,
+        baseParams
+      );
+      if (rows.length > 0) expensesSummary = rows;
+    } catch (e) {
+      console.error('Analytics expensesSummary Query Error:', e.message);
+    }
 
     // 6. Wholesale B2B Analytics Summary
-    const [wholesaleSummary] = await db.query(
-      `SELECT 
-        COUNT(*) as wholesale_orders_count,
-        COALESCE(SUM(total_amount), 0) as wholesale_revenue,
-        COALESCE(SUM(total_cost), 0) as wholesale_cogs,
-        COALESCE(SUM(gross_profit), 0) as wholesale_profit,
-        COALESCE(SUM(paid_amount), 0) as wholesale_cash_collected,
-        COALESCE(SUM(due_amount), 0) as wholesale_pending_pawna
-       FROM wholesale_sales ${wholesaleWhere}`,
-      baseParams
-    );
+    let wholesaleSummary = [{ wholesale_orders_count: 0, wholesale_revenue: 0, wholesale_cogs: 0, wholesale_profit: 0, wholesale_cash_collected: 0, wholesale_pending_pawna: 0 }];
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+          COUNT(*) as wholesale_orders_count,
+          COALESCE(SUM(total_amount), 0) as wholesale_revenue,
+          COALESCE(SUM(total_cost), 0) as wholesale_cogs,
+          COALESCE(SUM(gross_profit), 0) as wholesale_profit,
+          COALESCE(SUM(paid_amount), 0) as wholesale_cash_collected,
+          COALESCE(SUM(due_amount), 0) as wholesale_pending_pawna
+         FROM wholesale_sales ${wholesaleWhere}`,
+        baseParams
+      );
+      if (rows.length > 0) wholesaleSummary = rows;
+    } catch (e) {
+      console.error('Analytics wholesaleSummary Query Error:', e.message);
+    }
 
-    // 7. Top Wholesale Buyers Performance Ranking
-    const [topWholesaleBuyers] = await db.query(
-      `SELECT 
-        wc.id as buyer_id,
-        wc.name as buyer_name,
-        wc.phone,
-        wc.company_name,
-        COUNT(ws.id) as orders_count,
-        COALESCE(SUM(ws.total_amount), 0) as total_spent,
-        COALESCE(SUM(ws.gross_profit), 0) as total_profit_generated,
-        COALESCE(SUM(ws.due_amount), 0) as current_pawna_due
-       FROM wholesale_customers wc
-       JOIN wholesale_sales ws ON wc.id = ws.customer_id AND ws.tenant_id = wc.tenant_id
-       ${wholesaleBuyersWhere}
-       GROUP BY wc.id
-       ORDER BY total_spent DESC LIMIT 10`,
-      baseParams
-    );
+    // 7. Top Wholesale Buyers Performance Ranking (Fixed MySQL 8 ONLY_FULL_GROUP_BY)
+    let topWholesaleBuyers = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+          wc.id as buyer_id,
+          wc.name as buyer_name,
+          wc.phone,
+          wc.company_name,
+          COUNT(ws.id) as orders_count,
+          COALESCE(SUM(ws.total_amount), 0) as total_spent,
+          COALESCE(SUM(ws.gross_profit), 0) as total_profit_generated,
+          COALESCE(SUM(ws.due_amount), 0) as current_pawna_due
+         FROM wholesale_customers wc
+         JOIN wholesale_sales ws ON wc.id = ws.customer_id AND ws.tenant_id = wc.tenant_id
+         ${wholesaleBuyersWhere}
+         GROUP BY wc.id, wc.name, wc.phone, wc.company_name
+         ORDER BY total_spent DESC LIMIT 10`,
+        baseParams
+      );
+      topWholesaleBuyers = rows;
+    } catch (e) {
+      console.error('Analytics topWholesaleBuyers Query Error:', e.message);
+    }
 
     const grossSalesRev = Number(salesSummary[0].gross_sales_revenue || 0);
     const grossCogs = Number(salesSummary[0].gross_cogs || 0);
@@ -181,46 +223,64 @@ exports.getProductAnalytics = async (req, res) => {
       adsAggParams.push(startDate, endDate);
     }
 
-    const [salesAgg] = await db.query(
-      `SELECT 
-         si.product_id,
-         SUM(si.quantity) as units_sold,
-         SUM(si.total_price) as gross_revenue,
-         SUM(si.total_cost) as cogs,
-         SUM(si.item_profit) as gross_profit,
-         SUM(s.delivery_profit) as product_delivery_profit
-       FROM sale_items si
-       JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
-       ${prodSalesWhere}
-       GROUP BY si.product_id`,
-      salesAggParams
-    );
+    let salesAgg = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+           si.product_id,
+           SUM(si.quantity) as units_sold,
+           SUM(si.total_price) as gross_revenue,
+           SUM(si.total_cost) as cogs,
+           SUM(si.item_profit) as gross_profit,
+           SUM(s.delivery_profit) as product_delivery_profit
+         FROM sale_items si
+         JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
+         ${prodSalesWhere}
+         GROUP BY si.product_id`,
+        salesAggParams
+      );
+      salesAgg = rows;
+    } catch (e) {
+      console.error('Analytics salesAgg Query Error:', e.message);
+    }
 
-    const [returnsAgg] = await db.query(
-      `SELECT 
-         ri.product_id,
-         SUM(ri.quantity) as units_returned,
-         SUM(ri.quantity * (p_sub.selling_price - p_sub.cost_price)) as returned_profit_reversal,
-         SUM(s_sub.delivery_profit) as returned_deliv_profit_reversal,
-         SUM(r.courier_charge) as return_charges
-       FROM return_items ri
-       JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
-       JOIN products p_sub ON ri.product_id = p_sub.id AND ri.tenant_id = p_sub.tenant_id
-       LEFT JOIN sales s_sub ON r.invoice_no = s_sub.invoice_no AND r.tenant_id = s_sub.tenant_id
-       ${prodReturnsWhere}
-       GROUP BY ri.product_id`,
-      returnsAggParams
-    );
+    let returnsAgg = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+           ri.product_id,
+           SUM(ri.quantity) as units_returned,
+           SUM(ri.quantity * (p_sub.selling_price - p_sub.cost_price)) as returned_profit_reversal,
+           SUM(s_sub.delivery_profit) as returned_deliv_profit_reversal,
+           SUM(r.courier_charge) as return_charges
+         FROM return_items ri
+         JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
+         JOIN products p_sub ON ri.product_id = p_sub.id AND ri.tenant_id = p_sub.tenant_id
+         LEFT JOIN sales s_sub ON r.invoice_no = s_sub.invoice_no AND r.tenant_id = s_sub.tenant_id
+         ${prodReturnsWhere}
+         GROUP BY ri.product_id`,
+        returnsAggParams
+      );
+      returnsAgg = rows;
+    } catch (e) {
+      console.error('Analytics returnsAgg Query Error:', e.message);
+    }
 
-    const [adsAgg] = await db.query(
-      `SELECT 
-         product_id,
-         SUM(total_bdt_cost) as ad_spend_bdt
-       FROM paid_ads
-       ${prodAdsWhere}
-       GROUP BY product_id`,
-      adsAggParams
-    );
+    let adsAgg = [];
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+           product_id,
+           SUM(total_bdt_cost) as ad_spend_bdt
+         FROM paid_ads
+         ${prodAdsWhere}
+         GROUP BY product_id`,
+        adsAggParams
+      );
+      adsAgg = rows;
+    } catch (e) {
+      console.error('Analytics adsAgg Query Error:', e.message);
+    }
 
     const [allProducts] = await db.query('SELECT id, name, sku, is_combo, stock_quantity, cost_price, selling_price FROM products WHERE tenant_id = ?', [tenantId]);
 
