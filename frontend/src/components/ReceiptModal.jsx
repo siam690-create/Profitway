@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { X, Printer, CheckCircle, Edit2, ShieldAlert } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
-export const ReceiptModal = ({ sale, onClose }) => {
+export const ReceiptModal = ({ sale: rawSale, onClose }) => {
   const { currency, formatCurrency, shopSettings, user, authFetch, fetchSales } = useApp();
+  
+  const sale = rawSale?.sale ? rawSale.sale : rawSale;
+
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     customer_name: sale?.customer_name || 'Walk-in Customer',

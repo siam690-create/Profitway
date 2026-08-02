@@ -358,7 +358,7 @@ export const AppProvider = ({ children }) => {
       if (res.ok) {
         clearCart();
         refreshAllData();
-        return { success: true, sale: data };
+        return { success: true, sale: data.sale || data };
       }
       return { success: false, error: data.error };
     } catch (err) {
