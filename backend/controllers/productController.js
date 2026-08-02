@@ -314,7 +314,7 @@ exports.bulkImportProducts = async (req, res) => {
            name = VALUES(name),
            cost_price = VALUES(cost_price),
            selling_price = VALUES(selling_price),
-           stock_quantity = stock_quantity + VALUES(stock_quantity),
+           stock_quantity = VALUES(stock_quantity),
            low_stock_threshold = VALUES(low_stock_threshold),
            unit = VALUES(unit),
            location = COALESCE(VALUES(location), location)`,
