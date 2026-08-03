@@ -39,7 +39,7 @@ exports.createReturn = async (req, res) => {
 
     for (const item of items) {
       const [prodRows] = await connection.query(
-        'SELECT id, name, is_combo FROM products WHERE id = ? AND tenant_id = ?',
+        'SELECT id, name, is_combo, stock_quantity FROM products WHERE id = ? AND tenant_id = ?',
         [item.product_id, tenantId]
       );
 
@@ -48,7 +48,9 @@ exports.createReturn = async (req, res) => {
       }
 
       const product = prodRows[0];
-      const restockCond = item.restock_condition || 'Good';
+      const restockCond = item.restock_condition || 'good_restockable';
+      const condLower = String(restockCond).toLowerCase();
+      const isRestockable = condLower.includes('good') || condLower.includes('restock') || condLower === 'good';
       const qty = Number(item.quantity || 1);
 
       await connection.query(
@@ -57,8 +59,8 @@ exports.createReturn = async (req, res) => {
         [tenantId, return_id, product.id, product.name, qty, restockCond]
       );
 
-      // If condition is Good, restock stock back!
-      if (restockCond === 'Good') {
+      // If condition is Good / Restockable, add stock quantity back to inventory!
+      if (isRestockable) {
         if (product.is_combo) {
           const [comboChildItems] = await connection.query(
             'SELECT child_product_id, quantity FROM combo_items WHERE combo_product_id = ? AND tenant_id = ?',
@@ -78,7 +80,25 @@ exports.createReturn = async (req, res) => {
             [qty, product.id, tenantId]
           );
         }
+
+        // Record stock movement log
+        await connection.query(
+          `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+           VALUES (?, ?, 'Courier Return Restock', ?, ?, ?, ?, ?)`,
+          [
+            tenantId, product.id, qty, Number(product.stock_quantity || 0),
+            Number(product.stock_quantity || 0) + qty, return_no, `Restocked from Courier Return #${return_no}`
+          ]
+        );
       }
+    }
+
+    // If invoice number is provided, mark sale status as 'returned'
+    if (invoice_no && invoice_no.trim()) {
+      await connection.query(
+        `UPDATE sales SET status = 'returned' WHERE invoice_no = ? AND tenant_id = ?`,
+        [invoice_no.trim(), tenantId]
+      );
     }
 
     // Automatically log courier charge as expense under category 'Transport' if > 0
