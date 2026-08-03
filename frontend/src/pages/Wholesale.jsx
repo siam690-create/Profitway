@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { ShoppingBag, Plus, PackagePlus, Eye, X, Users, Phone, MapPin, DollarSign, Wallet, FileText, CheckCircle, ArrowUpRight, Printer } from 'lucide-react';
+import { ShoppingBag, Plus, PackagePlus, Eye, X, Users, Phone, MapPin, DollarSign, Wallet, FileText, CheckCircle, ArrowUpRight, Printer, Trash2 } from 'lucide-react';
 
 export const Wholesale = () => {
   const { authFetch, products, currency, formatCurrency, shopSettings, refreshAllData } = useApp();
@@ -20,6 +20,28 @@ export const Wholesale = () => {
   const [paymentStatus, setPaymentStatus] = useState('paid'); // 'paid', 'partial', 'due'
   const [paidAmount, setPaidAmount] = useState('0');
   const [accountId, setAccountId] = useState('');
+
+  const handleDeleteSale = async (sale) => {
+    if (!window.confirm(`Are you sure you want to delete Wholesale Order #${sale.invoice_no}? This will restore product stock, refund any paid cash, and remove auto-created Pawna dues.`)) {
+      return;
+    }
+
+    try {
+      const res = await authFetch(`/api/wholesale/sales/${sale.id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || `Wholesale Order #${sale.invoice_no} deleted successfully!`);
+        fetchData();
+        refreshAllData();
+      } else {
+        alert(`Error deleting wholesale sale: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error deleting wholesale sale: ${err.message}`);
+    }
+  };
 
   // Cart of Products to Sell Wholesale
   const [saleItems, setSaleItems] = useState([]);
@@ -420,9 +442,14 @@ export const Wholesale = () => {
                           </span>
                         </td>
                         <td>
-                          <button onClick={() => handleViewSaleDetails(sale.id)} className="btn btn-secondary btn-icon btn-sm" title="View & Print Wholesale Invoice">
-                            <Eye size={14} />
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => handleViewSaleDetails(sale.id)} className="btn btn-secondary btn-icon btn-sm" title="View & Print Wholesale Invoice">
+                              <Eye size={14} />
+                            </button>
+                            <button onClick={() => handleDeleteSale(sale)} className="btn btn-danger btn-icon btn-sm" style={{ background: '#ef4444', borderColor: '#ef4444', color: '#fff' }} title="Delete Wholesale Order & Revert Stock">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

@@ -128,6 +128,7 @@ router.delete('/wholesale/customers/:id', checkActiveSubscription, wholesaleCont
 router.get('/wholesale/sales', wholesaleController.getWholesaleSales);
 router.get('/wholesale/sales/:id', wholesaleController.getWholesaleSaleById);
 router.post('/wholesale/sales', checkActiveSubscription, wholesaleController.createWholesaleSale);
+router.delete('/wholesale/sales/:id', checkActiveSubscription, wholesaleController.deleteWholesaleSale);
 
 // Supplier Directory APIs
 router.get('/suppliers', supplierController.getSuppliers);

@@ -270,6 +270,95 @@ exports.getWholesaleSales = async (req, res) => {
   }
 };
 
+// Delete Wholesale Sale & Revert Stock / Financial Dues
+exports.deleteWholesaleSale = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+
+    await connection.beginTransaction();
+
+    // 1. Fetch Wholesale Sale Order
+    const [sales] = await connection.query(
+      `SELECT * FROM wholesale_sales WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+      [id, tenantId]
+    );
+
+    if (sales.length === 0) {
+      return res.status(404).json({ error: 'Wholesale sale order not found.' });
+    }
+    const sale = sales[0];
+
+    // 2. Fetch Sale Line Items
+    const [items] = await connection.query(
+      `SELECT * FROM wholesale_sale_items WHERE sale_id = ?`,
+      [id]
+    );
+
+    // 3. Restock Product Quantities
+    for (const item of items) {
+      const [prodRows] = await connection.query(
+        `SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE`,
+        [item.product_id, tenantId]
+      );
+
+      const prevStock = prodRows.length > 0 ? Number(prodRows[0].stock_quantity) : 0;
+      const newStock = prevStock + Number(item.quantity);
+
+      await connection.query(
+        `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?`,
+        [item.quantity, item.product_id, tenantId]
+      );
+
+      // Log Stock Movement Audit
+      await connection.query(
+        `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes, created_at)
+         VALUES (?, ?, 'wholesale_sale_deletion', ?, ?, ?, ?, ?, NOW())`,
+        [tenantId, item.product_id, item.quantity, prevStock, newStock, sale.invoice_no, `Restocked due to deletion of Wholesale Sale #${sale.invoice_no}`]
+      );
+    }
+
+    // 4. Financial Account Reversal (Deduct paid_amount if cash was deposited)
+    const paidAmt = Number(sale.paid_amount || 0);
+    if (paidAmt > 0 && sale.account_id) {
+      await connection.query(
+        `UPDATE finance_accounts SET balance = balance - ? WHERE id = ? AND tenant_id = ?`,
+        [paidAmt, sale.account_id, tenantId]
+      );
+
+      // Log Passbook Reversal Entry in account_transactions
+      await connection.query(
+        `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+         VALUES (?, ?, 'Wholesale Sale Cancelled', ?, 0.00, ?, ?, NOW())`,
+        [tenantId, sale.account_id, paidAmt, sale.invoice_no, `Reverted cash received due to deletion of Wholesale Sale #${sale.invoice_no} (Buyer: ${sale.customer_name})`]
+      );
+    }
+
+    // 5. Remove Auto-Created Pawna (Receivables) for this Wholesale Sale
+    await connection.query(
+      `DELETE FROM receivables WHERE tenant_id = ? AND title LIKE ?`,
+      [tenantId, `%${sale.invoice_no}%`]
+    );
+
+    // 6. Delete Sale Items & Wholesale Sale
+    await connection.query(`DELETE FROM wholesale_sale_items WHERE sale_id = ?`, [id]);
+    await connection.query(`DELETE FROM wholesale_sales WHERE id = ? AND tenant_id = ?`, [id, tenantId]);
+
+    await connection.commit();
+
+    res.json({
+      message: `Wholesale Sale #${sale.invoice_no} deleted successfully! Products restocked, liquid account reverted, and Pawna dues removed.`
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
 // Get Wholesale Sale Details
 exports.getWholesaleSaleById = async (req, res) => {
   try {
