@@ -37,16 +37,16 @@ exports.getInvestments = async (req, res) => {
   }
 };
 
-// Record New Investment (Deposit Capital into Investor Profile)
+// Record New Investment / Create Investor Profile
 exports.createInvestment = async (req, res) => {
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
     const { investor_name, phone, email, invested_amount, account_id, notes } = req.body;
 
-    const amountNum = Number(invested_amount);
-    if (!investor_name || isNaN(amountNum) || amountNum <= 0) {
-      return res.status(400).json({ error: 'Investor name and valid investment amount are required.' });
+    const amountNum = Number(invested_amount || 0);
+    if (!investor_name) {
+      return res.status(400).json({ error: 'Investor name is required.' });
     }
 
     await connection.beginTransaction();
@@ -78,31 +78,35 @@ exports.createInvestment = async (req, res) => {
     } else {
       const [invResult] = await connection.query(
         `INSERT INTO investments (tenant_id, investor_name, phone, email, invested_amount, returned_amount, status, account_id, notes, created_at)
-         VALUES (?, ?, ?, ?, ?, 0.00, 'active', ?, ?, NOW())`,
-        [tenantId, cleanName, phone || null, email || null, amountNum, account_id || null, notes || null]
+         VALUES (?, ?, ?, ?, ?, 0.00, ?, ?, ?, NOW())`,
+        [tenantId, cleanName, phone || null, email || null, amountNum, amountNum > 0 ? 'active' : 'returned', account_id || null, notes || null]
       );
       investmentId = invResult.insertId;
     }
 
-    // 2. Deposit Funds into Selected Liquid Account
-    if (account_id) {
+    // 2. Deposit Funds into Selected Liquid Account if amount > 0
+    if (account_id && amountNum > 0) {
       await connection.query(
         'UPDATE finance_accounts SET balance = balance + ? WHERE id = ? AND tenant_id = ?',
         [amountNum, account_id, tenantId]
       );
     }
 
-    // 3. Log Deposit Transaction
-    await connection.query(
-      `INSERT INTO investment_transactions (tenant_id, investment_id, type, amount, account_id, notes, transaction_date)
-       VALUES (?, ?, 'deposit', ?, ?, ?, NOW())`,
-      [tenantId, investmentId, amountNum, account_id || null, notes || 'Capital Investment Deposit']
-    );
+    // 3. Log Deposit Transaction if amount > 0
+    if (amountNum > 0) {
+      await connection.query(
+        `INSERT INTO investment_transactions (tenant_id, investment_id, type, amount, account_id, notes, transaction_date)
+         VALUES (?, ?, 'deposit', ?, ?, ?, NOW())`,
+        [tenantId, investmentId, amountNum, account_id || null, notes || 'Capital Investment Deposit']
+      );
+    }
 
     await connection.commit();
 
     res.status(201).json({
-      message: `৳${amountNum.toFixed(2)} investment capital recorded for "${cleanName}"! Liquid account balance updated.`,
+      message: amountNum > 0 
+        ? `৳${amountNum.toFixed(2)} investment capital recorded for "${cleanName}"!`
+        : `Investor profile "${cleanName}" created successfully!`,
       investment_id: investmentId
     });
   } catch (error) {

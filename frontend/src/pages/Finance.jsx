@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Landmark, Wallet, ArrowUpRight, ArrowDownRight, Plus, RefreshCw, DollarSign, Send, CheckCircle, UserCheck, ShieldAlert, X, TrendingUp, HandCoins, Eye, Printer, FileText, Calendar, Building2, Download } from 'lucide-react';
+import { Landmark, Wallet, ArrowUpRight, ArrowDownRight, Plus, RefreshCw, DollarSign, Send, CheckCircle, UserCheck, ShieldAlert, X, TrendingUp, HandCoins, Eye, Printer, FileText, Calendar, Building2, Download, UserPlus } from 'lucide-react';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Finance = () => {
@@ -23,6 +23,7 @@ export const Finance = () => {
   const [showPayDenaModal, setShowPayDenaModal] = useState(null);
   const [showCollectPawnaModal, setShowCollectPawnaModal] = useState(null);
   const [showInvestModal, setShowInvestModal] = useState(false);
+  const [showAddInvestorModal, setShowAddInvestorModal] = useState(false);
   const [showRepayInvestModal, setShowRepayInvestModal] = useState(null);
 
   // Audit History Modals
@@ -44,6 +45,7 @@ export const Finance = () => {
 
   // Investment Forms
   const [investForm, setInvestForm] = useState({ investor_name: '', phone: '', email: '', invested_amount: '', account_id: '', notes: '' });
+  const [addInvestorForm, setAddInvestorForm] = useState({ investor_name: '', phone: '', email: '', invested_amount: '', account_id: '', notes: '' });
   const [repayInvestAmt, setRepayInvestAmt] = useState('');
   const [repayInvestAccId, setRepayInvestAccId] = useState('');
   const [repayInvestNotes, setRepayInvestNotes] = useState('');
@@ -312,12 +314,34 @@ export const Finance = () => {
         setShowInvestModal(false);
         setInvestForm({ investor_name: '', phone: '', email: '', invested_amount: '', account_id: '', notes: '' });
         fetchFinance();
-        alert('New investment capital recorded & deposited into account!');
+        alert(data.message || 'New investment capital recorded!');
       } else {
         alert(`Error: ${data.error}`);
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
+    }
+  };
+
+  const handleAddInvestorSubmit = async (e) => {
+    e.preventDefault();
+    if (!addInvestorForm.investor_name) return;
+    try {
+      const res = await authFetch('/api/investments', {
+        method: 'POST',
+        body: JSON.stringify(addInvestorForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowAddInvestorModal(false);
+        setAddInvestorForm({ investor_name: '', phone: '', email: '', invested_amount: '', account_id: '', notes: '' });
+        fetchFinance();
+        alert(data.message || `Investor Profile "${addInvestorForm.investor_name}" created successfully!`);
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error creating investor profile: ${err.message}`);
     }
   };
 
@@ -813,10 +837,24 @@ export const Finance = () => {
                 </p>
               </div>
 
-              <button onClick={() => setShowInvestModal(true)} className="btn btn-primary btn-sm" style={{ background: '#8b5cf6', borderColor: '#8b5cf6' }}>
-                <Plus size={15} />
-                <span>+ Record New Investment</span>
-              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => {
+                    setAddInvestorForm({ investor_name: '', phone: '', email: '', invested_amount: '', account_id: '', notes: '' });
+                    setShowAddInvestorModal(true);
+                  }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ background: 'var(--bg-secondary)', borderColor: '#8b5cf6', color: '#8b5cf6' }}
+                >
+                  <UserPlus size={15} />
+                  <span>+ Add Investor Profile</span>
+                </button>
+
+                <button onClick={() => setShowInvestModal(true)} className="btn btn-primary btn-sm" style={{ background: '#8b5cf6', borderColor: '#8b5cf6' }}>
+                  <Plus size={15} />
+                  <span>+ Record New Investment</span>
+                </button>
+              </div>
             </div>
 
             <div className="table-wrapper">
@@ -868,6 +906,27 @@ export const Finance = () => {
                               <Eye size={14} />
                               <span>History</span>
                             </button>
+
+                            <button
+                              onClick={() => {
+                                setInvestForm({
+                                  investor_name: inv.investor_name,
+                                  phone: inv.phone || '',
+                                  email: inv.email || '',
+                                  invested_amount: '',
+                                  account_id: (accounts && accounts.length > 0) ? accounts[0].id : '',
+                                  notes: ''
+                                });
+                                setShowInvestModal(true);
+                              }}
+                              className="btn btn-primary btn-sm"
+                              style={{ background: '#8b5cf6', borderColor: '#8b5cf6' }}
+                              title="Add Investment for this Investor"
+                            >
+                              <Plus size={14} />
+                              <span>+ Add Invest</span>
+                            </button>
+
                             {inv.active_capital > 0 && (
                               <button onClick={() => { setShowRepayInvestModal({ ...inv, id: inv.sample_id }); setRepayInvestAmt(inv.active_capital); }} className="btn btn-secondary btn-sm">
                                 Return Capital
@@ -1705,6 +1764,102 @@ export const Finance = () => {
         </div>
       )}
 
+      {/* Add New Investor Profile Modal */}
+      {showAddInvestorModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h3>Create New Investor Profile (ইনভেস্টর প্রোফাইল তৈরি)</h3>
+              <button onClick={() => setShowAddInvestorModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleAddInvestorSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Investor Full Name *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. MD TANIM HOSSAN"
+                    value={addInvestorForm.investor_name}
+                    onChange={(e) => setAddInvestorForm({ ...addInvestorForm, investor_name: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Phone Number</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="01580852168"
+                      value={addInvestorForm.phone}
+                      onChange={(e) => setAddInvestorForm({ ...addInvestorForm, phone: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Email Address</label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      placeholder="tanim@gmail.com"
+                      value={addInvestorForm.email}
+                      onChange={(e) => setAddInvestorForm({ ...addInvestorForm, email: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Opening Capital ({currency}) (Optional)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="form-input"
+                      placeholder="0.00"
+                      value={addInvestorForm.invested_amount}
+                      onChange={(e) => setAddInvestorForm({ ...addInvestorForm, invested_amount: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Deposit Target Account</label>
+                    <select
+                      className="form-select"
+                      required={Number(addInvestorForm.invested_amount) > 0}
+                      value={addInvestorForm.account_id}
+                      onChange={(e) => setAddInvestorForm({ ...addInvestorForm, account_id: e.target.value })}
+                    >
+                      <option value="">Select Account...</option>
+                      {accounts.map(a => (
+                        <option key={a.id} value={a.id}>{a.name} ({currency}{a.balance})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Notes / Remarks</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Business Equity Partner"
+                    value={addInvestorForm.notes}
+                    onChange={(e) => setAddInvestorForm({ ...addInvestorForm, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowAddInvestorModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ background: '#8b5cf6', borderColor: '#8b5cf6' }}>Create Investor Profile</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Add New Investment Modal */}
       {showInvestModal && (
         <div className="modal-overlay">
@@ -1716,12 +1871,38 @@ export const Finance = () => {
             <form onSubmit={handleCreateInvestmentSubmit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
-                  <label className="form-label">Investor Full Name</label>
+                  <label className="form-label">Select Registered Investor Profile</label>
+                  <select
+                    className="form-select"
+                    value=""
+                    onChange={(e) => {
+                      const selectedName = e.target.value;
+                      if (selectedName) {
+                        const invList = (investments || []);
+                        const found = invList.find(i => i.investor_name.toLowerCase() === selectedName.toLowerCase());
+                        setInvestForm({
+                          ...investForm,
+                          investor_name: selectedName,
+                          phone: found ? found.phone || '' : investForm.phone,
+                          email: found ? found.email || '' : investForm.email
+                        });
+                      }
+                    }}
+                  >
+                    <option value="">Select Existing Investor Profile (or type name below)...</option>
+                    {Array.from(new Set((investments || []).map(i => i.investor_name))).map((name, idx) => (
+                      <option key={idx} value={name}>👤 {name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Investor Full Name *</label>
                   <input
                     type="text"
                     className="form-input"
                     required
-                    placeholder="e.g. Syed Kamrul Hasan"
+                    placeholder="e.g. MD TANIM HOSSAN"
                     value={investForm.investor_name}
                     onChange={(e) => setInvestForm({ ...investForm, investor_name: e.target.value })}
                   />
