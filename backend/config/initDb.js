@@ -258,6 +258,145 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 14. Enterprise HR & Employee Directory Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS employees (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        user_id INT DEFAULT NULL,
+        employee_code VARCHAR(50) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        designation VARCHAR(100) DEFAULT 'Staff',
+        department VARCHAR(100) DEFAULT 'General',
+        phone VARCHAR(50) DEFAULT NULL,
+        email VARCHAR(150) DEFAULT NULL,
+        joining_date DATE DEFAULT NULL,
+        nid_number VARCHAR(100) DEFAULT NULL,
+        blood_group VARCHAR(20) DEFAULT NULL,
+        emergency_contact_name VARCHAR(150) DEFAULT NULL,
+        emergency_contact_phone VARCHAR(50) DEFAULT NULL,
+        photo_url TEXT DEFAULT NULL,
+        base_salary DECIMAL(12,2) DEFAULT 0.00,
+        hourly_rate DECIMAL(10,2) DEFAULT 0.00,
+        overtime_rate DECIMAL(10,2) DEFAULT 0.00,
+        payment_method VARCHAR(50) DEFAULT 'Cash',
+        account_number VARCHAR(100) DEFAULT NULL,
+        is_active TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_emp_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 15. Employee Attendance Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS employee_attendance (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        employee_id INT NOT NULL,
+        date DATE NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'present',
+        in_time TIME DEFAULT NULL,
+        out_time TIME DEFAULT NULL,
+        overtime_hours DECIMAL(5,2) DEFAULT 0.00,
+        late_minutes INT DEFAULT 0,
+        notes TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_att_tenant (tenant_id),
+        INDEX idx_att_emp_date (employee_id, date)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 16. Employee Leaves Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS employee_leaves (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        employee_id INT NOT NULL,
+        leave_type VARCHAR(50) NOT NULL DEFAULT 'casual',
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        total_days INT NOT NULL DEFAULT 1,
+        reason TEXT DEFAULT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        approved_by VARCHAR(150) DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_lv_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 17. Employee Loans & Advances Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS employee_loans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        employee_id INT NOT NULL,
+        loan_amount DECIMAL(12,2) NOT NULL,
+        paid_amount DECIMAL(12,2) DEFAULT 0.00,
+        monthly_installment DECIMAL(12,2) DEFAULT 0.00,
+        account_id INT DEFAULT NULL,
+        disbursement_date DATE DEFAULT NULL,
+        notes TEXT DEFAULT NULL,
+        status VARCHAR(20) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ln_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 18. Employee Loan Repayments Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS employee_loan_repayments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        loan_id INT NOT NULL,
+        employee_id INT NOT NULL,
+        repayment_amount DECIMAL(12,2) NOT NULL,
+        repayment_source VARCHAR(50) DEFAULT 'salary_deduction',
+        payroll_id INT DEFAULT NULL,
+        notes TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_lr_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 19. Employee Provident Fund (PF) Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS employee_pf (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        employee_id INT NOT NULL,
+        employee_contrib_pct DECIMAL(5,2) DEFAULT 5.00,
+        employer_contrib_pct DECIMAL(5,2) DEFAULT 5.00,
+        accumulated_balance DECIMAL(12,2) DEFAULT 0.00,
+        status VARCHAR(20) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_pf_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 20. Employee Bonuses & Allowances Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS employee_bonuses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        employee_id INT DEFAULT NULL,
+        title VARCHAR(255) NOT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        bonus_date DATE NOT NULL,
+        notes TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_bn_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // Retroactive column additions to payroll table
+    await addColumnIfNotExists('payroll', 'employee_id', 'INT NULL');
+    await addColumnIfNotExists('payroll', 'overtime_pay', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payroll', 'absent_penalty', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payroll', 'late_penalty', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payroll', 'loan_deduction', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payroll', 'pf_deduction', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payroll', 'payment_status', "VARCHAR(20) DEFAULT 'paid'");
+
     // Retroactive fix: Auto-insert missing cancellation log for past deleted purchases like #PUR-20260802-516
     try {
       const [accs] = await db.query("SELECT id, tenant_id FROM finance_accounts WHERE name LIKE '%UCB%' LIMIT 1");

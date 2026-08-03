@@ -181,4 +181,26 @@ router.post('/staff', checkActiveSubscription, staffController.createStaff);
 router.patch('/staff/:id', checkActiveSubscription, staffController.updateStaff);
 router.delete('/staff/:id', checkActiveSubscription, staffController.deleteStaff);
 
+// Enterprise HR, Payroll & Attendance OS APIs
+router.get('/staff/employees', staffController.getEmployees);
+router.post('/staff/employees', checkActiveSubscription, staffController.createEmployee);
+router.put('/staff/employees/:id', checkActiveSubscription, staffController.updateEmployee);
+router.delete('/staff/employees/:id', checkActiveSubscription, staffController.deleteEmployee);
+
+router.get('/staff/attendance', staffController.getAttendance);
+router.post('/staff/attendance/batch', checkActiveSubscription, staffController.markAttendanceBatch);
+
+router.get('/staff/leaves', staffController.getLeaves);
+router.post('/staff/leaves', checkActiveSubscription, staffController.createLeave);
+router.patch('/staff/leaves/:id/status', checkActiveSubscription, staffController.updateLeaveStatus);
+
+router.get('/staff/loans', staffController.getLoans);
+router.post('/staff/loans/disburse', checkActiveSubscription, staffController.disburseLoan);
+
+router.get('/staff/bonuses', staffController.getBonuses);
+router.post('/staff/bonuses', checkActiveSubscription, staffController.createBonus);
+
+router.get('/staff/salary-sheet', staffController.getMonthlySalarySheet);
+router.post('/staff/salary-sheet/disburse', checkActiveSubscription, staffController.disburseSalary);
+
 module.exports = router;
