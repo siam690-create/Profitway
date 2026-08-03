@@ -446,6 +446,14 @@ async function autoMigrate() {
     await addColumnIfNotExists('payroll', 'pf_deduction', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('payroll', 'payment_status', "VARCHAR(20) DEFAULT 'paid'");
 
+    // Retroactive column type expansion for liabilities & receivables status column to prevent data truncation
+    try {
+      await db.query("ALTER TABLE liabilities MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
+      await db.query("ALTER TABLE receivables MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
+    } catch (e) {
+      console.warn('Status column expansion note:', e.message);
+    }
+
     // Retroactive fix: Auto-insert missing cancellation log for past deleted purchases like #PUR-20260802-516
     try {
       const [accs] = await db.query("SELECT id, tenant_id FROM finance_accounts WHERE name LIKE '%UCB%' LIMIT 1");
