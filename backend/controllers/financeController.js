@@ -29,18 +29,24 @@ exports.getFinanceSummary = async (req, res) => {
       [tenantId]
     );
 
-    // Calculate aggregated metrics
+    // Calculate aggregated metrics consolidated by supplier/party to handle negative adjustments correctly
     const totalLiquidBalance = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
     
-    const totalDena = liabilities.reduce((sum, l) => {
-      const pending = Number(l.total_amount) - Number(l.amount_paid);
-      return sum + (pending > 0 ? pending : 0);
-    }, 0);
+    const denaMap = {};
+    liabilities.forEach(l => {
+      const party = (l.party_name || 'General Supplier').trim();
+      if (!denaMap[party]) denaMap[party] = 0;
+      denaMap[party] += (Number(l.total_amount || 0) - Number(l.amount_paid || 0));
+    });
+    const totalDena = Object.values(denaMap).reduce((sum, val) => sum + Math.max(0, val), 0);
 
-    const totalPawna = receivables.reduce((sum, r) => {
-      const pending = Number(r.total_amount) - Number(r.amount_collected);
-      return sum + (pending > 0 ? pending : 0);
-    }, 0);
+    const pawnaMap = {};
+    receivables.forEach(r => {
+      const party = (r.party_name || 'General Customer').trim();
+      if (!pawnaMap[party]) pawnaMap[party] = 0;
+      pawnaMap[party] += (Number(r.total_amount || 0) - Number(r.amount_collected || 0));
+    });
+    const totalPawna = Object.values(pawnaMap).reduce((sum, val) => sum + Math.max(0, val), 0);
 
     const netCapital = (totalLiquidBalance + totalPawna) - totalDena;
 
