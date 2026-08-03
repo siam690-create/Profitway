@@ -3,6 +3,20 @@ const db = require('../config/db');
 exports.getDashboardSummary = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
+    const { startDate, endDate } = req.query;
+
+    let salesWhere = 'WHERE tenant_id = ?';
+    let salesParams = [tenantId];
+    let expenseWhere = 'WHERE tenant_id = ?';
+    let expenseParams = [tenantId];
+
+    if (startDate && endDate) {
+      salesWhere += ' AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?';
+      salesParams.push(startDate, endDate);
+
+      expenseWhere += ' AND DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?';
+      expenseParams.push(startDate, endDate);
+    }
 
     // 1. Sales totals for tenant
     const [salesTotals] = await db.query(`
@@ -11,13 +25,13 @@ exports.getDashboardSummary = async (req, res) => {
         COALESCE(SUM(total_cost), 0) AS total_costOfGoods,
         COALESCE(SUM(gross_profit), 0) AS gross_profit,
         COUNT(id) AS total_sales_count
-      FROM sales WHERE tenant_id = ?
-    `, [tenantId]);
+      FROM sales ${salesWhere}
+    `, salesParams);
 
     // 2. Expenses total for tenant
     const [expenseTotals] = await db.query(`
-      SELECT COALESCE(SUM(amount), 0) AS total_expenses FROM expenses WHERE tenant_id = ?
-    `, [tenantId]);
+      SELECT COALESCE(SUM(amount), 0) AS total_expenses FROM expenses ${expenseWhere}
+    `, expenseParams);
 
     // 3. Inventory summary for tenant
     const [inventoryTotals] = await db.query(`

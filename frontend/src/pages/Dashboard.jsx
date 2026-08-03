@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { MetricCard } from '../components/MetricCard';
 import { SimpleChart } from '../components/SimpleChart';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -14,9 +15,12 @@ import {
 } from 'lucide-react';
 
 export const Dashboard = () => {
-  const { dashboardData, currency, setActiveTab } = useApp();
+  const { dashboardData, currency, setActiveTab, authFetch } = useApp();
+  const [filteredData, setFilteredData] = useState(null);
 
-  if (!dashboardData) {
+  const activeData = filteredData || dashboardData;
+
+  if (!activeData) {
     return (
       <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>
         Loading dashboard metrics...
@@ -24,10 +28,35 @@ export const Dashboard = () => {
     );
   }
 
-  const { summary, low_stock_products, recent_sales, daily_chart } = dashboardData;
+  const { summary, low_stock_products, recent_sales, daily_chart } = activeData;
+
+  const handleFilterChange = async ({ startDate: s, endDate: e }) => {
+    try {
+      let url = '/api/dashboard/summary';
+      if (s && e) {
+        url += `?startDate=${s}&endDate=${e}`;
+      }
+      const res = await authFetch(url);
+      const data = await res.json();
+      if (res.ok) setFilteredData(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Header Bar with Date Range Filter */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h2 style={{ fontSize: '20px', fontWeight: '700' }}>Executive Business Dashboard</h2>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+            Real-time sales revenue, gross margin, expenses & net profit overview
+          </p>
+        </div>
+        <DateRangeFilter onFilterChange={handleFilterChange} />
+      </div>
+
       {/* Metric Cards Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px' }}>
         <MetricCard

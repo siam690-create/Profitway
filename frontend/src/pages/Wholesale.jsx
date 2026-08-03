@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { ShoppingBag, Plus, PackagePlus, Eye, X, Users, Phone, MapPin, DollarSign, Wallet, FileText, CheckCircle, ArrowUpRight, Printer, Trash2 } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Wholesale = () => {
   const { authFetch, products, currency, formatCurrency, shopSettings, refreshAllData } = useApp();
@@ -11,6 +12,10 @@ export const Wholesale = () => {
   const [showModal, setShowModal] = useState(false);
   const [showBuyerModal, setShowBuyerModal] = useState(false);
   const [selectedSaleDetails, setSelectedSaleDetails] = useState(null);
+
+  // Date Filter States
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Form State for Wholesale Sale Order
   const [customerId, setCustomerId] = useState('');
@@ -364,7 +369,13 @@ export const Wholesale = () => {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <DateRangeFilter
+            onFilterChange={({ startDate: s, endDate: e }) => {
+              setStartDate(s);
+              setEndDate(e);
+            }}
+          />
           <button onClick={() => setShowBuyerModal(true)} className="btn btn-secondary">
             <Users size={16} />
             <span>+ Add B2B Buyer Profile</span>
@@ -393,73 +404,94 @@ export const Wholesale = () => {
       </div>
 
       {/* --- SUB TAB 1: WHOLESALE ORDERS --- */}
-      {activeSubTab === 'orders' && (
-        <div className="glass-card" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Wholesale B2B Sales History</h3>
+      {activeSubTab === 'orders' && (() => {
+        const filteredSales = salesList.filter(s => {
+          if (!startDate && !endDate) return true;
+          const sDate = new Date(s.sale_date || s.created_at).toISOString().slice(0, 10);
+          if (startDate && sDate < startDate) return false;
+          if (endDate && sDate > endDate) return false;
+          return true;
+        });
 
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Invoice #</th>
-                  <th>Date</th>
-                  <th>Buyer Name</th>
-                  <th>Total Amount</th>
-                  <th>Paid Cash</th>
-                  <th>Due Pawna</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {salesList.length === 0 ? (
+        const totalWholesaleRev = filteredSales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+        const totalPaidCash = filteredSales.reduce((sum, s) => sum + Number(s.paid_amount || 0), 0);
+        const totalDuePawna = filteredSales.reduce((sum, s) => sum + Number(s.due_amount || 0), 0);
+
+        return (
+          <div className="glass-card" style={{ padding: '24px' }}>
+            {/* Summary Stat Bar */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px', background: 'var(--bg-secondary)', padding: '14px', borderRadius: '10px' }}>
+              <div>Total Wholesale Revenue: <strong style={{ display: 'block', fontSize: '15px', color: '#f59e0b' }}>{formatCurrency(totalWholesaleRev)}</strong></div>
+              <div>Paid Cash Received: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--success)' }}>{formatCurrency(totalPaidCash)}</strong></div>
+              <div>Customer Due Pawna: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--danger)' }}>{formatCurrency(totalDuePawna)}</strong></div>
+            </div>
+
+            <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Wholesale B2B Sales History ({filteredSales.length})</h3>
+
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                      No wholesale sales recorded yet. Click "+ Create Wholesale Sale" to add one.
-                    </td>
+                    <th>Invoice #</th>
+                    <th>Date</th>
+                    <th>Buyer Name</th>
+                    <th>Total Amount</th>
+                    <th>Paid Cash</th>
+                    <th>Due Pawna</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ) : (
-                  salesList.map(sale => {
-                    const dueNum = Number(sale.due_amount || 0);
-                    const paidNum = Number(sale.paid_amount || 0);
+                </thead>
+                <tbody>
+                  {filteredSales.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        No wholesale sales found for the selected date filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSales.map(sale => {
+                      const dueNum = Number(sale.due_amount || 0);
+                      const paidNum = Number(sale.paid_amount || 0);
 
-                    return (
-                      <tr key={sale.id}>
-                        <td><strong style={{ color: 'var(--text-primary)' }}>#{sale.invoice_no}</strong></td>
-                        <td style={{ fontSize: '13px' }}>{new Date(sale.sale_date).toLocaleDateString()}</td>
-                        <td>
-                          <strong>{sale.customer_name}</strong>
-                          {sale.company_name && <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{sale.company_name}</div>}
-                        </td>
-                        <td style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{formatCurrency(sale.total_amount)}</td>
-                        <td style={{ fontWeight: '700', color: 'var(--success)' }}>{formatCurrency(paidNum)}</td>
-                        <td style={{ fontWeight: '700', color: dueNum > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                          {formatCurrency(dueNum)}
-                        </td>
-                        <td>
-                          <span className={`badge ${dueNum === 0 ? 'badge-success' : (paidNum > 0 ? 'badge-warning' : 'badge-danger')}`}>
-                            {dueNum === 0 ? '🟢 Full Paid' : (paidNum > 0 ? '🟡 Partial Paid' : '🔴 Full Credit Due')}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <button onClick={() => handleViewSaleDetails(sale.id)} className="btn btn-secondary btn-icon btn-sm" title="View & Print Wholesale Invoice">
-                              <Eye size={14} />
-                            </button>
-                            <button onClick={() => handleDeleteSale(sale)} className="btn btn-danger btn-icon btn-sm" style={{ background: '#ef4444', borderColor: '#ef4444', color: '#fff' }} title="Delete Wholesale Order & Revert Stock">
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                      return (
+                        <tr key={sale.id}>
+                          <td><strong style={{ color: 'var(--text-primary)' }}>#{sale.invoice_no}</strong></td>
+                          <td style={{ fontSize: '13px' }}>{new Date(sale.sale_date).toLocaleDateString()}</td>
+                          <td>
+                            <strong>{sale.customer_name}</strong>
+                            {sale.company_name && <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{sale.company_name}</div>}
+                          </td>
+                          <td style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{formatCurrency(sale.total_amount)}</td>
+                          <td style={{ fontWeight: '700', color: 'var(--success)' }}>{formatCurrency(paidNum)}</td>
+                          <td style={{ fontWeight: '700', color: dueNum > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                            {formatCurrency(dueNum)}
+                          </td>
+                          <td>
+                            <span className={`badge ${dueNum === 0 ? 'badge-success' : (paidNum > 0 ? 'badge-warning' : 'badge-danger')}`}>
+                              {dueNum === 0 ? '🟢 Full Paid' : (paidNum > 0 ? '🟡 Partial Paid' : '🔴 Full Credit Due')}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={() => handleViewSaleDetails(sale.id)} className="btn btn-secondary btn-icon btn-sm" title="View & Print Wholesale Invoice">
+                                <Eye size={14} />
+                              </button>
+                              <button onClick={() => handleDeleteSale(sale)} className="btn btn-danger btn-icon btn-sm" style={{ background: '#ef4444', borderColor: '#ef4444', color: '#fff' }} title="Delete Wholesale Order & Revert Stock">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* --- SUB TAB 2: BUYER DIRECTORY --- */}
       {activeSubTab === 'buyers' && (

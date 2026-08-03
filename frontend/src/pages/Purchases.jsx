@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Truck, Plus, PackagePlus, CheckCircle, Eye, X, Building2, Phone, MapPin, DollarSign, Wallet, FileText, Trash2 } from 'lucide-react';
 import { ProductSelectSearch } from '../components/ProductSelectSearch';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Purchases = () => {
   const { authFetch, products, currency, refreshAllData } = useApp();
@@ -12,6 +13,10 @@ export const Purchases = () => {
   const [showModal, setShowModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [selectedPurchaseDetails, setSelectedPurchaseDetails] = useState(null);
+
+  // Date Filter States
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Form State for Purchase Order
   const [supplierId, setSupplierId] = useState('');
@@ -226,7 +231,13 @@ export const Purchases = () => {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <DateRangeFilter
+            onFilterChange={({ startDate: s, endDate: e }) => {
+              setStartDate(s);
+              setEndDate(e);
+            }}
+          />
           <button onClick={() => setShowSupplierModal(true)} className="btn btn-secondary">
             <Building2 size={16} />
             <span>+ Add Supplier</span>
@@ -255,68 +266,89 @@ export const Purchases = () => {
       </div>
 
       {/* 1. Purchase Orders Log Table */}
-      {activeSubTab === 'orders' && (
-        <div className="glass-card" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Stock Restock Purchase Orders</h3>
+      {activeSubTab === 'orders' && (() => {
+        const filteredPurchases = purchasesList.filter(p => {
+          if (!startDate && !endDate) return true;
+          const pDate = new Date(p.purchase_date || p.created_at).toISOString().slice(0, 10);
+          if (startDate && pDate < startDate) return false;
+          if (endDate && pDate > endDate) return false;
+          return true;
+        });
 
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Purchase #</th>
-                  <th>Supplier Name</th>
-                  <th>Total Cost</th>
-                  <th>Paid Amount</th>
-                  <th>Due Amount</th>
-                  <th>Payment Status</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {purchasesList.length === 0 ? (
+        const totalCost = filteredPurchases.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+        const totalPaid = filteredPurchases.reduce((sum, p) => sum + Number(p.paid_amount || p.total_amount || 0), 0);
+        const totalDue = filteredPurchases.reduce((sum, p) => sum + Number(p.due_amount || 0), 0);
+
+        return (
+          <div className="glass-card" style={{ padding: '24px' }}>
+            {/* Filtered Summary Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px', background: 'var(--bg-secondary)', padding: '14px', borderRadius: '10px' }}>
+              <div>Total Restock Purchase: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--text-primary)' }}>{currency}{totalCost.toFixed(2)}</strong></div>
+              <div>Total Paid Amount: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--success)' }}>{currency}{totalPaid.toFixed(2)}</strong></div>
+              <div>Supplier Dena (Due): <strong style={{ display: 'block', fontSize: '15px', color: 'var(--danger)' }}>{currency}{totalDue.toFixed(2)}</strong></div>
+            </div>
+
+            <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Stock Restock Purchase Orders ({filteredPurchases.length})</h3>
+
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                      No purchase orders recorded yet.
-                    </td>
+                    <th>Purchase #</th>
+                    <th>Supplier Name</th>
+                    <th>Total Cost</th>
+                    <th>Paid Amount</th>
+                    <th>Due Amount</th>
+                    <th>Payment Status</th>
+                    <th>Date</th>
+                    <th>Actions</th>
                   </tr>
-                ) : (
-                  purchasesList.map(p => (
-                    <tr key={p.id}>
-                      <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{p.purchase_no}</td>
-                      <td><strong>{p.supplier_name || 'General Supplier'}</strong></td>
-                      <td style={{ fontWeight: '700' }}>{currency}{Number(p.total_amount).toFixed(2)}</td>
-                      <td style={{ color: 'var(--success)' }}>{currency}{Number(p.paid_amount || p.total_amount).toFixed(2)}</td>
-                      <td style={{ color: Number(p.due_amount) > 0 ? 'var(--danger)' : 'var(--text-muted)', fontWeight: '700' }}>
-                        {currency}{Number(p.due_amount || 0).toFixed(2)}
-                      </td>
-                      <td>
-                        <span className={`badge ${p.payment_status === 'due' ? 'badge-danger' : (p.payment_status === 'partial' ? 'badge-warning' : 'badge-success')}`}>
-                          {(p.payment_status || 'paid').toUpperCase()}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {new Date(p.purchase_date).toLocaleString()}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <button onClick={() => handleViewDetails(p.id)} className="btn btn-secondary btn-sm" title="View Details">
-                            <Eye size={14} />
-                            <span>Details</span>
-                          </button>
-                          <button onClick={() => handleDeletePurchase(p)} className="btn btn-danger btn-sm btn-icon" title="Delete Purchase Order">
-                            <Trash2 size={14} color="#fff" />
-                          </button>
-                        </div>
+                </thead>
+                <tbody>
+                  {filteredPurchases.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        No purchase orders found for the selected date filter.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredPurchases.map(p => (
+                      <tr key={p.id}>
+                        <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{p.purchase_no}</td>
+                        <td><strong>{p.supplier_name || 'General Supplier'}</strong></td>
+                        <td style={{ fontWeight: '700' }}>{currency}{Number(p.total_amount).toFixed(2)}</td>
+                        <td style={{ color: 'var(--success)' }}>{currency}{Number(p.paid_amount || p.total_amount).toFixed(2)}</td>
+                        <td style={{ color: Number(p.due_amount) > 0 ? 'var(--danger)' : 'var(--text-muted)', fontWeight: '700' }}>
+                          {currency}{Number(p.due_amount || 0).toFixed(2)}
+                        </td>
+                        <td>
+                          <span className={`badge ${p.payment_status === 'due' ? 'badge-danger' : (p.payment_status === 'partial' ? 'badge-warning' : 'badge-success')}`}>
+                            {(p.payment_status || 'paid').toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          {new Date(p.purchase_date).toLocaleString()}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <button onClick={() => handleViewDetails(p.id)} className="btn btn-secondary btn-sm" title="View Details">
+                              <Eye size={14} />
+                              <span>Details</span>
+                            </button>
+                            <button onClick={() => handleDeletePurchase(p)} className="btn btn-danger btn-sm btn-icon" title="Delete Purchase Order">
+                              <Trash2 size={14} color="#fff" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 2. Supplier Directory Table */}
       {activeSubTab === 'suppliers' && (
