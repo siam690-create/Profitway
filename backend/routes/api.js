@@ -24,6 +24,7 @@ const subscriptionController = require('../controllers/subscriptionController');
 
 const storeApiKeyController = require('../controllers/storeApiKeyController');
 const externalOrderController = require('../controllers/externalOrderController');
+const taskController = require('../controllers/taskController');
 
 const { authenticate, requireSuperAdmin, checkActiveSubscription } = require('../middleware/authMiddleware');
 
@@ -202,5 +203,14 @@ router.post('/staff/bonuses', checkActiveSubscription, staffController.createBon
 
 router.get('/staff/salary-sheet', staffController.getMonthlySalarySheet);
 router.post('/staff/salary-sheet/disburse', checkActiveSubscription, staffController.disburseSalary);
+
+// Staff Task Management System APIs
+router.get('/tasks', taskController.getTasks);
+router.post('/tasks', checkActiveSubscription, taskController.createTask);
+router.put('/tasks/:id', checkActiveSubscription, taskController.updateTask);
+router.delete('/tasks/:id', checkActiveSubscription, taskController.deleteTask);
+router.patch('/tasks/checklists/:id', checkActiveSubscription, taskController.toggleChecklist);
+router.post('/tasks/:id/comments', checkActiveSubscription, taskController.addComment);
+router.get('/tasks/analytics', taskController.getTaskAnalytics);
 
 module.exports = router;

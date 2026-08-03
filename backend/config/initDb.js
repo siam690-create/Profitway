@@ -388,6 +388,55 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 21. Staff Task Management System Tables
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        assigned_to_staff_id INT DEFAULT NULL,
+        created_by_user_id INT DEFAULT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT DEFAULT NULL,
+        category VARCHAR(100) DEFAULT 'General',
+        priority VARCHAR(20) NOT NULL DEFAULT 'medium',
+        status VARCHAR(20) NOT NULL DEFAULT 'todo',
+        due_date DATETIME DEFAULT NULL,
+        completed_at DATETIME DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_tsk_tenant (tenant_id),
+        INDEX idx_tsk_staff (assigned_to_staff_id),
+        INDEX idx_tsk_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS task_checklists (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        task_id INT NOT NULL,
+        item_text VARCHAR(255) NOT NULL,
+        is_completed TINYINT(1) DEFAULT 0,
+        completed_at DATETIME DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_chk_tenant (tenant_id),
+        INDEX idx_chk_task (task_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS task_comments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        task_id INT NOT NULL,
+        user_id INT DEFAULT NULL,
+        user_name VARCHAR(150) NOT NULL,
+        comment_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_cm_tenant (tenant_id),
+        INDEX idx_cm_task (task_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // Retroactive column additions to payroll table
     await addColumnIfNotExists('payroll', 'employee_id', 'INT NULL');
     await addColumnIfNotExists('payroll', 'overtime_pay', 'DECIMAL(10,2) DEFAULT 0.00');
