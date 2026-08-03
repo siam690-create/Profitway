@@ -723,18 +723,19 @@ export const Finance = () => {
           const partyObj = groupedReceivablesMap.get(partyKey);
           const total = Number(r.total_amount || 0);
           const collected = Number(r.amount_collected || 0);
-          const pending = Math.max(0, total - collected);
 
           partyObj.total_amount += total;
           partyObj.amount_collected += collected;
-          partyObj.pending_pawna += pending;
           partyObj.entries.push(r);
           if (new Date(r.created_at) > new Date(partyObj.latest_date)) {
             partyObj.latest_date = r.created_at;
           }
         });
 
-        const consolidatedReceivables = Array.from(groupedReceivablesMap.values());
+        const consolidatedReceivables = Array.from(groupedReceivablesMap.values()).map(p => ({
+          ...p,
+          pending_pawna: Math.max(0, p.total_amount - p.amount_collected)
+        }));
 
         return (
           <div className="glass-card" style={{ padding: '24px' }}>
@@ -872,18 +873,19 @@ export const Finance = () => {
           const partyObj = groupedLiabilitiesMap.get(partyKey);
           const total = Number(l.total_amount || 0);
           const paid = Number(l.amount_paid || 0);
-          const pending = Math.max(0, total - paid);
 
           partyObj.total_amount += total;
           partyObj.amount_paid += paid;
-          partyObj.pending_dena += pending;
           partyObj.entries.push(l);
           if (new Date(l.created_at) > new Date(partyObj.latest_date)) {
             partyObj.latest_date = l.created_at;
           }
         });
 
-        const consolidatedLiabilities = Array.from(groupedLiabilitiesMap.values());
+        const consolidatedLiabilities = Array.from(groupedLiabilitiesMap.values()).map(p => ({
+          ...p,
+          pending_dena: Math.max(0, p.total_amount - p.amount_paid)
+        }));
 
         return (
           <div className="glass-card" style={{ padding: '24px' }}>
