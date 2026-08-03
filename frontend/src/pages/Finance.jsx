@@ -20,6 +20,7 @@ export const Finance = () => {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showDenaModal, setShowDenaModal] = useState(false);
   const [showPawnaModal, setShowPawnaModal] = useState(false);
+  const [showAddPawnaModal, setShowAddPawnaModal] = useState(false);
   const [showPayDenaModal, setShowPayDenaModal] = useState(null);
   const [showCollectPawnaModal, setShowCollectPawnaModal] = useState(null);
   const [showInvestModal, setShowInvestModal] = useState(false);
@@ -38,6 +39,7 @@ export const Finance = () => {
   const [transferForm, setTransferForm] = useState({ from_account_id: '', to_account_id: '', amount: '' });
   const [denaForm, setDenaForm] = useState({ title: '', party_type: 'supplier', party_name: '', total_amount: '', due_date: '', notes: '' });
   const [pawnaForm, setPawnaForm] = useState({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '' });
+  const [addPawnaForm, setAddPawnaForm] = useState({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '' });
   const [payDenaAmt, setPayDenaAmt] = useState('');
   const [payDenaAccId, setPayDenaAccId] = useState('');
   const [collectPawnaAmt, setCollectPawnaAmt] = useState('');
@@ -245,6 +247,31 @@ export const Finance = () => {
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
+    }
+  };
+
+  const handleAddPawnaProfileSubmit = async (e) => {
+    e.preventDefault();
+    if (!addPawnaForm.party_name) return;
+    try {
+      const res = await authFetch('/api/finance/receivables', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...addPawnaForm,
+          title: addPawnaForm.title || `Pawna Profile: ${addPawnaForm.party_name}`
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowAddPawnaModal(false);
+        setAddPawnaForm({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '' });
+        fetchFinance();
+        alert(data.message || `Pawna Profile created for "${addPawnaForm.party_name}"!`);
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error creating Pawna profile: ${err.message}`);
     }
   };
 
@@ -610,10 +637,25 @@ export const Finance = () => {
                   Consolidated by Customer / Borrower Name. Click History to view complete Pawna addition & collection ledger.
                 </p>
               </div>
-              <button onClick={() => setShowPawnaModal(true)} className="btn btn-success btn-sm">
-                <Plus size={15} />
-                <span>+ Record New Pawna</span>
-              </button>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => {
+                    setAddPawnaForm({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '' });
+                    setShowAddPawnaModal(true);
+                  }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ background: 'var(--bg-secondary)', borderColor: '#10b981', color: '#10b981' }}
+                >
+                  <UserPlus size={15} />
+                  <span>+ Add Pawna Profile</span>
+                </button>
+
+                <button onClick={() => setShowPawnaModal(true)} className="btn btn-success btn-sm">
+                  <Plus size={15} />
+                  <span>+ Record New Pawna</span>
+                </button>
+              </div>
             </div>
 
             <div className="table-wrapper">
@@ -664,6 +706,26 @@ export const Finance = () => {
                               <Eye size={14} />
                               <span>History</span>
                             </button>
+
+                            <button
+                              onClick={() => {
+                                setPawnaForm({
+                                  title: `Dhar/Due given to ${r.party_name}`,
+                                  party_type: r.party_type || 'customer',
+                                  party_name: r.party_name,
+                                  total_amount: '',
+                                  due_date: '',
+                                  notes: ''
+                                });
+                                setShowPawnaModal(true);
+                              }}
+                              className="btn btn-success btn-sm"
+                              title="Add Extra Pawna / Dhar for this person"
+                            >
+                              <Plus size={14} />
+                              <span>+ Add Pawna</span>
+                            </button>
+
                             {r.pending_pawna > 0 && (
                               <button onClick={() => { setShowCollectPawnaModal(r); setCollectPawnaAmt(r.pending_pawna); }} className="btn btn-success btn-sm">
                                 Collect Money
@@ -1739,6 +1801,77 @@ export const Finance = () => {
         </div>
       )}
 
+      {/* Add New Pawna Profile Modal */}
+      {showAddPawnaModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h3>Create New Pawna Profile (পাওনাদার/কাস্টমার প্রোফাইল তৈরি)</h3>
+              <button onClick={() => setShowAddPawnaModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleAddPawnaProfileSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Customer / Person Full Name *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. Tanvir Ahmed / MD Sahadat Hossen"
+                    value={addPawnaForm.party_name}
+                    onChange={(e) => setAddPawnaForm({ ...addPawnaForm, party_name: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Party Type</label>
+                    <select
+                      className="form-select"
+                      value={addPawnaForm.party_type}
+                      onChange={(e) => setAddPawnaForm({ ...addPawnaForm, party_type: e.target.value })}
+                    >
+                      <option value="customer">Customer</option>
+                      <option value="friend">Friend / Relative</option>
+                      <option value="borrower">Personal Loan Borrower</option>
+                      <option value="other">Other Party</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Opening Pawna/Dhar ({currency}) (Optional)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="form-input"
+                      placeholder="0.00"
+                      value={addPawnaForm.total_amount}
+                      onChange={(e) => setAddPawnaForm({ ...addPawnaForm, total_amount: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Notes / Description</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Personal Dhar Loan / Wholesale Credit Account"
+                    value={addPawnaForm.notes}
+                    onChange={(e) => setAddPawnaForm({ ...addPawnaForm, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowAddPawnaModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-success">Create Pawna Profile</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Add Pawna Modal */}
       {showPawnaModal && (
         <div className="modal-overlay">
@@ -1750,11 +1883,34 @@ export const Finance = () => {
             <form onSubmit={handleCreatePawna}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
+                  <label className="form-label">Select Registered Customer / Pawna Profile</label>
+                  <select
+                    className="form-select"
+                    value=""
+                    onChange={(e) => {
+                      const selectedName = e.target.value;
+                      if (selectedName) {
+                        setPawnaForm({
+                          ...pawnaForm,
+                          party_name: selectedName,
+                          title: pawnaForm.title || `Dhar/Due given to ${selectedName}`
+                        });
+                      }
+                    }}
+                  >
+                    <option value="">Select Existing Pawna Profile (or type name below)...</option>
+                    {Array.from(new Set((receivables || []).map(r => r.party_name))).map((name, idx) => (
+                      <option key={idx} value={name}>👤 {name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">Title / Description</label>
-                  <input type="text" className="form-input" required placeholder="e.g. Customer Credit Sale #402" value={pawnaForm.title} onChange={(e) => setPawnaForm({ ...pawnaForm, title: e.target.value })} />
+                  <input type="text" className="form-input" required placeholder="e.g. Customer Credit Sale #402 / Personal Loan" value={pawnaForm.title} onChange={(e) => setPawnaForm({ ...pawnaForm, title: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Customer / Party Name</label>
+                  <label className="form-label">Customer / Party Name *</label>
                   <input type="text" className="form-input" required placeholder="e.g. Tanvir Ahmed" value={pawnaForm.party_name} onChange={(e) => setPawnaForm({ ...pawnaForm, party_name: e.target.value })} />
                 </div>
                 <div className="form-group">

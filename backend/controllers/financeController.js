@@ -320,26 +320,31 @@ exports.createReceivable = async (req, res) => {
     const tenantId = req.user.tenantId;
     const { title, party_type, party_name, total_amount, due_date, notes } = req.body;
 
-    if (!title || !party_name || !total_amount) {
-      return res.status(400).json({ error: 'Title, Party Name, and Total Amount are required.' });
+    if (!party_name) {
+      return res.status(400).json({ error: 'Party/Customer Name is required.' });
     }
+
+    const amt = Number(total_amount || 0);
 
     const [result] = await db.query(
       `INSERT INTO receivables (tenant_id, title, party_type, party_name, total_amount, amount_collected, status, due_date, notes)
-       VALUES (?, ?, ?, ?, ?, 0.00, 'pending', ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, 0.00, ?, ?, ?)`,
       [
         tenantId,
-        title,
+        title || `Pawna Profile: ${party_name}`,
         party_type || 'customer',
-        party_name,
-        Number(total_amount),
+        party_name.trim(),
+        amt,
+        amt > 0 ? 'pending' : 'collected',
         due_date || null,
         notes || null
       ]
     );
 
     res.status(201).json({
-      message: 'Receivable (Pawna) record created successfully',
+      message: amt > 0 
+        ? `৳${amt.toFixed(2)} Pawna record created for "${party_name}"!`
+        : `Pawna Profile created for "${party_name}"!`,
       receivableId: result.insertId
     });
   } catch (error) {
