@@ -454,8 +454,9 @@ async function autoMigrate() {
     try {
       await db.query("ALTER TABLE liabilities MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
       await db.query("ALTER TABLE receivables MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
+      await db.query("ALTER TABLE expenses MODIFY COLUMN title VARCHAR(255) DEFAULT 'General Expense'");
     } catch (e) {
-      console.warn('Status column expansion note:', e.message);
+      console.warn('Column expansion note:', e.message);
     }
 
     // Retroactive fix: Auto-insert missing cancellation log for past deleted purchases like #PUR-20260802-516

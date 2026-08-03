@@ -84,9 +84,9 @@ exports.createReturn = async (req, res) => {
     // Automatically log courier charge as expense under category 'Transport' if > 0
     if (courierFee > 0) {
       await connection.query(
-        `INSERT INTO expenses (tenant_id, category, amount, notes, expense_date)
-         VALUES (?, 'Transport', ?, ?, ?)`,
-        [tenantId, courierFee, `Courier Return Delivery Fee for Return #${return_no}`, finalReturnDate]
+        `INSERT INTO expenses (tenant_id, title, category, amount, notes, expense_date)
+         VALUES (?, ?, 'Transport', ?, ?, ?)`,
+        [tenantId, `Courier Return Fee #${return_no}`, courierFee, `Courier Return Delivery Fee for Return #${return_no}`, finalReturnDate]
       );
     }
 
