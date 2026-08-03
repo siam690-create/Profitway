@@ -446,6 +446,10 @@ async function autoMigrate() {
     await addColumnIfNotExists('payroll', 'pf_deduction', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('payroll', 'payment_status', "VARCHAR(20) DEFAULT 'paid'");
 
+    // Retroactive column additions to returns table
+    await addColumnIfNotExists('returns', 'courier_charge', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('returns', 'return_delivery_loss', 'DECIMAL(10,2) DEFAULT 0.00');
+
     // Retroactive column type expansion for liabilities & receivables status column to prevent data truncation
     try {
       await db.query("ALTER TABLE liabilities MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
