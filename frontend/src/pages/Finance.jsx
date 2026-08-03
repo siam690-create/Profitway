@@ -1,7 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Landmark, Wallet, ArrowUpRight, ArrowDownRight, Plus, RefreshCw, DollarSign, Send, CheckCircle, UserCheck, ShieldAlert, X, TrendingUp, HandCoins, Eye, Printer, FileText, Calendar, Building2, Download, UserPlus } from 'lucide-react';
+import { Landmark, Wallet, ArrowUpRight, ArrowDownRight, Plus, RefreshCw, DollarSign, Send, CheckCircle, UserCheck, ShieldAlert, X, TrendingUp, HandCoins, Eye, Printer, FileText, Calendar, Building2, Download, UserPlus, FileSpreadsheet } from 'lucide-react';
 import { DateRangeFilter } from '../components/DateRangeFilter';
+
+const formatDateTimeBD = (dateStr) => {
+  if (!dateStr) return 'N/A';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleString('en-US', {
+      timeZone: 'Asia/Dhaka',
+      month: 'numeric',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  } catch (e) {
+    return new Date(dateStr).toLocaleString();
+  }
+};
+
+const exportPassbookToExcel = (accountName, transactions) => {
+  const headers = ["Date & Time (BD Time)", "Transaction Type", "Description / Notes", "Debit (-BDT)", "Credit (+BDT)"];
+  const rows = transactions.map(tx => [
+    `"${formatDateTimeBD(tx.date)}"`,
+    `"${(tx.type || '').replace(/"/g, '""')}"`,
+    `"${(tx.notes || '').replace(/"/g, '""')}"`,
+    tx.debit ? Number(tx.debit).toFixed(2) : '0.00',
+    tx.credit ? Number(tx.credit).toFixed(2) : '0.00'
+  ]);
+
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  const cleanName = (accountName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '_');
+  link.setAttribute("download", `Passbook_${cleanName}_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
 export const Finance = () => {
   const { authFetch, currency, tenant, refreshAllData } = useApp();
@@ -13,6 +55,11 @@ export const Finance = () => {
   const [suppliersList, setSuppliersList] = useState([]);
   const [investmentData, setInvestmentData] = useState({ summary: {}, investments: [], transactions: [] });
   const [loading, setLoading] = useState(false);
+
+  // Passbook Date Filter States
+  const [passbookDateFilter, setPassbookDateFilter] = useState('all');
+  const [passbookStartDate, setPassbookStartDate] = useState('');
+  const [passbookEndDate, setPassbookEndDate] = useState('');
 
   // Modals
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -122,6 +169,9 @@ export const Finance = () => {
 
   const handleOpenAccountStatement = async (accId) => {
     try {
+      setPassbookDateFilter('all');
+      setPassbookStartDate('');
+      setPassbookEndDate('');
       const res = await authFetch(`/api/finance/accounts/${accId}/statement`);
       const data = await res.json();
       if (res.ok) setAccountStatementData(data);
@@ -1241,7 +1291,7 @@ export const Finance = () => {
                         const pending = Number(l.total_amount) - Number(l.amount_paid);
                         return (
                           <tr key={idx}>
-                            <td style={{ fontSize: '12px' }}>{new Date(l.created_at || l.due_date).toLocaleString()}</td>
+                            <td style={{ fontSize: '12px' }}>{formatDateTimeBD(l.created_at || l.due_date)}</td>
                             <td>
                               <strong>{l.title}</strong>
                               {l.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{l.notes}</div>}
@@ -1288,7 +1338,7 @@ export const Finance = () => {
                     ) : (
                       denaAuditData.payment_logs.map(log => (
                         <tr key={log.id}>
-                          <td style={{ fontSize: '12px' }}>{new Date(log.payment_date).toLocaleString()}</td>
+                          <td style={{ fontSize: '12px' }}>{formatDateTimeBD(log.payment_date)}</td>
                           <td style={{ fontWeight: '700', color: 'var(--success)' }}>{currency}{Number(log.amount).toFixed(2)}</td>
                           <td><strong>{log.account_name || 'Cash Box'}</strong></td>
                           <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{log.notes || 'Dena Repayment'}</td>
@@ -1366,7 +1416,7 @@ export const Finance = () => {
                         const pending = Number(r.total_amount) - Number(r.amount_collected);
                         return (
                           <tr key={idx}>
-                            <td style={{ fontSize: '12px' }}>{new Date(r.created_at || r.due_date).toLocaleString()}</td>
+                            <td style={{ fontSize: '12px' }}>{formatDateTimeBD(r.created_at || r.due_date)}</td>
                             <td>
                               <strong>{r.title}</strong>
                               {r.notes && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.notes}</div>}
@@ -1413,7 +1463,7 @@ export const Finance = () => {
                     ) : (
                       pawnaAuditData.collection_logs.map(log => (
                         <tr key={log.id}>
-                          <td style={{ fontSize: '12px' }}>{new Date(log.collection_date).toLocaleString()}</td>
+                          <td style={{ fontSize: '12px' }}>{formatDateTimeBD(log.collection_date)}</td>
                           <td style={{ fontWeight: '700', color: 'var(--success)' }}>+{currency}{Number(log.amount).toFixed(2)}</td>
                           <td><strong>{log.account_name || 'Cash Box'}</strong></td>
                           <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{log.notes || log.receivable_title || 'Pawna Collection'}</td>
@@ -1429,70 +1479,166 @@ export const Finance = () => {
       )}
 
       {/* 3. Account Passbook / Ledger Statement Modal */}
-      {accountStatementData && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '800px' }}>
-            <div className="modal-header">
-              <div>
-                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>{accountStatementData.account.name} Passbook Ledger</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Account #: {accountStatementData.account.account_number || 'Cash Box'}</span>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={handlePrintStatement} className="btn btn-secondary btn-sm">
-                  <Printer size={15} />
-                  <span>Print Passbook</span>
-                </button>
-                <button onClick={() => setAccountStatementData(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
-              </div>
-            </div>
+      {accountStatementData && (() => {
+        const rawTxList = accountStatementData.transactions || [];
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
-                <div>Account Name: <strong>{accountStatementData.account.name}</strong></div>
-                <div>Account Type: <strong style={{ textTransform: 'uppercase' }}>{accountStatementData.account.account_type}</strong></div>
-                <div>Current Liquid Balance: <strong style={{ fontSize: '18px', color: 'var(--success)' }}>{currency}{Number(accountStatementData.account.balance).toFixed(2)}</strong></div>
+        // Apply Date Range Filter
+        const now = new Date();
+        const filteredTx = rawTxList.filter(tx => {
+          if (!tx.date) return true;
+          const d = new Date(tx.date);
+          if (isNaN(d.getTime())) return true;
+
+          // Convert tx date to BD YYYY-MM-DD
+          const txBDStr = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Dhaka" })).toISOString().slice(0, 10);
+          const nowBDStr = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Dhaka" })).toISOString().slice(0, 10);
+
+          if (passbookDateFilter === 'today') {
+            return txBDStr === nowBDStr;
+          }
+          if (passbookDateFilter === 'week') {
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(now.getDate() - 7);
+            return d >= sevenDaysAgo;
+          }
+          if (passbookDateFilter === 'month') {
+            const txDateBD = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
+            const nowBD = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
+            return txDateBD.getMonth() === nowBD.getMonth() && txDateBD.getFullYear() === nowBD.getFullYear();
+          }
+          if (passbookDateFilter === 'custom') {
+            if (passbookStartDate && txBDStr < passbookStartDate) return false;
+            if (passbookEndDate && txBDStr > passbookEndDate) return false;
+            return true;
+          }
+          return true; // 'all'
+        });
+
+        const totalFilteredDebit = filteredTx.reduce((sum, t) => sum + Number(t.debit || 0), 0);
+        const totalFilteredCredit = filteredTx.reduce((sum, t) => sum + Number(t.credit || 0), 0);
+
+        return (
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ maxWidth: '850px' }}>
+              <div className="modal-header">
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '700' }}>{accountStatementData.account.name} Passbook Ledger</h3>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Account #: {accountStatementData.account.account_number || 'Cash Box'}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => exportPassbookToExcel(accountStatementData.account.name, filteredTx)} className="btn btn-success btn-sm" title="Export Filtered Passbook to Excel CSV">
+                    <FileSpreadsheet size={15} />
+                    <span>Download Excel</span>
+                  </button>
+
+                  <button onClick={handlePrintStatement} className="btn btn-secondary btn-sm" title="Print Statement">
+                    <Printer size={15} />
+                    <span>Print Passbook</span>
+                  </button>
+                  <button onClick={() => setAccountStatementData(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+                </div>
               </div>
 
-              <div className="table-wrapper">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Transaction Type</th>
-                      <th>Description / Notes</th>
-                      <th>Debit (-৳)</th>
-                      <th>Credit (+৳)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {accountStatementData.transactions.length === 0 ? (
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Account Summary */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
+                  <div>Account Name: <strong style={{ display: 'block', fontSize: '14px' }}>{accountStatementData.account.name}</strong></div>
+                  <div>Filtered Debit (-): <strong style={{ display: 'block', fontSize: '14px', color: 'var(--danger)' }}>-{currency}{totalFilteredDebit.toFixed(2)}</strong></div>
+                  <div>Filtered Credit (+): <strong style={{ display: 'block', fontSize: '14px', color: 'var(--success)' }}>+{currency}{totalFilteredCredit.toFixed(2)}</strong></div>
+                  <div>Current Balance: <strong style={{ display: 'block', fontSize: '16px', color: 'var(--success)' }}>{currency}{Number(accountStatementData.account.balance).toFixed(2)}</strong></div>
+                </div>
+
+                {/* Date Filter Bar (Matching 2nd Image) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', background: 'var(--bg-secondary)', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {[
+                      { key: 'today', label: 'Today' },
+                      { key: 'week', label: 'This Week' },
+                      { key: 'month', label: 'This Month' },
+                      { key: 'all', label: 'All Time' },
+                      { key: 'custom', label: 'Custom Date' }
+                    ].map(btn => (
+                      <button
+                        key={btn.key}
+                        onClick={() => setPassbookDateFilter(btn.key)}
+                        className={`btn btn-sm ${passbookDateFilter === btn.key ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{
+                          borderRadius: '20px',
+                          padding: '4px 14px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          background: passbookDateFilter === btn.key ? '#8b5cf6' : 'transparent',
+                          borderColor: passbookDateFilter === btn.key ? '#8b5cf6' : 'var(--border-color)',
+                          color: passbookDateFilter === btn.key ? '#fff' : 'var(--text-secondary)'
+                        }}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {passbookDateFilter === 'custom' && (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        type="date"
+                        className="form-input"
+                        style={{ padding: '4px 8px', fontSize: '12px' }}
+                        value={passbookStartDate}
+                        onChange={(e) => setPassbookStartDate(e.target.value)}
+                      />
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>to</span>
+                      <input
+                        type="date"
+                        className="form-input"
+                        style={{ padding: '4px 8px', fontSize: '12px' }}
+                        value={passbookEndDate}
+                        onChange={(e) => setPassbookEndDate(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="table-wrapper">
+                  <table className="data-table">
+                    <thead>
                       <tr>
-                        <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                          No transactions recorded for this account yet.
-                        </td>
+                        <th>Date & Time</th>
+                        <th>Transaction Type</th>
+                        <th>Description / Notes</th>
+                        <th>Debit (-৳)</th>
+                        <th>Credit (+৳)</th>
                       </tr>
-                    ) : (
-                      accountStatementData.transactions.map((tx, idx) => (
-                        <tr key={idx}>
-                          <td style={{ fontSize: '12px' }}>{new Date(tx.date).toLocaleString()}</td>
-                          <td><span className="badge badge-info" style={{ fontSize: '10px' }}>{tx.type}</span></td>
-                          <td style={{ fontSize: '12px' }}>{tx.notes}</td>
-                          <td style={{ color: Number(tx.debit) > 0 ? 'var(--danger)' : 'var(--text-muted)', fontWeight: Number(tx.debit) > 0 ? '700' : 'normal' }}>
-                            {Number(tx.debit) > 0 ? `-${currency}${Number(tx.debit).toFixed(2)}` : '-'}
-                          </td>
-                          <td style={{ color: Number(tx.credit) > 0 ? 'var(--success)' : 'var(--text-muted)', fontWeight: Number(tx.credit) > 0 ? '700' : 'normal' }}>
-                            {Number(tx.credit) > 0 ? `+${currency}${Number(tx.credit).toFixed(2)}` : '-'}
+                    </thead>
+                    <tbody>
+                      {filteredTx.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                            No transactions found for the selected date filter range.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        filteredTx.map((tx, idx) => (
+                          <tr key={idx}>
+                            <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{formatDateTimeBD(tx.date)}</td>
+                            <td><span className="badge badge-info" style={{ fontSize: '10px' }}>{tx.type}</span></td>
+                            <td style={{ fontSize: '12px' }}>{tx.notes}</td>
+                            <td style={{ color: Number(tx.debit) > 0 ? 'var(--danger)' : 'var(--text-muted)', fontWeight: Number(tx.debit) > 0 ? '700' : 'normal' }}>
+                              {Number(tx.debit) > 0 ? `-${currency}${Number(tx.debit).toFixed(2)}` : '-'}
+                            </td>
+                            <td style={{ color: Number(tx.credit) > 0 ? 'var(--success)' : 'var(--text-muted)', fontWeight: Number(tx.credit) > 0 ? '700' : 'normal' }}>
+                              {Number(tx.credit) > 0 ? `+${currency}${Number(tx.credit).toFixed(2)}` : '-'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 4. Investor Capital Audit Modal */}
       {investAuditData && (
@@ -1542,7 +1688,7 @@ export const Finance = () => {
                     ) : (
                       investAuditData.deposits.map((t, idx) => (
                         <tr key={idx}>
-                          <td style={{ fontSize: '12px' }}>{new Date(t.transaction_date).toLocaleString()}</td>
+                          <td style={{ fontSize: '12px' }}>{formatDateTimeBD(t.transaction_date)}</td>
                           <td style={{ fontWeight: '700', color: '#8b5cf6' }}>+{currency}{Number(t.amount).toFixed(2)}</td>
                           <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.notes || 'Investment Deposit'}</td>
                         </tr>
@@ -1575,7 +1721,7 @@ export const Finance = () => {
                     ) : (
                       investAuditData.repayments.map((t, idx) => (
                         <tr key={idx}>
-                          <td style={{ fontSize: '12px' }}>{new Date(t.transaction_date).toLocaleString()}</td>
+                          <td style={{ fontSize: '12px' }}>{formatDateTimeBD(t.transaction_date)}</td>
                           <td style={{ fontWeight: '700', color: 'var(--success)' }}>-{currency}{Number(t.amount).toFixed(2)}</td>
                           <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.notes || 'Capital Repayment'}</td>
                         </tr>
