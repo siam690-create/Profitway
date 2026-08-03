@@ -107,6 +107,7 @@ router.post('/finance/accounts', checkActiveSubscription, financeController.crea
 router.post('/finance/deposit', checkActiveSubscription, financeController.depositFund);
 router.get('/finance/accounts/:id/statement', financeController.getAccountStatement);
 router.post('/finance/transfer', checkActiveSubscription, financeController.transferFunds);
+router.post('/finance/adjust', checkActiveSubscription, financeController.adjustAccountBalance);
 router.post('/finance/liabilities', checkActiveSubscription, financeController.createLiability);
 router.get('/finance/liabilities/:id/audit', financeController.getDenaAudit);
 router.post('/finance/liabilities/:id/pay', checkActiveSubscription, financeController.payLiability);

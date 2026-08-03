@@ -178,7 +178,91 @@ exports.transferFunds = async (req, res) => {
 
     await connection.commit();
 
-    res.json({ message: 'Fund transfer executed successfully' });
+    res.status(200).json({
+      message: `Successfully transferred ৳${transferAmount.toFixed(2)} from "${fromAcc[0].name}" to destination account!`
+    });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
+// Adjust Account Balance / Manual Fund Withdrawal / Send Money (Non-Expense)
+exports.adjustAccountBalance = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { account_id, adjustment_type, amount, reason_title, notes } = req.body;
+
+    const adjAmount = Number(amount);
+    if (!account_id || isNaN(adjAmount) || adjAmount <= 0) {
+      return res.status(400).json({ error: 'Valid Account ID and Amount are required.' });
+    }
+
+    const type = adjustment_type || 'debit'; // 'debit' (withdraw/reduce) or 'credit' (add/increase)
+
+    await connection.beginTransaction();
+
+    const [accRows] = await connection.query(
+      'SELECT id, name, balance FROM finance_accounts WHERE id = ? AND tenant_id = ? FOR UPDATE',
+      [account_id, tenantId]
+    );
+
+    if (accRows.length === 0) {
+      return res.status(404).json({ error: 'Selected account not found.' });
+    }
+    const acc = accRows[0];
+
+    let newBalance = Number(acc.balance);
+    let txType = '';
+    let debitAmt = 0;
+    let creditAmt = 0;
+
+    if (type === 'debit') {
+      if (Number(acc.balance) < adjAmount) {
+        throw new Error(`Insufficient funds in "${acc.name}". Available balance: ৳${Number(acc.balance).toFixed(2)}, Withdrawal request: ৳${adjAmount.toFixed(2)}`);
+      }
+      newBalance = newBalance - adjAmount;
+      txType = reason_title || 'Balance Adjustment (-)';
+      debitAmt = adjAmount;
+    } else {
+      newBalance = newBalance + adjAmount;
+      txType = reason_title || 'Balance Adjustment (+)';
+      creditAmt = adjAmount;
+    }
+
+    // 1. Update Account Balance
+    await connection.query(
+      'UPDATE finance_accounts SET balance = ? WHERE id = ? AND tenant_id = ?',
+      [newBalance, account_id, tenantId]
+    );
+
+    // 2. Insert Transaction Record into account_transactions so it logs in Passbook
+    await connection.query(
+      `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        tenantId,
+        account_id,
+        txType,
+        debitAmt,
+        creditAmt,
+        `ADJ-${Date.now()}`,
+        notes || (type === 'debit' ? `Withdrawal / Balance Adjustment from ${acc.name}` : `Balance Adjustment added to ${acc.name}`)
+      ]
+    );
+
+    await connection.commit();
+
+    res.status(200).json({
+      message: type === 'debit'
+        ? `Successfully adjusted/withdrew ৳${adjAmount.toFixed(2)} from "${acc.name}"!`
+        : `Successfully added ৳${adjAmount.toFixed(2)} adjustment to "${acc.name}"!`,
+      new_balance: newBalance
+    });
+
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ error: error.message });

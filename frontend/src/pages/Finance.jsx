@@ -65,6 +65,7 @@ export const Finance = () => {
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [showDenaModal, setShowDenaModal] = useState(false);
   const [showPawnaModal, setShowPawnaModal] = useState(false);
   const [showAddPawnaModal, setShowAddPawnaModal] = useState(false);
@@ -84,6 +85,7 @@ export const Finance = () => {
   const [accForm, setAccForm] = useState({ name: '', account_type: 'bank', account_number: '', initial_balance: '' });
   const [depositForm, setDepositForm] = useState({ account_id: '', amount: '', source_title: 'Manual Fund Deposit', notes: '' });
   const [transferForm, setTransferForm] = useState({ from_account_id: '', to_account_id: '', amount: '' });
+  const [adjustForm, setAdjustForm] = useState({ account_id: '', adjustment_type: 'debit', amount: '', reason_title: 'Owner Personal Withdrawal', notes: '' });
   const [denaForm, setDenaForm] = useState({ title: '', party_type: 'supplier', party_name: '', total_amount: '', due_date: '', notes: '' });
   const [pawnaForm, setPawnaForm] = useState({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '' });
   const [addPawnaForm, setAddPawnaForm] = useState({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '' });
@@ -261,6 +263,28 @@ export const Finance = () => {
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
+    }
+  };
+
+  const handleAdjustSubmit = async (e) => {
+    e.preventDefault();
+    if (!adjustForm.account_id || !adjustForm.amount) return;
+    try {
+      const res = await authFetch('/api/finance/adjust', {
+        method: 'POST',
+        body: JSON.stringify(adjustForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowAdjustModal(false);
+        setAdjustForm({ account_id: '', adjustment_type: 'debit', amount: '', reason_title: 'Owner Personal Withdrawal', notes: '' });
+        fetchFinance();
+        alert(data.message || 'Account balance adjusted successfully!');
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error adjusting balance: ${err.message}`);
     }
   };
 
@@ -516,6 +540,25 @@ export const Finance = () => {
             <span>+ Deposit Funds (ফান্ড জমা)</span>
           </button>
 
+          <button
+            onClick={() => {
+              setAdjustForm({
+                account_id: (accounts && accounts.length > 0) ? accounts[0].id : '',
+                adjustment_type: 'debit',
+                amount: '',
+                reason_title: 'Owner Personal Withdrawal',
+                notes: ''
+              });
+              setShowAdjustModal(true);
+            }}
+            className="btn btn-secondary btn-sm"
+            style={{ background: 'var(--bg-secondary)', borderColor: 'rgba(239, 68, 68, 0.4)', color: 'var(--danger)' }}
+            title="Withdraw funds or adjust balance without recording expenses"
+          >
+            <ArrowDownRight size={15} />
+            <span>- Adjust / Withdraw (এডজাস্টমেন্ট)</span>
+          </button>
+
           <button onClick={() => setShowTransferModal(true)} className="btn btn-secondary btn-sm">
             <Send size={15} />
             <span>Transfer Funds</span>
@@ -622,7 +665,7 @@ export const Finance = () => {
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>{acc.name}</h3>
               <strong style={{ fontSize: '24px', color: 'var(--success)' }}>{currency}{Number(acc.balance).toFixed(2)}</strong>
 
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
                 <button
                   onClick={() => {
                     setDepositForm({ account_id: acc.id, amount: '', source_title: 'Manual Fund Deposit', notes: '' });
@@ -630,11 +673,26 @@ export const Finance = () => {
                   }}
                   className="btn btn-success btn-sm"
                   style={{ flex: 1 }}
+                  title="Deposit Funds into this account"
                 >
                   <Plus size={14} />
-                  <span>Deposit Fund</span>
+                  <span>+ Deposit</span>
                 </button>
-                <button onClick={() => handleOpenAccountStatement(acc.id)} className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
+
+                <button
+                  onClick={() => {
+                    setAdjustForm({ account_id: acc.id, adjustment_type: 'debit', amount: '', reason_title: 'Owner Personal Withdrawal', notes: '' });
+                    setShowAdjustModal(true);
+                  }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ flex: 1, background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                  title="Withdraw / Adjust funds without expenses or dues"
+                >
+                  <ArrowDownRight size={14} />
+                  <span>- Adjust</span>
+                </button>
+
+                <button onClick={() => handleOpenAccountStatement(acc.id)} className="btn btn-secondary btn-sm" style={{ flex: 1 }} title="View Passbook Ledger">
                   <FileText size={14} />
                   <span>Passbook</span>
                 </button>
@@ -1882,6 +1940,98 @@ export const Finance = () => {
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowTransferModal(false)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" className="btn btn-primary">Execute Transfer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Balance Adjustment & Fund Withdraw Modal */}
+      {showAdjustModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <div>
+                <h3>Account Balance Adjustment & Withdraw</h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Adjust balance or send money without adding to Expenses, Dena, Pawna, or Investment return.</span>
+              </div>
+              <button onClick={() => setShowAdjustModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleAdjustSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Select Account *</label>
+                  <select
+                    className="form-select"
+                    required
+                    value={adjustForm.account_id}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, account_id: e.target.value })}
+                  >
+                    <option value="">Select Account...</option>
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} (Available Balance: {currency}{Number(acc.balance).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Adjustment Direction *</label>
+                  <select
+                    className="form-select"
+                    value={adjustForm.adjustment_type}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, adjustment_type: e.target.value })}
+                  >
+                    <option value="debit">🔴 Withdraw / Send Money / Reduce Balance (- Debit)</option>
+                    <option value="credit">🟢 Fund Adjustment / Add Balance (+ Credit)</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Adjustment Category / Purpose *</label>
+                  <select
+                    className="form-select"
+                    value={adjustForm.reason_title}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, reason_title: e.target.value })}
+                  >
+                    <option value="Owner Personal Withdrawal">Owner Personal Cash Draw / Withdrawal</option>
+                    <option value="Direct Money Send">Direct Money Send (Non-Expense)</option>
+                    <option value="Balance Adjustment / Correction">Balance Adjustment / Correction</option>
+                    <option value="Bank Fee / Non-Operating Cash Adjustment">Bank Fee / Non-Operating Cash Adjustment</option>
+                    <option value="Other Fund Adjustment">Other Fund Adjustment</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Amount ({currency}) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="form-input"
+                    required
+                    placeholder="e.g. 500.00"
+                    value={adjustForm.amount}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, amount: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Notes / Details (Recorded in Passbook)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Owner withdrew cash for personal use / Direct transfer to friend"
+                    value={adjustForm.notes}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowAdjustModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ background: adjustForm.adjustment_type === 'debit' ? 'var(--danger)' : 'var(--success)', borderColor: adjustForm.adjustment_type === 'debit' ? 'var(--danger)' : 'var(--success)' }}>
+                  {adjustForm.adjustment_type === 'debit' ? 'Save Withdrawal / Adjustment' : 'Save Credit Adjustment'}
+                </button>
               </div>
             </form>
           </div>
