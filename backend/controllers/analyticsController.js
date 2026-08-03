@@ -77,11 +77,10 @@ exports.getProductAnalytics = async (req, res) => {
         `SELECT 
           COALESCE(SUM(ri.quantity * p.selling_price), 0) as returned_sales_revenue,
           COALESCE(SUM(ri.quantity * p.cost_price), 0) as returned_cogs,
-          COALESCE(SUM(s.delivery_profit), 0) as returned_delivery_profit_reversal
+          COALESCE(SUM(COALESCE(r.return_delivery_loss, r.courier_charge, 0)), 0) as returned_delivery_profit_reversal
          FROM return_items ri
          JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
          JOIN products p ON ri.product_id = p.id AND ri.tenant_id = p.tenant_id
-         LEFT JOIN sales s ON r.invoice_no = s.invoice_no AND r.tenant_id = s.tenant_id
          ${returnsWhere}`,
         baseParams
       );
@@ -159,15 +158,16 @@ exports.getProductAnalytics = async (req, res) => {
           wc.name as buyer_name,
           wc.phone,
           wc.company_name,
-          COUNT(ws.id) as orders_count,
-          COALESCE(SUM(ws.total_amount), 0) as total_spent,
-          COALESCE(SUM(ws.gross_profit), 0) as total_profit_generated,
-          COALESCE(SUM(ws.due_amount), 0) as current_pawna_due
+          COUNT(ws.id) as total_orders,
+          COALESCE(SUM(ws.total_amount), 0) as total_purchased_amount,
+          COALESCE(SUM(ws.gross_profit), 0) as profit_generated,
+          COALESCE(SUM(ws.due_amount), 0) as current_due
          FROM wholesale_customers wc
-         JOIN wholesale_sales ws ON wc.id = ws.customer_id AND ws.tenant_id = wc.tenant_id
+         JOIN wholesale_sales ws ON wc.id = ws.customer_id AND wc.tenant_id = ws.tenant_id
          ${wholesaleBuyersWhere}
          GROUP BY wc.id, wc.name, wc.phone, wc.company_name
-         ORDER BY total_spent DESC LIMIT 10`,
+         ORDER BY total_purchased_amount DESC
+         LIMIT 10`,
         baseParams
       );
       topWholesaleBuyers = rows;
@@ -250,9 +250,9 @@ exports.getProductAnalytics = async (req, res) => {
         `SELECT 
            ri.product_id,
            SUM(ri.quantity) as units_returned,
-           SUM(ri.quantity * (p_sub.selling_price - p_sub.cost_price)) as returned_profit_reversal,
-           SUM(CASE WHEN s_sub.total_amount > 0 THEN (s_sub.delivery_profit * ((ri.quantity * p_sub.selling_price) / s_sub.total_amount)) ELSE 0 END) as returned_deliv_profit_reversal,
-           SUM(r.courier_charge) as return_charges
+           SUM(ri.quantity * (COALESCE(p_sub.selling_price, 0) - COALESCE(p_sub.cost_price, 0))) as returned_profit_reversal,
+           SUM(COALESCE(r.return_delivery_loss, CASE WHEN s_sub.total_amount > 0 THEN (s_sub.delivery_profit * ((ri.quantity * p_sub.selling_price) / s_sub.total_amount)) ELSE 0 END, 0)) as returned_deliv_profit_reversal,
+           SUM(COALESCE(r.courier_charge, 0)) as return_charges
          FROM return_items ri
          JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
          JOIN products p_sub ON ri.product_id = p_sub.id AND ri.tenant_id = p_sub.tenant_id
