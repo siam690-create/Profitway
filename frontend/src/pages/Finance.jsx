@@ -927,11 +927,18 @@ export const Finance = () => {
                               <span>+ Add Invest</span>
                             </button>
 
-                            {inv.active_capital > 0 && (
-                              <button onClick={() => { setShowRepayInvestModal({ ...inv, id: inv.sample_id }); setRepayInvestAmt(inv.active_capital); }} className="btn btn-secondary btn-sm">
-                                Return Capital
-                              </button>
-                            )}
+                            <button
+                              onClick={() => {
+                                setShowRepayInvestModal({ ...inv, id: inv.sample_id });
+                                setRepayInvestAmt(inv.active_capital > 0 ? inv.active_capital : '');
+                              }}
+                              className="btn btn-secondary btn-sm"
+                              style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                              title="Return Capital / Repay Investor"
+                            >
+                              <ArrowDownRight size={14} />
+                              <span>Return Capital</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
