@@ -77,6 +77,20 @@ exports.getProfitLossReport = async (req, res) => {
       queryParams
     );
 
+    // 7. Reseller Sales Gross Profit & Revenue
+    let resellerWhere = 'WHERE tenant_id = ?';
+    if (!isAllTime) {
+      resellerWhere += ' AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?';
+    }
+    const [resellerResult] = await db.query(
+      `SELECT 
+        COALESCE(SUM(total_amount), 0) as total_reseller_revenue,
+        COALESCE(SUM(total_cost), 0) as total_reseller_cogs,
+        COALESCE(SUM(gross_profit + delivery_profit), 0) as reseller_gross_profit
+       FROM reseller_sales ${resellerWhere}`,
+      queryParams
+    );
+
     const rawSalesRevenue = Number(salesResult[0].total_sales_revenue || 0);
     const returnedSalesRev = Number(returnedProductSummary[0].returned_sales_revenue || 0);
     const netSalesRevenue = Math.max(0, rawSalesRevenue - returnedSalesRev);
@@ -89,6 +103,9 @@ exports.getProfitLossReport = async (req, res) => {
     const returnedDeliveryProfitReversal = Number(returnedDeliverySummary[0].returned_delivery_profit_reversal || 0);
 
     const netDeliveryProfit = grossDeliveryProfit - returnedDeliveryProfitReversal;
+    const resellerGrossProfit = Number(resellerResult[0].reseller_gross_profit || 0);
+    const resellerSalesRevenue = Number(resellerResult[0].total_reseller_revenue || 0);
+
     const totalOperatingGrossIncome = netProductProfit + netDeliveryProfit;
 
     let expenseBreakdown = {};
@@ -103,8 +120,9 @@ exports.getProfitLossReport = async (req, res) => {
     const totalReturnFees = Number(returnFeesResult[0].total_courier_return_charges || 0);
     const totalAdsCost = Number(adsResult[0].total_paid_ads_cost || 0);
 
-    const netOperatingProfit = totalOperatingGrossIncome - totalOperatingExpenses - totalReturnFees - totalAdsCost;
-    const profitMarginPct = netSalesRevenue > 0 ? ((netOperatingProfit / netSalesRevenue) * 100).toFixed(2) : 0;
+    const netOperatingProfit = totalOperatingGrossIncome + resellerGrossProfit - totalOperatingExpenses - totalReturnFees - totalAdsCost;
+    const totalRevForMargin = netSalesRevenue + resellerSalesRevenue;
+    const profitMarginPct = totalRevForMargin > 0 ? ((netOperatingProfit / totalRevForMargin) * 100).toFixed(2) : 0;
 
     res.json({
       date_range: { startDate: start_date || 'All Time', endDate: end_date || 'All Time' },
@@ -116,6 +134,8 @@ exports.getProfitLossReport = async (req, res) => {
         gross_delivery_profit: Number(grossDeliveryProfit.toFixed(2)),
         returned_delivery_profit_reversal: Number(returnedDeliveryProfitReversal.toFixed(2)),
         net_delivery_profit: Number(netDeliveryProfit.toFixed(2)),
+        reseller_sales_revenue: Number(resellerSalesRevenue.toFixed(2)),
+        reseller_gross_profit: Number(resellerGrossProfit.toFixed(2)),
         total_operating_gross_income: Number(totalOperatingGrossIncome.toFixed(2)),
         total_operating_expenses: Number(totalOperatingExpenses.toFixed(2)),
         total_return_fees: Number(totalReturnFees.toFixed(2)),

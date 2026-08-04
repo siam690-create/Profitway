@@ -123,6 +123,17 @@ export const Reports = () => {
                 </td>
               </tr>
 
+              {/* Separate Row 3: Reseller Parcels Gross Profit */}
+              <tr style={{ background: 'rgba(236, 72, 153, 0.05)' }}>
+                <td style={{ fontWeight: '700', color: '#ec4899', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Award size={16} color="#ec4899" />
+                  <span>+ Add: Reseller Parcels Gross Profit</span>
+                </td>
+                <td style={{ textAlign: 'right', fontWeight: '800', color: '#ec4899' }}>
+                  +{currency}{Number(fin.reseller_gross_profit || 0).toLocaleString()}
+                </td>
+              </tr>
+
               <tr style={{ background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-color)' }}>
                 <td style={{ fontWeight: '700', fontSize: '15px' }}>= TOTAL OPERATING GROSS INCOME</td>
                 <td style={{ textAlign: 'right', fontWeight: '800', fontSize: '16px', color: 'var(--success)' }}>

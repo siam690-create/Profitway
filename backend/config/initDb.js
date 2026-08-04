@@ -450,6 +450,78 @@ async function autoMigrate() {
     await addColumnIfNotExists('returns', 'courier_charge', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('returns', 'return_delivery_loss', 'DECIMAL(10,2) DEFAULT 0.00');
 
+    // 22. Reseller Parcels System Tables
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS reseller_sales (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        reseller_name VARCHAR(255) NOT NULL,
+        customer_name VARCHAR(255) NULL,
+        customer_phone VARCHAR(50) NULL,
+        invoice_no VARCHAR(100) NOT NULL,
+        total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        total_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        gross_profit DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        delivery_fee_charged DECIMAL(10,2) DEFAULT 0.00,
+        courier_actual_cost DECIMAL(10,2) DEFAULT 0.00,
+        delivery_profit DECIMAL(10,2) DEFAULT 0.00,
+        payment_status VARCHAR(50) DEFAULT 'paid',
+        account_id INT DEFAULT NULL,
+        sale_date DATETIME NULL,
+        notes TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_rs_tenant (tenant_id),
+        INDEX idx_rs_reseller (reseller_name)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS reseller_sale_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        reseller_sale_id INT NOT NULL,
+        product_id INT NOT NULL,
+        product_name VARCHAR(255) NOT NULL,
+        quantity INT NOT NULL DEFAULT 1,
+        unit_cost DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        unit_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        total_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        item_profit DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        INDEX idx_rsi_tenant (tenant_id),
+        INDEX idx_rsi_sale (reseller_sale_id),
+        INDEX idx_rsi_prod (product_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS reseller_returns (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        reseller_name VARCHAR(255) NULL,
+        invoice_no VARCHAR(100) NULL,
+        courier_name VARCHAR(100) NULL,
+        courier_charge DECIMAL(10,2) DEFAULT 0.00,
+        return_delivery_loss DECIMAL(10,2) DEFAULT 0.00,
+        return_date DATETIME NULL,
+        notes TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_rr_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS reseller_return_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        reseller_return_id INT NOT NULL,
+        product_id INT NOT NULL,
+        quantity INT NOT NULL DEFAULT 1,
+        restock_condition VARCHAR(100) DEFAULT 'good_restockable',
+        INDEX idx_rri_tenant (tenant_id),
+        INDEX idx_rri_ret (reseller_return_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // Retroactive column type expansion for liabilities & receivables status & party_type column to prevent data truncation
     try {
       await db.query("ALTER TABLE liabilities MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");

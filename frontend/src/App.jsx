@@ -18,6 +18,7 @@ import { Reports } from './pages/Reports';
 import { Finance } from './pages/Finance';
 import { StaffManager } from './pages/StaffManager';
 import { TaskManager } from './pages/TaskManager';
+import { ResellerParcels } from './pages/ResellerParcels';
 import { Settings } from './pages/Settings';
 import { Subscription } from './pages/Subscription';
 import { Support } from './pages/Support';
@@ -82,6 +83,7 @@ function MainApp() {
       case 'finance': return <Finance />;
       case 'staff': return <StaffManager />;
       case 'tasks': return <TaskManager />;
+      case 'reseller-parcels': return <ResellerParcels />;
       case 'settings': return <Settings />;
       case 'subscription': return <Subscription />;
       case 'support': return <Support />;

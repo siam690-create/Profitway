@@ -132,6 +132,14 @@ router.get('/wholesale/sales/:id', wholesaleController.getWholesaleSaleById);
 router.post('/wholesale/sales', checkActiveSubscription, wholesaleController.createWholesaleSale);
 router.delete('/wholesale/sales/:id', checkActiveSubscription, wholesaleController.deleteWholesaleSale);
 
+// Reseller Parcels APIs
+const resellerController = require('../controllers/resellerController');
+router.get('/reseller/sales', resellerController.getResellerSales);
+router.post('/reseller/sales', checkActiveSubscription, resellerController.createResellerSale);
+router.delete('/reseller/sales/:id', checkActiveSubscription, resellerController.deleteResellerSale);
+router.get('/reseller/returns', resellerController.getResellerReturns);
+router.post('/reseller/returns', checkActiveSubscription, resellerController.createResellerReturn);
+
 // Supplier Directory APIs
 router.get('/suppliers', supplierController.getSuppliers);
 router.post('/suppliers', checkActiveSubscription, supplierController.createSupplier);
