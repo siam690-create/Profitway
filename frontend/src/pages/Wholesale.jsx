@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Search, ShoppingBag, Plus, PackagePlus, Eye, X, Users, Phone, MapPin, DollarSign, Wallet, FileText, CheckCircle, ArrowUpRight, Printer, Trash2 } from 'lucide-react';
 import { DateRangeFilter } from '../components/DateRangeFilter';
+import { ProductSelectSearch } from '../components/ProductSelectSearch';
 
 export const Wholesale = () => {
   const { authFetch, products, currency, formatCurrency, shopSettings, refreshAllData } = useApp();
@@ -725,72 +726,20 @@ export const Wholesale = () => {
 
                   <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1.2fr 1fr', gap: '10px', alignItems: 'flex-end' }}>
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>Product *</span>
-                        {modalProductSearch && (
-                          <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: '600' }}>
-                            Filtered by: "{modalProductSearch}"
-                          </span>
-                        )}
-                      </label>
-
-                      {/* Instant Search Input Box */}
-                      <div style={{ position: 'relative', marginBottom: '6px' }}>
-                        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#f59e0b' }} />
-                        <input
-                          type="text"
-                          className="form-input"
-                          style={{ paddingLeft: '32px', paddingRight: modalProductSearch ? '28px' : '10px', fontSize: '12px', background: 'var(--bg-secondary)', borderColor: '#f59e0b' }}
-                          placeholder="🔍 Type product name or SKU..."
-                          value={modalProductSearch}
-                          onChange={(e) => setModalProductSearch(e.target.value)}
-                        />
-                        {modalProductSearch && (
-                          <button
-                            type="button"
-                            onClick={() => setModalProductSearch('')}
-                            style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                          >
-                            <X size={12} />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Filtered Dropdown */}
-                      <select
-                        className="form-select"
-                        style={{ borderColor: selectedProductId ? 'var(--success)' : 'var(--border-color)', fontWeight: selectedProductId ? '600' : 'normal' }}
-                        value={selectedProductId}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setSelectedProductId(val);
-                          const prod = products.find(p => String(p.id) === String(val));
+                      <label className="form-label">Product *</label>
+                      <ProductSelectSearch
+                        products={products}
+                        selectedId={selectedProductId}
+                        onSelect={(id) => {
+                          setSelectedProductId(id);
+                          const prod = products.find(p => String(p.id) === String(id));
                           if (prod) {
                             setUnitCostPrice(String(prod.cost_price || 0));
                             setUnitWholesalePrice(String(prod.selling_price || 0));
                           }
                         }}
-                      >
-                        <option value="">
-                          {modalProductSearch 
-                            ? `-- Matches for "${modalProductSearch}" --` 
-                            : `-- Select Product (${products.length} Available) --`}
-                        </option>
-                        {products
-                          .filter(p => {
-                            if (!modalProductSearch.trim()) return true;
-                            const q = modalProductSearch.toLowerCase().trim();
-                            return (
-                              p.name?.toLowerCase().includes(q) ||
-                              p.sku?.toLowerCase().includes(q)
-                            );
-                          })
-                          .map(p => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} {p.sku ? `[${p.sku}]` : ''} — (Stock: {p.stock_quantity}) | Regular ৳{Number(p.selling_price).toFixed(2)}
-                            </option>
-                          ))}
-                      </select>
+                        placeholder="Type product name or SKU to search..."
+                      />
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
