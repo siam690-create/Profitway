@@ -450,10 +450,12 @@ async function autoMigrate() {
     await addColumnIfNotExists('returns', 'courier_charge', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('returns', 'return_delivery_loss', 'DECIMAL(10,2) DEFAULT 0.00');
 
-    // Retroactive column type expansion for liabilities & receivables status column to prevent data truncation
+    // Retroactive column type expansion for liabilities & receivables status & party_type column to prevent data truncation
     try {
       await db.query("ALTER TABLE liabilities MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
       await db.query("ALTER TABLE receivables MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
+      await db.query("ALTER TABLE liabilities MODIFY COLUMN party_type VARCHAR(100) DEFAULT 'supplier'");
+      await db.query("ALTER TABLE receivables MODIFY COLUMN party_type VARCHAR(100) DEFAULT 'customer'");
       await db.query("ALTER TABLE expenses MODIFY COLUMN title VARCHAR(255) DEFAULT 'General Expense'");
     } catch (e) {
       console.warn('Column expansion note:', e.message);
