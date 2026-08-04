@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { ShoppingBag, Plus, PackagePlus, Eye, X, Users, Phone, MapPin, DollarSign, Wallet, FileText, CheckCircle, ArrowUpRight, Printer, Trash2 } from 'lucide-react';
+import { Search, ShoppingBag, Plus, PackagePlus, Eye, X, Users, Phone, MapPin, DollarSign, Wallet, FileText, CheckCircle, ArrowUpRight, Printer, Trash2 } from 'lucide-react';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Wholesale = () => {
@@ -13,7 +13,10 @@ export const Wholesale = () => {
   const [showBuyerModal, setShowBuyerModal] = useState(false);
   const [selectedSaleDetails, setSelectedSaleDetails] = useState(null);
 
-  // Date Filter States
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [buyerSearchQuery, setBuyerSearchQuery] = useState('');
+  const [modalProductSearch, setModalProductSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -406,10 +409,23 @@ export const Wholesale = () => {
       {/* --- SUB TAB 1: WHOLESALE ORDERS --- */}
       {activeSubTab === 'orders' && (() => {
         const filteredSales = salesList.filter(s => {
-          if (!startDate && !endDate) return true;
-          const sDate = new Date(s.sale_date || s.created_at).toISOString().slice(0, 10);
-          if (startDate && sDate < startDate) return false;
-          if (endDate && sDate > endDate) return false;
+          if (startDate || endDate) {
+            const sDate = new Date(s.sale_date || s.created_at).toISOString().slice(0, 10);
+            if (startDate && sDate < startDate) return false;
+            if (endDate && sDate > endDate) return false;
+          }
+
+          if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase().trim();
+            const inv = String(s.invoice_no || '').toLowerCase();
+            const name = String(s.customer_name || '').toLowerCase();
+            const phone = String(s.customer_phone || '').toLowerCase();
+            const note = String(s.notes || '').toLowerCase();
+            const itemNames = (s.items || []).map(i => String(i.product_name || '').toLowerCase()).join(' ');
+
+            return inv.includes(q) || name.includes(q) || phone.includes(q) || note.includes(q) || itemNames.includes(q);
+          }
+
           return true;
         });
 
@@ -426,7 +442,31 @@ export const Wholesale = () => {
               <div>Customer Due Pawna: <strong style={{ display: 'block', fontSize: '15px', color: 'var(--danger)' }}>{formatCurrency(totalDuePawna)}</strong></div>
             </div>
 
-            <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Wholesale B2B Sales History ({filteredSales.length})</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Wholesale B2B Sales History ({filteredSales.length})</h3>
+
+              {/* Instant Search Bar */}
+              <div style={{ position: 'relative', width: '320px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  className="form-input"
+                  style={{ paddingLeft: '36px', paddingRight: searchQuery ? '32px' : '12px', fontSize: '13px' }}
+                  placeholder="Search by Buyer Name, Phone, Invoice #, or Item..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
 
             <div className="table-wrapper">
               <table className="data-table">
@@ -494,14 +534,51 @@ export const Wholesale = () => {
       })()}
 
       {/* --- SUB TAB 2: BUYER DIRECTORY --- */}
-      {activeSubTab === 'buyers' && (
-        <div className="glass-card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Registered B2B Wholesale Buyers Profiles</h3>
-            <button onClick={() => setShowBuyerModal(true)} className="btn btn-secondary btn-sm">
-              + Add Buyer Profile
-            </button>
-          </div>
+      {activeSubTab === 'buyers' && (() => {
+        const filteredBuyers = buyersList.filter(b => {
+          if (!buyerSearchQuery.trim()) return true;
+          const q = buyerSearchQuery.toLowerCase().trim();
+          return (
+            String(b.name || '').toLowerCase().includes(q) ||
+            String(b.company_name || '').toLowerCase().includes(q) ||
+            String(b.phone || '').toLowerCase().includes(q) ||
+            String(b.email || '').toLowerCase().includes(q) ||
+            String(b.address || '').toLowerCase().includes(q)
+          );
+        });
+
+        return (
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Registered B2B Wholesale Buyers Profiles ({filteredBuyers.length})</h3>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div style={{ position: 'relative', width: '280px' }}>
+                  <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input
+                    type="text"
+                    className="form-input"
+                    style={{ paddingLeft: '36px', paddingRight: buyerSearchQuery ? '32px' : '12px', fontSize: '13px' }}
+                    placeholder="Search Buyer Name, Phone, Company..."
+                    value={buyerSearchQuery}
+                    onChange={(e) => setBuyerSearchQuery(e.target.value)}
+                  />
+                  {buyerSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setBuyerSearchQuery('')}
+                      style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <button onClick={() => setShowBuyerModal(true)} className="btn btn-secondary btn-sm">
+                  + Add Buyer Profile
+                </button>
+              </div>
+            </div>
 
           <div className="table-wrapper">
             <table className="data-table">
@@ -538,7 +615,8 @@ export const Wholesale = () => {
             </table>
           </div>
         </div>
-      )}
+      );
+    })()}
 
       {/* Add Wholesale Buyer Modal */}
       {showBuyerModal && (

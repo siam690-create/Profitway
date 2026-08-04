@@ -340,6 +340,7 @@ export const Finance = () => {
         setShowAddPawnaModal(false);
         setAddPawnaForm({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '' });
         fetchFinance();
+        refreshAllData();
         alert(data.message || `Pawna Profile created for "${addPawnaForm.party_name}"!`);
       } else {
         alert(`Error: ${data.error}`);

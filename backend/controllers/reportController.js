@@ -14,10 +14,10 @@ exports.getProfitLossReport = async (req, res) => {
     let queryParams = [tenantId];
 
     if (!isAllTime) {
-      salesWhere += ' AND (sale_date IS NULL OR DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?)';
-      returnsWhere += ' AND (return_date IS NULL OR DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?)';
-      expensesWhere += ' AND (expense_date IS NULL OR DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?)';
-      adsWhere += ' AND (ad_date IS NULL OR DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?)';
+      salesWhere += ' AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?';
+      returnsWhere += ' AND DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?';
+      expensesWhere += ' AND DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?';
+      adsWhere += ' AND DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?';
       queryParams.push(start_date, end_date);
     }
 

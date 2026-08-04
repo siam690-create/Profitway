@@ -425,7 +425,7 @@ exports.createReceivable = async (req, res) => {
         party_type || 'customer',
         party_name.trim(),
         amt,
-        amt > 0 ? 'pending' : 'collected',
+        'pending',
         due_date || null,
         notes || null
       ]
