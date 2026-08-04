@@ -52,6 +52,8 @@ export const ResellerParcels = () => {
   const [returnItems, setReturnItems] = useState([]);
   const [retProductId, setRetProductId] = useState('');
   const [retQty, setRetQty] = useState('1');
+  const [retUnitPrice, setRetUnitPrice] = useState('');
+  const [retCostPrice, setRetCostPrice] = useState('0');
   const [retCondition, setRetCondition] = useState('good_restockable');
 
   const fetchData = async () => {
@@ -205,6 +207,10 @@ export const ResellerParcels = () => {
     const prod = products.find(p => String(p.id) === String(retProductId));
     if (!prod) return;
 
+    const priceNum = parseFloat(retUnitPrice) || Number(prod.selling_price || 0);
+    const costNum = parseFloat(retCostPrice) || Number(prod.cost_price || 0);
+    const marginLoss = q * (priceNum - costNum);
+
     setReturnItems([
       ...returnItems,
       {
@@ -212,12 +218,17 @@ export const ResellerParcels = () => {
         product_name: prod.name,
         sku: prod.sku,
         quantity: q,
+        unit_wholesale_price: priceNum,
+        unit_cost_price: costNum,
+        margin_loss: marginLoss > 0 ? marginLoss : 0,
         restock_condition: retCondition
       }
     ]);
 
     setRetProductId('');
     setRetQty('1');
+    setRetUnitPrice('');
+    setRetCostPrice('0');
   };
 
   const handleRemoveReturnItem = (idx) => {
@@ -823,19 +834,26 @@ export const ResellerParcels = () => {
                     <span>Select Returned Product to Restock</span>
                   </h4>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr 1fr', gap: '10px', alignItems: 'flex-end' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.8fr 1.2fr 1.2fr 0.8fr', gap: '8px', alignItems: 'flex-end' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Product *</label>
                       <ProductSelectSearch
                         products={products}
                         selectedId={retProductId}
-                        onSelect={(id) => setRetProductId(id)}
+                        onSelect={(id) => {
+                          setRetProductId(id);
+                          const prod = products.find(p => String(p.id) === String(id));
+                          if (prod) {
+                            setRetUnitPrice(String(prod.selling_price || 0));
+                            setRetCostPrice(String(prod.cost_price || 0));
+                          }
+                        }}
                         placeholder="Type product name or SKU to search..."
                       />
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Returned Qty</label>
+                      <label className="form-label">Qty</label>
                       <input
                         type="number"
                         className="form-input"
@@ -846,14 +864,26 @@ export const ResellerParcels = () => {
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Resell Price ({currency})</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="form-input"
+                        placeholder="Resell price..."
+                        value={retUnitPrice}
+                        onChange={(e) => setRetUnitPrice(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Condition</label>
                       <select
                         className="form-select"
                         value={retCondition}
                         onChange={(e) => setRetCondition(e.target.value)}
                       >
-                        <option value="good_restockable">Good (Restock to Inventory)</option>
-                        <option value="damaged_scrap">Damaged (Do NOT Restock)</option>
+                        <option value="good_restockable">Good (Restock In)</option>
+                        <option value="damaged_scrap">Damaged (No Restock)</option>
                       </select>
                     </div>
 
@@ -865,34 +895,49 @@ export const ResellerParcels = () => {
 
                 {/* Return Items List */}
                 {returnItems.length > 0 && (
-                  <div className="table-wrapper">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Product</th>
-                          <th>Qty</th>
-                          <th>Condition</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {returnItems.map((item, idx) => (
-                          <tr key={idx}>
-                            <td><strong>{item.product_name}</strong></td>
-                            <td>{item.quantity}</td>
-                            <td style={{ color: item.restock_condition.includes('good') ? 'var(--success)' : '#ef4444' }}>
-                              {item.restock_condition.includes('good') ? 'Good (Restock In)' : 'Damaged'}
-                            </td>
-                            <td>
-                              <button type="button" onClick={() => handleRemoveReturnItem(idx)} className="btn btn-danger btn-icon btn-sm">
-                                <X size={14} />
-                              </button>
-                            </td>
+                  <>
+                    <div className="table-wrapper">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Product</th>
+                            <th>Qty</th>
+                            <th>Resell Price</th>
+                            <th>Margin Loss (-৳)</th>
+                            <th>Condition</th>
+                            <th>Action</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {returnItems.map((item, idx) => (
+                            <tr key={idx}>
+                              <td><strong>{item.product_name}</strong></td>
+                              <td>{item.quantity}</td>
+                              <td>{formatCurrency(item.unit_wholesale_price)}</td>
+                              <td style={{ color: '#ef4444', fontWeight: '700' }}>-{formatCurrency(item.margin_loss)}</td>
+                              <td style={{ color: item.restock_condition.includes('good') ? 'var(--success)' : '#ef4444' }}>
+                                {item.restock_condition.includes('good') ? 'Good (Restock In)' : 'Damaged'}
+                              </td>
+                              <td>
+                                <button type="button" onClick={() => handleRemoveReturnItem(idx)} className="btn btn-danger btn-icon btn-sm">
+                                  <X size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(239, 68, 68, 0.08)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                      <span style={{ fontSize: '13px', color: '#ef4444', fontWeight: '600' }}>
+                        Returned Reseller Margin Profit Reversal:
+                      </span>
+                      <strong style={{ fontSize: '16px', color: '#ef4444' }}>
+                        -{formatCurrency(returnItems.reduce((sum, i) => sum + i.margin_loss, 0))}
+                      </strong>
+                    </div>
+                  </>
                 )}
               </div>
 

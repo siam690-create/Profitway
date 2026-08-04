@@ -288,22 +288,31 @@ exports.createResellerReturn = async (req, res) => {
     const formattedDate = return_date || new Date().toISOString().slice(0, 10);
 
     const [result] = await connection.query(
-      `INSERT INTO reseller_returns (tenant_id, reseller_name, invoice_no, courier_name, courier_charge, return_delivery_loss, return_date, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO reseller_returns (tenant_id, reseller_name, invoice_no, courier_name, courier_charge, return_delivery_loss, returned_profit_reversal, return_date, notes)
+       VALUES (?, ?, ?, ?, ?, ?, 0.00, ?, ?)`,
       [tenantId, reseller_name || null, invoice_no || null, courier_name || null, cCharge, delivLoss, formattedDate, notes || null]
     );
 
     const returnId = result.insertId;
+    let totalReturnedProfitReversal = 0;
 
     for (const item of items) {
       const cond = item.restock_condition || 'good_restockable';
       const condLower = String(cond).toLowerCase();
       const isGood = condLower.includes('good') || condLower.includes('restock');
 
+      const qty = Number(item.quantity || 1);
+      const unitPrice = Number(item.unit_wholesale_price || item.unit_price || 0);
+      const unitCost = Number(item.unit_cost_price || item.unit_cost || 0);
+
+      const marginPerUnit = unitPrice > 0 ? (unitPrice - unitCost) : 0;
+      const profitReversalItem = qty * marginPerUnit;
+      totalReturnedProfitReversal += profitReversalItem;
+
       await connection.query(
-        `INSERT INTO reseller_return_items (tenant_id, reseller_return_id, product_id, quantity, restock_condition)
-         VALUES (?, ?, ?, ?, ?)`,
-        [tenantId, returnId, item.product_id, item.quantity, cond]
+        `INSERT INTO reseller_return_items (tenant_id, reseller_return_id, product_id, quantity, unit_price, unit_cost, returned_profit_reversal, restock_condition)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [tenantId, returnId, item.product_id, qty, unitPrice, unitCost, profitReversalItem, cond]
       );
 
       // Restock good items back into inventory
@@ -311,21 +320,27 @@ exports.createResellerReturn = async (req, res) => {
         const [pRows] = await connection.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [item.product_id, tenantId]);
         if (pRows.length > 0) {
           const oldStock = Number(pRows[0].stock_quantity || 0);
-          const newStock = oldStock + Number(item.quantity || 1);
+          const newStock = oldStock + qty;
 
           await connection.query('UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?', [newStock, item.product_id, tenantId]);
 
           await connection.query(
             `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
              VALUES (?, ?, 'Reseller Return Restock', ?, ?, ?, ?, ?)`,
-            [tenantId, item.product_id, item.quantity, oldStock, newStock, invoice_no || 'RSL-RET', `Reseller Return (Reseller: ${reseller_name || 'N/A'})`]
+            [tenantId, item.product_id, qty, oldStock, newStock, invoice_no || 'RSL-RET', `Reseller Return (Reseller: ${reseller_name || 'N/A'})`]
           );
         }
       }
     }
 
+    // Update master total profit reversal
+    await connection.query(
+      `UPDATE reseller_returns SET returned_profit_reversal = ? WHERE id = ? AND tenant_id = ?`,
+      [totalReturnedProfitReversal, returnId, tenantId]
+    );
+
     await connection.commit();
-    res.status(201).json({ message: 'Reseller Return recorded successfully!', returnId });
+    res.json({ message: 'Reseller Return recorded and items restocked!' });
   } catch (error) {
     await connection.rollback();
     console.error('Error in createResellerReturn:', error);

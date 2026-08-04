@@ -79,8 +79,10 @@ exports.getProfitLossReport = async (req, res) => {
 
     // 7. Reseller Sales Gross Profit & Revenue
     let resellerWhere = 'WHERE tenant_id = ?';
+    let resellerReturnWhere = 'WHERE tenant_id = ?';
     if (!isAllTime) {
       resellerWhere += ' AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?';
+      resellerReturnWhere += ' AND DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?';
     }
     const [resellerResult] = await db.query(
       `SELECT 
@@ -90,6 +92,17 @@ exports.getProfitLossReport = async (req, res) => {
        FROM reseller_sales ${resellerWhere}`,
       queryParams
     );
+
+    const [resellerReturnResult] = await db.query(
+      `SELECT COALESCE(SUM(returned_profit_reversal), 0) as reseller_returned_profit_reversal
+       FROM reseller_returns ${resellerReturnWhere}`,
+      queryParams
+    );
+
+    const resellerProfitReversal = Number(resellerReturnResult[0].reseller_returned_profit_reversal || 0);
+    const rawResellerProfit = Number(resellerResult[0].reseller_gross_profit || 0);
+    const resellerGrossProfit = rawResellerProfit - resellerProfitReversal;
+    const resellerSalesRevenue = Number(resellerResult[0].total_reseller_revenue || 0);
 
     const rawSalesRevenue = Number(salesResult[0].total_sales_revenue || 0);
     const returnedSalesRev = Number(returnedProductSummary[0].returned_sales_revenue || 0);
@@ -103,8 +116,6 @@ exports.getProfitLossReport = async (req, res) => {
     const returnedDeliveryProfitReversal = Number(returnedDeliverySummary[0].returned_delivery_profit_reversal || 0);
 
     const netDeliveryProfit = grossDeliveryProfit - returnedDeliveryProfitReversal;
-    const resellerGrossProfit = Number(resellerResult[0].reseller_gross_profit || 0);
-    const resellerSalesRevenue = Number(resellerResult[0].total_reseller_revenue || 0);
 
     const totalOperatingGrossIncome = netProductProfit + netDeliveryProfit;
 

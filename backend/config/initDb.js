@@ -522,6 +522,12 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // Retroactive column additions to reseller returns table
+    await addColumnIfNotExists('reseller_returns', 'returned_profit_reversal', 'DECIMAL(12,2) DEFAULT 0.00');
+    await addColumnIfNotExists('reseller_return_items', 'unit_price', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('reseller_return_items', 'unit_cost', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('reseller_return_items', 'returned_profit_reversal', 'DECIMAL(12,2) DEFAULT 0.00');
+
     // Retroactive column type expansion for liabilities & receivables status & party_type column to prevent data truncation
     try {
       await db.query("ALTER TABLE liabilities MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
