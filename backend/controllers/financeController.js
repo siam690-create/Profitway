@@ -776,7 +776,7 @@ exports.getAccountStatement = async (req, res) => {
     try {
       const [rows] = await db.query(
         `SELECT 'Stock Purchase' as type, paid_amount as debit, 0 as credit, CONCAT('Purchase Order #', purchase_no, ' (Supplier: ', supplier_name, ')') as notes, purchase_date as date
-         FROM purchases WHERE (account_id = ? OR account_id IS NULL) AND tenant_id = ? AND paid_amount > 0`,
+         FROM purchases WHERE account_id = ? AND tenant_id = ? AND paid_amount > 0`,
         [id, tenantId]
       );
       purchases = rows;
@@ -800,7 +800,7 @@ exports.getAccountStatement = async (req, res) => {
     try {
       const [rows] = await db.query(
         `SELECT 'Wholesale Sale' as type, 0 as debit, paid_amount as credit, CONCAT('Wholesale Order #', invoice_no, ' (Buyer: ', customer_name, ')') as notes, sale_date as date
-         FROM wholesale_sales WHERE (account_id = ? OR account_id IS NULL) AND tenant_id = ? AND paid_amount > 0`,
+         FROM wholesale_sales WHERE account_id = ? AND tenant_id = ? AND paid_amount > 0`,
         [id, tenantId]
       );
       wholesaleSales = rows;
