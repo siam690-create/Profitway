@@ -3,7 +3,8 @@ import { useApp } from '../context/AppContext';
 import { 
   Users, UserPlus, Shield, Trash2, Key, CheckCircle, X, Edit3, Lock, 
   Calendar, Clock, CreditCard, DollarSign, Gift, FileText, Printer, 
-  Award, Briefcase, Phone, Mail, QrCode, Plus, Search, Building2, Check, AlertCircle, FileCheck
+  Award, Briefcase, Phone, Mail, QrCode, Plus, Search, Building2, Check, AlertCircle, FileCheck,
+  Upload, Image, Eye, ExternalLink, File
 } from 'lucide-react';
 
 const MODULE_LIST = [
@@ -40,6 +41,7 @@ export const StaffManager = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // '2026-08'
   const [selectedEmpForCard, setSelectedEmpForCard] = useState(null);
   const [selectedEmpForPayslip, setSelectedEmpForPayslip] = useState(null);
+  const [selectedEmpForDocs, setSelectedEmpForDocs] = useState(null);
 
   // Modals & Forms
   const [showEmpModal, setShowEmpModal] = useState(false);
@@ -47,8 +49,39 @@ export const StaffManager = () => {
   const [empForm, setEmpForm] = useState({
     name: '', designation: 'Staff', department: 'General', phone: '', email: '', joining_date: new Date().toISOString().slice(0, 10),
     nid_number: '', blood_group: 'B+', emergency_contact_name: '', emergency_contact_phone: '',
-    photo_url: '', base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: ''
+    photo_url: '', nid_front_url: '', nid_back_url: '', documents_url: '',
+    base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: ''
   });
+
+  const handleFileUpload = async (e, fieldName) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 15 * 1024 * 1024) {
+      alert('File size exceeds 15MB limit.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const payload = { filename: file.name, filedata: reader.result };
+        const res = await authFetch('/api/upload', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setEmpForm(prev => ({ ...prev, [fieldName]: data.url }));
+        } else {
+          alert(`Upload failed: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`Upload error: ${err.message}`);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ employee_id: '', leave_type: 'casual', start_date: new Date().toISOString().slice(0, 10), end_date: new Date().toISOString().slice(0, 10), total_days: 1, reason: '' });
@@ -252,7 +285,12 @@ export const StaffManager = () => {
         <button
           onClick={() => {
             setEditingEmp(null);
-            setEmpForm({ name: '', designation: 'Staff', department: 'General', phone: '', email: '', joining_date: new Date().toISOString().slice(0, 10), nid_number: '', blood_group: 'B+', emergency_contact_name: '', emergency_contact_phone: '', photo_url: '', base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: '' });
+            setEmpForm({
+              name: '', designation: 'Staff', department: 'General', phone: '', email: '', joining_date: new Date().toISOString().slice(0, 10),
+              nid_number: '', blood_group: 'B+', emergency_contact_name: '', emergency_contact_phone: '',
+              photo_url: '', nid_front_url: '', nid_back_url: '', documents_url: '',
+              base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: ''
+            });
             setShowEmpModal(true);
           }}
           className="btn btn-primary"
@@ -327,12 +365,16 @@ export const StaffManager = () => {
                       <td><strong style={{ color: 'var(--accent-primary)' }}>{emp.employee_code}</strong></td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                            {emp.name.charAt(0).toUpperCase()}
-                          </div>
+                          {emp.photo_url ? (
+                            <img src={emp.photo_url} alt={emp.name} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                          ) : (
+                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                              {emp.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
                           <div>
                             <strong>{emp.name}</strong>
-                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Blood Group: {emp.blood_group || 'N/A'}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>NID: {emp.nid_number || 'N/A'}</div>
                           </div>
                         </div>
                       </td>
@@ -354,6 +396,14 @@ export const StaffManager = () => {
                       <td>
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <button
+                            onClick={() => setSelectedEmpForDocs(emp)}
+                            className="btn btn-secondary btn-icon btn-sm"
+                            title="View NID Cards & Documents"
+                            style={{ color: '#6366f1' }}
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button
                             onClick={() => {
                               setSelectedEmpForCard(emp);
                               setActiveTab('idcards');
@@ -366,7 +416,15 @@ export const StaffManager = () => {
                           <button
                             onClick={() => {
                               setEditingEmp(emp);
-                              setEmpForm({ ...emp });
+                              setEmpForm({
+                                ...emp,
+                                joining_date: emp.joining_date ? new Date(emp.joining_date).toISOString().slice(0, 10) : '',
+                                nid_number: emp.nid_number || '',
+                                photo_url: emp.photo_url || '',
+                                nid_front_url: emp.nid_front_url || '',
+                                nid_back_url: emp.nid_back_url || '',
+                                documents_url: emp.documents_url || ''
+                              });
                               setShowEmpModal(true);
                             }}
                             className="btn btn-secondary btn-icon btn-sm"
@@ -1008,8 +1066,67 @@ export const StaffManager = () => {
                 </div>
 
                 <div className="form-group">
+                  <label className="form-label">NID Card Number</label>
+                  <input type="text" className="form-input" placeholder="e.g. 1995123456789" value={empForm.nid_number} onChange={(e) => setEmpForm({ ...empForm, nid_number: e.target.value })} />
+                </div>
+
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label className="form-label">Joining Date</label>
                   <input type="date" className="form-input" value={empForm.joining_date} onChange={(e) => setEmpForm({ ...empForm, joining_date: e.target.value })} />
+                </div>
+
+                {/* Identity & Document Upload Section */}
+                <div style={{ gridColumn: 'span 2', padding: '16px', background: 'var(--bg-primary)', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FileCheck size={16} />
+                    <span>NID Cards & Profile Document Uploads (এনআইডি ও ডকুমেন্টস)</span>
+                  </h4>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                    {/* Staff Photo */}
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '12px' }}>Staff Photo (ছবি)</label>
+                      <input type="file" accept="image/*" className="form-input" style={{ fontSize: '11px', padding: '6px' }} onChange={(e) => handleFileUpload(e, 'photo_url')} />
+                      {empForm.photo_url && (
+                        <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--success)' }}>
+                          ✓ Photo Uploaded (<a href={empForm.photo_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)' }}>View</a>)
+                        </div>
+                      )}
+                    </div>
+
+                    {/* NID Front */}
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '12px' }}>NID Front (সামনের অংশ)</label>
+                      <input type="file" accept="image/*,application/pdf" className="form-input" style={{ fontSize: '11px', padding: '6px' }} onChange={(e) => handleFileUpload(e, 'nid_front_url')} />
+                      {empForm.nid_front_url && (
+                        <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--success)' }}>
+                          ✓ NID Front Uploaded (<a href={empForm.nid_front_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)' }}>View</a>)
+                        </div>
+                      )}
+                    </div>
+
+                    {/* NID Back */}
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '12px' }}>NID Back (পেছনের অংশ)</label>
+                      <input type="file" accept="image/*,application/pdf" className="form-input" style={{ fontSize: '11px', padding: '6px' }} onChange={(e) => handleFileUpload(e, 'nid_back_url')} />
+                      {empForm.nid_back_url && (
+                        <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--success)' }}>
+                          ✓ NID Back Uploaded (<a href={empForm.nid_back_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)' }}>View</a>)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Other Documents */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '12px' }}>Other Certificates / CV / Contract (অন্যান্য ডকুমেন্ট)</label>
+                    <input type="file" accept="image/*,application/pdf,.doc,.docx" className="form-input" style={{ fontSize: '11px', padding: '6px' }} onChange={(e) => handleFileUpload(e, 'documents_url')} />
+                    {empForm.documents_url && (
+                      <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--success)' }}>
+                        ✓ Document Uploaded (<a href={empForm.documents_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)' }}>View File</a>)
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="modal-footer">
@@ -1017,6 +1134,87 @@ export const StaffManager = () => {
                 <button type="submit" className="btn btn-primary">Save Profile</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW DOCUMENTS & NID CARDS MODAL */}
+      {selectedEmpForDocs && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '650px' }}>
+            <div className="modal-header">
+              <h3>Employee Identity & Attached Documents</h3>
+              <button onClick={() => setSelectedEmpForDocs(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
+                {selectedEmpForDocs.photo_url ? (
+                  <img src={selectedEmpForDocs.photo_url} alt={selectedEmpForDocs.name} style={{ width: '64px', height: '64px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent-primary)' }} />
+                ) : (
+                  <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--accent-primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>
+                    {selectedEmpForDocs.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: 'bold' }}>{selectedEmpForDocs.name}</h3>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Code: {selectedEmpForDocs.employee_code} | Dept: {selectedEmpForDocs.department}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>NID Number: <strong>{selectedEmpForDocs.nid_number || 'N/A'}</strong></div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {/* NID Front */}
+                <div style={{ padding: '12px', background: 'var(--bg-primary)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>🪪 NID Card Front (সামনের অংশ)</h4>
+                  {selectedEmpForDocs.nid_front_url ? (
+                    selectedEmpForDocs.nid_front_url.endsWith('.pdf') ? (
+                      <a href={selectedEmpForDocs.nid_front_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <FileText size={14} /> Open NID PDF
+                      </a>
+                    ) : (
+                      <a href={selectedEmpForDocs.nid_front_url} target="_blank" rel="noreferrer">
+                        <img src={selectedEmpForDocs.nid_front_url} alt="NID Front" style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', borderRadius: '6px' }} />
+                      </a>
+                    )
+                  ) : (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No NID Front image uploaded.</div>
+                  )}
+                </div>
+
+                {/* NID Back */}
+                <div style={{ padding: '12px', background: 'var(--bg-primary)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>🪪 NID Card Back (পেছনের অংশ)</h4>
+                  {selectedEmpForDocs.nid_back_url ? (
+                    selectedEmpForDocs.nid_back_url.endsWith('.pdf') ? (
+                      <a href={selectedEmpForDocs.nid_back_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <FileText size={14} /> Open NID PDF
+                      </a>
+                    ) : (
+                      <a href={selectedEmpForDocs.nid_back_url} target="_blank" rel="noreferrer">
+                        <img src={selectedEmpForDocs.nid_back_url} alt="NID Back" style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', borderRadius: '6px' }} />
+                      </a>
+                    )
+                  ) : (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No NID Back image uploaded.</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Other Documents */}
+              <div style={{ padding: '12px', background: 'var(--bg-primary)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                <h4 style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>📄 Certificates & CV Documents</h4>
+                {selectedEmpForDocs.documents_url ? (
+                  <a href={selectedEmpForDocs.documents_url} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <ExternalLink size={14} /> View Attached Document / Certificate
+                  </a>
+                ) : (
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No additional documents attached.</div>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button onClick={() => setSelectedEmpForDocs(null)} className="btn btn-secondary">Close</button>
+            </div>
           </div>
         </div>
       )}

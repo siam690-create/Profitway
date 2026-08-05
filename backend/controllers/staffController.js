@@ -161,10 +161,14 @@ exports.createEmployee = async (req, res) => {
     const {
       name, designation, department, phone, email, joining_date,
       nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
-      photo_url, base_salary, hourly_rate, overtime_rate, payment_method, account_number
+      photo_url, nid_front_url, nid_back_url, documents_url,
+      base_salary, hourly_rate, overtime_rate, payment_method, account_number
     } = req.body;
 
     if (!name) return res.status(400).json({ error: 'Employee name is required.' });
+
+    // Format date string safely for MySQL DATE column
+    const formattedJoiningDate = joining_date ? new Date(joining_date).toISOString().slice(0, 10) : null;
 
     // Generate unique code EMP-101
     const [last] = await db.query('SELECT id FROM employees WHERE tenant_id = ? ORDER BY id DESC LIMIT 1', [tenantId]);
@@ -174,12 +178,14 @@ exports.createEmployee = async (req, res) => {
       `INSERT INTO employees (
         tenant_id, employee_code, name, designation, department, phone, email,
         joining_date, nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
-        photo_url, base_salary, hourly_rate, overtime_rate, payment_method, account_number
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        photo_url, nid_front_url, nid_back_url, documents_url,
+        base_salary, hourly_rate, overtime_rate, payment_method, account_number
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tenantId, empCode, name, designation || 'Staff', department || 'General', phone || null, email || null,
-        joining_date || null, nid_number || null, blood_group || null, emergency_contact_name || null, emergency_contact_phone || null,
-        photo_url || null, Number(base_salary || 0), Number(hourly_rate || 0), Number(overtime_rate || 0),
+        formattedJoiningDate, nid_number || null, blood_group || null, emergency_contact_name || null, emergency_contact_phone || null,
+        photo_url || null, nid_front_url || null, nid_back_url || null, documents_url || null,
+        Number(base_salary || 0), Number(hourly_rate || 0), Number(overtime_rate || 0),
         payment_method || 'Cash', account_number || null
       ]
     );
@@ -203,19 +209,24 @@ exports.updateEmployee = async (req, res) => {
     const {
       name, designation, department, phone, email, joining_date,
       nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
-      photo_url, base_salary, hourly_rate, overtime_rate, payment_method, account_number, is_active
+      photo_url, nid_front_url, nid_back_url, documents_url,
+      base_salary, hourly_rate, overtime_rate, payment_method, account_number, is_active
     } = req.body;
+
+    const formattedJoiningDate = joining_date ? new Date(joining_date).toISOString().slice(0, 10) : null;
 
     await db.query(
       `UPDATE employees SET
         name = ?, designation = ?, department = ?, phone = ?, email = ?,
         joining_date = ?, nid_number = ?, blood_group = ?, emergency_contact_name = ?, emergency_contact_phone = ?,
-        photo_url = ?, base_salary = ?, hourly_rate = ?, overtime_rate = ?, payment_method = ?, account_number = ?, is_active = ?
+        photo_url = ?, nid_front_url = ?, nid_back_url = ?, documents_url = ?,
+        base_salary = ?, hourly_rate = ?, overtime_rate = ?, payment_method = ?, account_number = ?, is_active = ?
       WHERE id = ? AND tenant_id = ?`,
       [
         name, designation, department, phone, email,
-        joining_date, nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
-        photo_url, Number(base_salary || 0), Number(hourly_rate || 0), Number(overtime_rate || 0), payment_method, account_number, is_active ? 1 : 0,
+        formattedJoiningDate, nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
+        photo_url, nid_front_url, nid_back_url, documents_url,
+        Number(base_salary || 0), Number(hourly_rate || 0), Number(overtime_rate || 0), payment_method, account_number, is_active ? 1 : 0,
         id, tenantId
       ]
     );

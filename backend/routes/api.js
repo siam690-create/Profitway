@@ -219,6 +219,8 @@ router.put('/tasks/:id', checkActiveSubscription, taskController.updateTask);
 router.delete('/tasks/:id', checkActiveSubscription, taskController.deleteTask);
 router.patch('/tasks/checklists/:id', checkActiveSubscription, taskController.toggleChecklist);
 router.post('/tasks/:id/comments', checkActiveSubscription, taskController.addComment);
-router.get('/tasks/analytics', taskController.getTaskAnalytics);
+// File Upload API
+const uploadController = require('../controllers/uploadController');
+router.post('/upload', checkActiveSubscription, uploadController.uploadFile);
 
 module.exports = router;

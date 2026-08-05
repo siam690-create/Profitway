@@ -522,11 +522,14 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // Retroactive column additions to reseller returns table
+    // Retroactive column additions to reseller returns & employees tables
     await addColumnIfNotExists('reseller_returns', 'returned_profit_reversal', 'DECIMAL(12,2) DEFAULT 0.00');
     await addColumnIfNotExists('reseller_return_items', 'unit_price', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('reseller_return_items', 'unit_cost', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('reseller_return_items', 'returned_profit_reversal', 'DECIMAL(12,2) DEFAULT 0.00');
+    await addColumnIfNotExists('employees', 'nid_front_url', 'TEXT DEFAULT NULL');
+    await addColumnIfNotExists('employees', 'nid_back_url', 'TEXT DEFAULT NULL');
+    await addColumnIfNotExists('employees', 'documents_url', 'TEXT DEFAULT NULL');
 
     // Retroactive column type expansion for liabilities & receivables status & party_type column to prevent data truncation
     try {
