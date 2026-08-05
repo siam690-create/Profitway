@@ -213,6 +213,9 @@ router.post('/staff/bonuses', checkActiveSubscription, staffController.createBon
 router.get('/staff/salary-sheet', staffController.getMonthlySalarySheet);
 router.post('/staff/salary-sheet/disburse', checkActiveSubscription, staffController.disburseSalary);
 
+router.get('/staff/pf', staffController.getPF);
+router.post('/staff/pf', checkActiveSubscription, staffController.updatePF);
+
 // Staff Task Management System APIs
 router.get('/tasks', taskController.getTasks);
 router.post('/tasks', checkActiveSubscription, taskController.createTask);

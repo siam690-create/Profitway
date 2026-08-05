@@ -672,11 +672,19 @@ exports.disburseSalary = async (req, res) => {
 
     // 5. Update Provident Fund balance
     if (Number(pf_deduction) > 0) {
-      const totalPfAddition = Number(pf_deduction) * 2; // Employee 5% + Employer 5%
-      await db.query(
-        'UPDATE employee_pf SET accumulated_balance = accumulated_balance + ? WHERE tenant_id = ? AND employee_id = ?',
-        [totalPfAddition, tenantId, employee_id]
+      const [pfRows] = await db.query(
+        "SELECT id, employer_contrib_pct FROM employee_pf WHERE tenant_id = ? AND employee_id = ? AND status = 'active'",
+        [tenantId, employee_id]
       );
+      if (pfRows.length > 0) {
+        const companyPct = Number(pfRows[0].employer_contrib_pct || 5);
+        const companyContrib = Number(base_salary || 0) * (companyPct / 100);
+        const totalPfAddition = Number(pf_deduction) + companyContrib;
+        await db.query(
+          'UPDATE employee_pf SET accumulated_balance = accumulated_balance + ? WHERE id = ?',
+          [totalPfAddition, pfRows[0].id]
+        );
+      }
     }
 
     // 6. Update Employee Loan & Advance Repayment Ledgers (only auto_deduct_salary = 1)
@@ -702,6 +710,65 @@ exports.disburseSalary = async (req, res) => {
     }
 
     res.status(201).json({ message: 'Salary disbursed successfully with Passbook & Expense integration.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 7. Provident Fund (PF) Management
+exports.getPF = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const [rows] = await db.query(
+      `SELECT e.id as employee_id, e.name, e.employee_code, e.designation, e.base_salary,
+              pf.id as pf_id,
+              COALESCE(pf.employee_contrib_pct, 5.00) as employee_contrib_pct,
+              COALESCE(pf.employer_contrib_pct, 5.00) as employer_contrib_pct,
+              COALESCE(pf.accumulated_balance, 0.00) as accumulated_balance,
+              COALESCE(pf.status, 'inactive') as status
+       FROM employees e
+       LEFT JOIN employee_pf pf ON pf.employee_id = e.id AND pf.tenant_id = e.tenant_id
+       WHERE e.tenant_id = ? AND e.is_active = 1
+       ORDER BY e.name ASC`,
+      [tenantId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.updatePF = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { employee_id, status, employee_contrib_pct, employer_contrib_pct } = req.body;
+
+    if (!employee_id) {
+      return res.status(400).json({ error: 'Employee ID is required.' });
+    }
+
+    const pfStatus = status === 'active' ? 'active' : 'inactive';
+    const empPct = Number(employee_contrib_pct !== undefined ? employee_contrib_pct : 5.00);
+    const companyPct = Number(employer_contrib_pct !== undefined ? employer_contrib_pct : 5.00);
+
+    const [existing] = await db.query(
+      'SELECT id FROM employee_pf WHERE tenant_id = ? AND employee_id = ?',
+      [tenantId, employee_id]
+    );
+
+    if (existing.length > 0) {
+      await db.query(
+        'UPDATE employee_pf SET status = ?, employee_contrib_pct = ?, employer_contrib_pct = ? WHERE id = ?',
+        [pfStatus, empPct, companyPct, existing[0].id]
+      );
+    } else {
+      await db.query(
+        'INSERT INTO employee_pf (tenant_id, employee_id, employee_contrib_pct, employer_contrib_pct, accumulated_balance, status) VALUES (?, ?, ?, ?, 0.00, ?)',
+        [tenantId, employee_id, empPct, companyPct, pfStatus]
+      );
+    }
+
+    res.json({ message: `Provident Fund settings updated for staff (${pfStatus.toUpperCase()})` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

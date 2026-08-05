@@ -226,6 +226,23 @@ export const StaffManager = () => {
     } catch (e) { console.error(e); }
   };
 
+  const [pfList, setPfList] = useState([]);
+  const [editingPf, setEditingPf] = useState(null);
+  const [pfForm, setPfForm] = useState({
+    employee_id: '',
+    status: 'inactive',
+    employee_contrib_pct: 5,
+    employer_contrib_pct: 5
+  });
+
+  const fetchPF = async () => {
+    try {
+      const res = await authFetch('/api/staff/pf');
+      const data = await res.json();
+      if (res.ok) setPfList(data);
+    } catch (e) { console.error(e); }
+  };
+
   useEffect(() => {
     fetchEmployees();
     fetchAccounts();
@@ -237,8 +254,48 @@ export const StaffManager = () => {
     if (activeTab === 'leaves') fetchLeaves();
     if (activeTab === 'loans') fetchLoans();
     if (activeTab === 'bonuses') fetchBonuses();
+    if (activeTab === 'pf') fetchPF();
     if (activeTab === 'salary-sheet' || activeTab === 'payroll') fetchSalarySheet();
   }, [activeTab, attendanceDate, selectedMonth]);
+
+  const handleTogglePFStatus = async (item) => {
+    const newStatus = item.status === 'active' ? 'inactive' : 'active';
+    try {
+      const res = await authFetch('/api/staff/pf', {
+        method: 'POST',
+        body: JSON.stringify({
+          employee_id: item.employee_id,
+          status: newStatus,
+          employee_contrib_pct: item.employee_contrib_pct,
+          employer_contrib_pct: item.employer_contrib_pct
+        })
+      });
+      if (res.ok) {
+        fetchPF();
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  const handleSavePF = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await authFetch('/api/staff/pf', {
+        method: 'POST',
+        body: JSON.stringify(pfForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEditingPf(null);
+        fetchPF();
+        alert(data.message);
+      } else alert(`Error: ${data.error}`);
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
 
   // Handlers
   const handleSaveEmployee = async (e) => {
@@ -1022,10 +1079,14 @@ export const StaffManager = () => {
       {/* 8. PROVIDENT FUND (PF) TAB */}
       {activeTab === 'pf' && (
         <div className="glass-card" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Provident Fund (PF) Treasury Ledger</h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
-            5% Employee Contribution + 5% Employer Contribution accumulated monthly during salary disbursement.
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Provident Fund (PF) Treasury Ledger & Settings</h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Enable/Disable Provident Fund (PF) and configure custom contribution percentages per staff member.
+              </p>
+            </div>
+          </div>
 
           <div className="table-wrapper">
             <table className="data-table">
@@ -1033,28 +1094,82 @@ export const StaffManager = () => {
                 <tr>
                   <th>Employee</th>
                   <th>Designation</th>
-                  <th>Monthly PF Contribution</th>
-                  <th>Total Accumulated Treasury Balance</th>
-                  <th>Status</th>
+                  <th>Base Salary</th>
+                  <th>PF Status (ON / OFF)</th>
+                  <th>Staff Contribution</th>
+                  <th>Company Contribution</th>
+                  <th>Total Accumulated Treasury</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {employeesList.map(emp => {
-                  const monthlyPf = Number(emp.base_salary || 0) * 0.05;
-                  const estAccum = monthlyPf * 2 * 12; // Example 12-month accumulated treasury balance
+                {pfList.length === 0 ? (
+                  <tr><td colSpan="8" style={{ textAlign: 'center', padding: '30px' }}>No employees found.</td></tr>
+                ) : (
+                  pfList.map(item => {
+                    const isActive = item.status === 'active';
+                    const baseSalary = Number(item.base_salary || 0);
+                    const empPct = Number(item.employee_contrib_pct || 5);
+                    const compPct = Number(item.employer_contrib_pct || 5);
+                    const staffMonthly = isActive ? baseSalary * (empPct / 100) : 0;
+                    const compMonthly = isActive ? baseSalary * (compPct / 100) : 0;
 
-                  return (
-                    <tr key={emp.id}>
-                      <td><strong>{emp.name}</strong> ({emp.employee_code})</td>
-                      <td>{emp.designation}</td>
-                      <td>{currency}{monthlyPf.toFixed(2)} / month (5%)</td>
-                      <td style={{ fontWeight: '800', color: 'var(--success)', fontSize: '15px' }}>
-                        {currency}{estAccum.toFixed(2)}
-                      </td>
-                      <td><span className="badge badge-success">ACTIVE FUND</span></td>
-                    </tr>
-                  );
-                })}
+                    return (
+                      <tr key={item.employee_id}>
+                        <td>
+                          <strong>{item.name}</strong>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.employee_code}</div>
+                        </td>
+                        <td>{item.designation}</td>
+                        <td style={{ fontWeight: '600' }}>{currency}{baseSalary.toFixed(2)}</td>
+                        <td>
+                          <button
+                            onClick={() => handleTogglePFStatus(item)}
+                            className={`btn btn-sm ${isActive ? 'btn-success' : 'btn-secondary'}`}
+                            style={{ padding: '4px 10px', fontSize: '12px', minWidth: '90px' }}
+                            title="Click to toggle PF ON/OFF"
+                          >
+                            {isActive ? '🟢 PF ON' : '🔴 PF OFF'}
+                          </button>
+                        </td>
+                        <td style={{ fontSize: '13px' }}>
+                          {isActive ? (
+                            <span>{currency}{staffMonthly.toFixed(2)} / mo ({empPct}%)</span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>0% (Inactive)</span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '13px' }}>
+                          {isActive ? (
+                            <span>{currency}{compMonthly.toFixed(2)} / mo ({compPct}%)</span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>0% (Inactive)</span>
+                          )}
+                        </td>
+                        <td style={{ fontWeight: '800', color: 'var(--success)', fontSize: '15px' }}>
+                          {currency}{Number(item.accumulated_balance || 0).toFixed(2)}
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => {
+                              setEditingPf(item);
+                              setPfForm({
+                                employee_id: item.employee_id,
+                                status: item.status || 'inactive',
+                                employee_contrib_pct: item.employee_contrib_pct || 5,
+                                employer_contrib_pct: item.employer_contrib_pct || 5
+                              });
+                            }}
+                            className="btn btn-secondary btn-icon btn-sm"
+                            title="Configure PF Settings"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -1692,6 +1807,78 @@ export const StaffManager = () => {
             <div className="modal-footer">
               <button onClick={() => window.print()} className="btn btn-primary"><Printer size={15} /> Print Payslip</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: CONFIGURE PROVIDENT FUND (PF) */}
+      {editingPf && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3>Configure Provident Fund (PF) Settings</h3>
+              <button onClick={() => setEditingPf(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleSavePF}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px', fontSize: '13px' }}>
+                  <div>Staff: <strong>{editingPf.name} ({editingPf.employee_code})</strong></div>
+                  <div>Base Salary: <strong>{currency}{Number(editingPf.base_salary).toFixed(2)}</strong></div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Provident Fund (PF) Status *</label>
+                  <select
+                    className="form-select"
+                    value={pfForm.status}
+                    onChange={(e) => setPfForm({ ...pfForm, status: e.target.value })}
+                  >
+                    <option value="active">🟢 ON - Active (স্যালারি থেকে কর্তন হবে)</option>
+                    <option value="inactive">🔴 OFF - Inactive (কোনো কর্তন হবে না)</option>
+                  </select>
+                </div>
+
+                {pfForm.status === 'active' && (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Staff Contribution (%) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="form-input"
+                        required
+                        placeholder="e.g. 5"
+                        value={pfForm.employee_contrib_pct}
+                        onChange={(e) => setPfForm({ ...pfForm, employee_contrib_pct: e.target.value })}
+                      />
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        * স্যালারি শিটে কর্মী বেতন থেকে কর্তন: {currency}{((Number(editingPf.base_salary || 0) * Number(pfForm.employee_contrib_pct || 0)) / 100).toFixed(2)} / মাস
+                      </span>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Company Contribution (%) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="form-input"
+                        required
+                        placeholder="e.g. 5"
+                        value={pfForm.employer_contrib_pct}
+                        onChange={(e) => setPfForm({ ...pfForm, employer_contrib_pct: e.target.value })}
+                      />
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        * প্রতিষ্ঠান থেকে যুক্ত হবে: {currency}{((Number(editingPf.base_salary || 0) * Number(pfForm.employer_contrib_pct || 0)) / 100).toFixed(2)} / মাস
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setEditingPf(null)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save PF Settings</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
