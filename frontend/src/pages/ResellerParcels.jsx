@@ -596,30 +596,14 @@ export const ResellerParcels = () => {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Sale Date</label>
-                    <input
-                      type="date"
-                      className="form-input"
-                      value={saleDate}
-                      onChange={(e) => setSaleDate(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Deposit Payment Account (Optional)</label>
-                    <select
-                      className="form-select"
-                      value={accountId}
-                      onChange={(e) => setAccountId(e.target.value)}
-                    >
-                      <option value="">Select Target Cash/Bank Account...</option>
-                      {accountsList.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} ({currency}{a.balance})</option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">Sale Date</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={saleDate}
+                    onChange={(e) => setSaleDate(e.target.value)}
+                  />
                 </div>
 
                 {/* Add Product Section */}

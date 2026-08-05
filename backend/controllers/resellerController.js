@@ -69,7 +69,7 @@ exports.createResellerSale = async (req, res) => {
     let totalCost = 0;
     let grossProfit = 0;
 
-    const formattedDate = saleDate || new Date().toISOString().slice(0, 10);
+    const formattedDate = sale_date || new Date().toISOString().slice(0, 10);
     const invNo = `RSL-${Date.now().toString().slice(-6)}`;
 
     // 1. Insert Master Reseller Sale Record
