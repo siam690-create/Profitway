@@ -399,13 +399,15 @@ exports.getLoans = async (req, res) => {
 exports.disburseLoan = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const { employee_id, loan_amount, monthly_installment, account_id, notes } = req.body;
+    const { employee_id, type, loan_amount, auto_deduct_salary, monthly_installment, account_id, notes } = req.body;
 
     if (!employee_id || !loan_amount || !account_id) {
-      return res.status(400).json({ error: 'Employee, Loan Amount, and Disbursement Account are required.' });
+      return res.status(400).json({ error: 'Employee, Amount, and Disbursement Account are required.' });
     }
 
     const amount = Number(loan_amount);
+    const loanType = type === 'advance' ? 'advance' : 'loan';
+    const autoDeduct = auto_deduct_salary !== undefined ? (auto_deduct_salary ? 1 : 0) : 1;
 
     // Check account balance
     const [accRows] = await db.query('SELECT name, balance FROM finance_accounts WHERE id = ? AND tenant_id = ?', [account_id, tenantId]);
@@ -415,27 +417,44 @@ exports.disburseLoan = async (req, res) => {
       return res.status(400).json({ error: `Insufficient account balance in ${accRows[0].name}` });
     }
 
-    // Insert loan
+    // Insert loan / advance
     const [emp] = await db.query('SELECT name FROM employees WHERE id = ?', [employee_id]);
     const empName = emp[0]?.name || 'Employee';
 
     const [result] = await db.query(
-      `INSERT INTO employee_loans (tenant_id, employee_id, loan_amount, paid_amount, monthly_installment, account_id, disbursement_date, notes, status)
-       VALUES (?, ?, ?, 0.00, ?, ?, CURDATE(), ?, 'active')`,
-      [tenantId, employee_id, amount, Number(monthly_installment || 0), account_id, notes || null]
+      `INSERT INTO employee_loans (tenant_id, employee_id, type, loan_amount, paid_amount, auto_deduct_salary, monthly_installment, account_id, disbursement_date, notes, status)
+       VALUES (?, ?, ?, ?, 0.00, ?, ?, ?, CURDATE(), ?, 'active')`,
+      [tenantId, employee_id, loanType, amount, autoDeduct, Number(monthly_installment || 0), account_id, notes || null]
     );
 
     // Deduct from finance account
     await db.query('UPDATE finance_accounts SET balance = balance - ? WHERE id = ?', [amount, account_id]);
 
+    const titlePrefix = loanType === 'advance' ? 'Salary Advance' : 'Personal Loan';
+
     // Record Passbook entry
     await db.query(
       `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
-       VALUES (?, ?, 'Employee Loan Disbursement', ?, 0.00, ?, ?, NOW())`,
-      [tenantId, account_id, amount, `EMP-LOAN-${result.insertId}`, `Personal Loan Disbursed to Staff: ${empName} (${notes || 'Loan/Advance'})`]
+       VALUES (?, ?, 'Staff Loan Disbursement', ?, 0.00, ?, ?, NOW())`,
+      [tenantId, account_id, amount, `EMP-LOAN-${result.insertId}`, `${titlePrefix} Disbursed to Staff: ${empName} (${notes || titlePrefix})`]
     );
 
-    res.status(201).json({ message: 'Employee loan issued successfully and recorded in Passbook Ledger.' });
+    res.status(201).json({ message: `${titlePrefix} issued successfully and recorded in Passbook Ledger.` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.deleteLoan = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+
+    const [loans] = await db.query('SELECT * FROM employee_loans WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (loans.length === 0) return res.status(404).json({ error: 'Record not found.' });
+
+    await db.query('DELETE FROM employee_loans WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    res.json({ message: 'Loan/Advance record deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -462,19 +481,19 @@ exports.getBonuses = async (req, res) => {
 exports.createBonus = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const { employee_id, title, amount, bonus_date, notes } = req.body;
+    const { title, employee_id, amount, bonus_date, notes } = req.body;
 
     if (!title || !amount) {
       return res.status(400).json({ error: 'Bonus title and amount are required.' });
     }
 
-    await db.query(
+    const [result] = await db.query(
       `INSERT INTO employee_bonuses (tenant_id, employee_id, title, amount, bonus_date, notes)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [tenantId, employee_id || null, title, Number(amount), bonus_date || new Date().toISOString().slice(0, 10), notes || null]
     );
 
-    res.status(201).json({ message: 'Bonus recorded successfully' });
+    res.status(201).json({ message: 'Bonus/Allowance recorded successfully', bonusId: result.insertId });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -517,13 +536,31 @@ exports.getMonthlySalarySheet = async (req, res) => {
         [tenantId, emp.id, month_year]
       );
 
-      // 3. Active Loans EMI
+      // 3. Active Loans & Advances EMI (only if auto_deduct_salary = 1)
       const [loanRows] = await db.query(
-        `SELECT COALESCE(SUM(monthly_installment), 0) as total_emi
+        `SELECT id, type, loan_amount, paid_amount, monthly_installment, auto_deduct_salary
          FROM employee_loans
-         WHERE tenant_id = ? AND employee_id = ? AND status = 'active'`,
+         WHERE tenant_id = ? AND employee_id = ? AND status = 'active' AND auto_deduct_salary = 1`,
         [tenantId, emp.id]
       );
+
+      let loanDeduction = 0;
+      let advanceDeduction = 0;
+
+      for (const l of loanRows) {
+        const remaining = Number(l.loan_amount) - Number(l.paid_amount);
+        if (remaining > 0) {
+          const emi = Number(l.monthly_installment);
+          const deductAmt = emi > 0 ? Math.min(emi, remaining) : remaining;
+          if (l.type === 'advance') {
+            advanceDeduction += deductAmt;
+          } else {
+            loanDeduction += deductAmt;
+          }
+        }
+      }
+
+      const totalLoanAndAdvanceDeduction = loanDeduction + advanceDeduction;
 
       // 4. Existing disbursement record if already paid
       const [paidRows] = await db.query(
@@ -537,10 +574,9 @@ exports.getMonthlySalarySheet = async (req, res) => {
       const perDaySalary = baseSalary / 30;
       const absentPenalty = absentDays * perDaySalary;
       const bonusAmt = Number(bonusRows[0]?.total_bonus || 0);
-      const loanDeduction = Number(loanRows[0]?.total_emi || 0);
       const pfDeduction = baseSalary * 0.05; // 5% PF
 
-      const netPayable = Math.max(0, baseSalary + bonusAmt + overtimePay - (absentPenalty + loanDeduction + pfDeduction));
+      const netPayable = Math.max(0, baseSalary + bonusAmt + overtimePay - (absentPenalty + totalLoanAndAdvanceDeduction + pfDeduction));
 
       sheet.push({
         employee_id: emp.id,
@@ -557,7 +593,9 @@ exports.getMonthlySalarySheet = async (req, res) => {
         overtime_pay: overtimePay,
         absent_penalty: absentPenalty,
         bonus_amount: bonusAmt,
-        loan_deduction: loanDeduction,
+        loan_deduction: totalLoanAndAdvanceDeduction,
+        personal_loan_deduction: loanDeduction,
+        advance_salary_deduction: advanceDeduction,
         pf_deduction: pfDeduction,
         net_payable: netPayable,
         is_paid: paidRows.length > 0,
@@ -634,18 +672,24 @@ exports.disburseSalary = async (req, res) => {
       );
     }
 
-    // 6. Update Employee Loan Repayment Ledger
-    if (Number(loan_deduction) > 0) {
-      const [loans] = await db.query('SELECT id, loan_amount, paid_amount FROM employee_loans WHERE tenant_id = ? AND employee_id = ? AND status = \'active\' LIMIT 1', [tenantId, employee_id]);
-      if (loans.length > 0) {
-        const loan = loans[0];
-        const newPaid = Number(loan.paid_amount) + Number(loan_deduction);
+    // 6. Update Employee Loan & Advance Repayment Ledgers (only auto_deduct_salary = 1)
+    const [loans] = await db.query(
+      'SELECT id, loan_amount, paid_amount, monthly_installment FROM employee_loans WHERE tenant_id = ? AND employee_id = ? AND status = \'active\' AND auto_deduct_salary = 1',
+      [tenantId, employee_id]
+    );
+
+    for (const loan of loans) {
+      const remaining = Number(loan.loan_amount) - Number(loan.paid_amount);
+      if (remaining > 0) {
+        const emi = Number(loan.monthly_installment);
+        const deductAmt = emi > 0 ? Math.min(emi, remaining) : remaining;
+        const newPaid = Number(loan.paid_amount) + deductAmt;
         const newStatus = newPaid >= Number(loan.loan_amount) ? 'cleared' : 'active';
 
         await db.query('UPDATE employee_loans SET paid_amount = ?, status = ? WHERE id = ?', [newPaid, newStatus, loan.id]);
         await db.query(
           'INSERT INTO employee_loan_repayments (tenant_id, loan_id, employee_id, repayment_amount, repayment_source, payroll_id, notes) VALUES (?, ?, ?, ?, \'salary_deduction\', ?, ?)',
-          [tenantId, loan.id, employee_id, Number(loan_deduction), payResult.insertId, `Auto EMI Deduction from Salary (${month_year})`]
+          [tenantId, loan.id, employee_id, deductAmt, payResult.insertId, `Auto Deduction from Salary (${month_year})`]
         );
       }
     }

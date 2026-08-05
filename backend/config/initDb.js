@@ -530,6 +530,8 @@ async function autoMigrate() {
     await addColumnIfNotExists('employees', 'nid_front_url', 'TEXT DEFAULT NULL');
     await addColumnIfNotExists('employees', 'nid_back_url', 'TEXT DEFAULT NULL');
     await addColumnIfNotExists('employees', 'documents_url', 'TEXT DEFAULT NULL');
+    await addColumnIfNotExists('employee_loans', 'type', "VARCHAR(20) DEFAULT 'loan'");
+    await addColumnIfNotExists('employee_loans', 'auto_deduct_salary', 'TINYINT(1) DEFAULT 1');
 
     // Retroactive column type expansion for liabilities & receivables status & party_type column to prevent data truncation
     try {

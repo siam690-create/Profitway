@@ -138,8 +138,17 @@ export const StaffManager = () => {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ employee_id: '', leave_type: 'casual', start_date: new Date().toISOString().slice(0, 10), end_date: new Date().toISOString().slice(0, 10), total_days: 1, reason: '' });
 
+  const [loanTypeFilter, setLoanTypeFilter] = useState('all'); // 'all', 'loan', 'advance'
   const [showLoanModal, setShowLoanModal] = useState(false);
-  const [loanForm, setLoanForm] = useState({ employee_id: '', loan_amount: '', monthly_installment: '', account_id: '', notes: '' });
+  const [loanForm, setLoanForm] = useState({
+    employee_id: '',
+    type: 'loan',
+    loan_amount: '',
+    auto_deduct_salary: true,
+    monthly_installment: '',
+    account_id: '',
+    notes: ''
+  });
 
   const [showBonusModal, setShowBonusModal] = useState(false);
   const [bonusForm, setBonusForm] = useState({ employee_id: '', title: 'Eid Festival Bonus', amount: '', bonus_date: new Date().toISOString().slice(0, 10), notes: '' });
@@ -286,9 +295,25 @@ export const StaffManager = () => {
       if (res.ok) {
         setShowLoanModal(false);
         fetchLoans();
-        alert(data.message || 'Loan disbursed successfully!');
+        alert(data.message || 'Disbursed successfully!');
       } else alert(`Error: ${data.error}`);
     } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const handleDeleteLoan = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this loan/advance record?')) return;
+    try {
+      const res = await authFetch(`/api/staff/loans/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchLoans();
+        alert('Record deleted successfully.');
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    }
   };
 
   const handleCreateBonus = async (e) => {
@@ -853,12 +878,58 @@ export const StaffManager = () => {
       {/* 7. LOANS & ADVANCES TAB */}
       {activeTab === 'loans' && (
         <div className="glass-card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Employee Loans & Advance Ledger</h3>
-            <button onClick={() => setShowLoanModal(true)} className="btn btn-primary">
-              <DollarSign size={15} />
-              <span>+ Disburse Employee Loan</span>
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Employee Loans & Salary Advance Ledger</h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Manage staff personal loans and monthly advance salary disbursements
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '8px' }}>
+                <button
+                  onClick={() => setLoanTypeFilter('all')}
+                  className={`btn btn-xs ${loanTypeFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '12px' }}
+                >
+                  All ({loansList.length})
+                </button>
+                <button
+                  onClick={() => setLoanTypeFilter('loan')}
+                  className={`btn btn-xs ${loanTypeFilter === 'loan' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '12px' }}
+                >
+                  💰 Loans ({loansList.filter(x => (x.type || 'loan') === 'loan').length})
+                </button>
+                <button
+                  onClick={() => setLoanTypeFilter('advance')}
+                  className={`btn btn-xs ${loanTypeFilter === 'advance' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '12px' }}
+                >
+                  ⚡ Advances ({loansList.filter(x => x.type === 'advance').length})
+                </button>
+              </div>
+
+              <button
+                onClick={() => {
+                  setLoanForm({
+                    employee_id: '',
+                    type: 'loan',
+                    loan_amount: '',
+                    auto_deduct_salary: true,
+                    monthly_installment: '',
+                    account_id: '',
+                    notes: ''
+                  });
+                  setShowLoanModal(true);
+                }}
+                className="btn btn-primary"
+              >
+                <DollarSign size={15} />
+                <span>+ Disburse Loan / Advance</span>
+              </button>
+            </div>
           </div>
 
           <div className="table-wrapper">
@@ -866,38 +937,82 @@ export const StaffManager = () => {
               <thead>
                 <tr>
                   <th>Employee</th>
-                  <th>Loan Amount</th>
-                  <th>Repaid Amount</th>
-                  <th>Pending Loan Due</th>
-                  <th>Monthly EMI</th>
+                  <th>Category</th>
+                  <th>Total Disbursed</th>
+                  <th>Repaid</th>
+                  <th>Pending Balance</th>
+                  <th>Auto Salary Deduct</th>
                   <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {loansList.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px' }}>No employee loans active.</td></tr>
-                ) : (
-                  loansList.map(l => {
+                {(() => {
+                  const filteredLoans = loansList.filter(l => {
+                    if (loanTypeFilter === 'loan') return (l.type || 'loan') === 'loan';
+                    if (loanTypeFilter === 'advance') return l.type === 'advance';
+                    return true;
+                  });
+
+                  if (filteredLoans.length === 0) {
+                    return (
+                      <tr><td colSpan="8" style={{ textAlign: 'center', padding: '30px' }}>No active loans or salary advances found.</td></tr>
+                    );
+                  }
+
+                  return filteredLoans.map(l => {
                     const pending = Number(l.loan_amount) - Number(l.paid_amount || 0);
+                    const isAdvance = l.type === 'advance';
+                    const autoDeduct = l.auto_deduct_salary === 1 || l.auto_deduct_salary === true || l.auto_deduct_salary === undefined;
+                    const emi = Number(l.monthly_installment || 0);
 
                     return (
                       <tr key={l.id}>
                         <td><strong>{l.employee_name}</strong></td>
+                        <td>
+                          {isAdvance ? (
+                            <span className="badge badge-warning" style={{ background: '#f59e0b20', color: '#f59e0b', border: '1px solid #f59e0b50' }}>
+                              ⚡ Salary Advance
+                            </span>
+                          ) : (
+                            <span className="badge badge-primary">
+                              💰 Personal Loan
+                            </span>
+                          )}
+                        </td>
                         <td style={{ fontWeight: '700' }}>{currency}{Number(l.loan_amount).toFixed(2)}</td>
                         <td style={{ color: 'var(--success)' }}>{currency}{Number(l.paid_amount || 0).toFixed(2)}</td>
                         <td style={{ fontWeight: '800', color: pending > 0 ? 'var(--danger)' : 'var(--success)' }}>
                           {currency}{pending.toFixed(2)}
                         </td>
-                        <td>{currency}{Number(l.monthly_installment || 0).toFixed(2)} / month</td>
+                        <td style={{ fontSize: '13px' }}>
+                          {autoDeduct ? (
+                            <div style={{ color: 'var(--success)', fontWeight: '600' }}>
+                              ✓ Yes {emi > 0 ? `(${currency}${emi.toFixed(0)}/mo)` : '(Full Deduct)'}
+                            </div>
+                          ) : (
+                            <div style={{ color: 'var(--text-muted)' }}>❌ No (Manual)</div>
+                          )}
+                        </td>
                         <td>
                           <span className={`badge ${l.status === 'cleared' ? 'badge-success' : 'badge-danger'}`}>
                             {l.status.toUpperCase()}
                           </span>
                         </td>
+                        <td>
+                          <button
+                            onClick={() => handleDeleteLoan(l.id)}
+                            className="btn btn-secondary btn-icon btn-sm"
+                            title="Delete Record"
+                            style={{ color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
                       </tr>
                     );
-                  })
-                )}
+                  });
+                })()}
               </tbody>
             </table>
           </div>
@@ -1384,7 +1499,7 @@ export const StaffManager = () => {
         </div>
       )}
 
-      {/* MODAL 3: ISSUE LOAN */}
+      {/* MODAL 3: ISSUE LOAN / ADVANCE */}
       {showLoanModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '480px' }}>
@@ -1408,17 +1523,53 @@ export const StaffManager = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Loan Amount ({currency}) *</label>
-                  <input type="number" step="0.01" className="form-input" required placeholder="5000" value={loanForm.loan_amount} onChange={(e) => setLoanForm({ ...loanForm, loan_amount: e.target.value })} />
+                  <label className="form-label">Category / Type *</label>
+                  <select
+                    className="form-select"
+                    value={loanForm.type}
+                    onChange={(e) => setLoanForm({ ...loanForm, type: e.target.value })}
+                  >
+                    <option value="loan">💰 Personal Loan (পার্সোনাল লোন)</option>
+                    <option value="advance">⚡ Salary Advance (অগ্রিম বেতন)</option>
+                  </select>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Monthly EMI Deduction ({currency})</label>
-                  <input type="number" step="0.01" className="form-input" placeholder="1000" value={loanForm.monthly_installment} onChange={(e) => setLoanForm({ ...loanForm, monthly_installment: e.target.value })} />
+                  <label className="form-label">Total Disbursed Amount ({currency}) *</label>
+                  <input type="number" step="0.01" className="form-input" required placeholder="e.g. 5000" value={loanForm.loan_amount} onChange={(e) => setLoanForm({ ...loanForm, loan_amount: e.target.value })} />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Source Cash Account *</label>
+                  <label className="form-label">Auto Deduct from Monthly Salary Sheet? *</label>
+                  <select
+                    className="form-select"
+                    value={loanForm.auto_deduct_salary ? '1' : '0'}
+                    onChange={(e) => setLoanForm({ ...loanForm, auto_deduct_salary: e.target.value === '1' })}
+                  >
+                    <option value="1">✓ Yes (মাসিক বেতন থেকে অটো কর্তন হবে)</option>
+                    <option value="0">❌ No (অটো কর্তন হবে না - ম্যানুয়াল পরিশোধ)</option>
+                  </select>
+                </div>
+
+                {loanForm.auto_deduct_salary && (
+                  <div className="form-group">
+                    <label className="form-label">Monthly Deduction / EMI Amount ({currency})</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="form-input"
+                      placeholder="e.g. 1000 (খালি রাখলে পুরোটা একসাথে কাটবে)"
+                      value={loanForm.monthly_installment}
+                      onChange={(e) => setLoanForm({ ...loanForm, monthly_installment: e.target.value })}
+                    />
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      * খালি রাখলে বা 0 দিলে পরবর্তী মাসের বেতনের দিন সম্পূর্ণ টাকা একসাথে কর্তন হবে। অথবা কিস্তির পরিমাণ (যেমন 1000) লিখুন।
+                    </span>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Source Cash / Bank Account *</label>
                   <select
                     className="form-select"
                     required
@@ -1429,10 +1580,15 @@ export const StaffManager = () => {
                     {accountsList.map(a => <option key={a.id} value={a.id}>{a.name} ({currency}{a.balance})</option>)}
                   </select>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">Notes / Reason</label>
+                  <input type="text" className="form-input" placeholder="e.g. Medical emergency advance" value={loanForm.notes} onChange={(e) => setLoanForm({ ...loanForm, notes: e.target.value })} />
+                </div>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowLoanModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">Disburse Loan</button>
+                <button type="submit" className="btn btn-primary">Disburse Amount</button>
               </div>
             </form>
           </div>

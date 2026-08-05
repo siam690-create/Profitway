@@ -205,6 +205,7 @@ router.patch('/staff/leaves/:id/status', checkActiveSubscription, staffControlle
 
 router.get('/staff/loans', staffController.getLoans);
 router.post('/staff/loans/disburse', checkActiveSubscription, staffController.disburseLoan);
+router.delete('/staff/loans/:id', checkActiveSubscription, staffController.deleteLoan);
 
 router.get('/staff/bonuses', staffController.getBonuses);
 router.post('/staff/bonuses', checkActiveSubscription, staffController.createBonus);
