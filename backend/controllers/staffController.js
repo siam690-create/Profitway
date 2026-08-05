@@ -536,12 +536,14 @@ exports.getMonthlySalarySheet = async (req, res) => {
         [tenantId, emp.id, month_year]
       );
 
-      // 3. Active Loans & Advances EMI (only if auto_deduct_salary = 1)
+      // 3. Active Loans & Advances EMI (if auto_deduct_salary is not 0, and disbursed on or before this month)
       const [loanRows] = await db.query(
-        `SELECT id, type, loan_amount, paid_amount, monthly_installment, auto_deduct_salary
+        `SELECT id, type, loan_amount, paid_amount, monthly_installment, auto_deduct_salary, disbursement_date
          FROM employee_loans
-         WHERE tenant_id = ? AND employee_id = ? AND status = 'active' AND auto_deduct_salary = 1`,
-        [tenantId, emp.id]
+         WHERE tenant_id = ? AND employee_id = ? AND status = 'active'
+           AND (auto_deduct_salary IS NULL OR auto_deduct_salary = 1)
+           AND (disbursement_date IS NULL OR DATE_FORMAT(disbursement_date, '%Y-%m') <= ?)`,
+        [tenantId, emp.id, month_year]
       );
 
       let loanDeduction = 0;
