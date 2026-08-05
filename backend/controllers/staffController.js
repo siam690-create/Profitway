@@ -574,7 +574,14 @@ exports.getMonthlySalarySheet = async (req, res) => {
       const perDaySalary = baseSalary / 30;
       const absentPenalty = absentDays * perDaySalary;
       const bonusAmt = Number(bonusRows[0]?.total_bonus || 0);
-      const pfDeduction = baseSalary * 0.05; // 5% PF
+
+      // 5. Active Provident Fund (PF) contribution (only if PF is active for this employee)
+      const [pfRows] = await db.query(
+        "SELECT employee_contrib_pct FROM employee_pf WHERE tenant_id = ? AND employee_id = ? AND status = 'active'",
+        [tenantId, emp.id]
+      );
+      const pfPct = pfRows.length > 0 ? Number(pfRows[0].employee_contrib_pct || 0) : 0;
+      const pfDeduction = baseSalary * (pfPct / 100);
 
       const netPayable = Math.max(0, baseSalary + bonusAmt + overtimePay - (absentPenalty + totalLoanAndAdvanceDeduction + pfDeduction));
 
