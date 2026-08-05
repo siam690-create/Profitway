@@ -101,18 +101,20 @@ export const Finance = () => {
   const [repayInvestAccId, setRepayInvestAccId] = useState('');
   const [repayInvestNotes, setRepayInvestNotes] = useState('');
 
-  // Payroll Form
-  const [payrollForm, setPayrollForm] = useState({
-    staff_id: '',
-    staff_name: '',
-    month_year: new Date().toISOString().slice(0, 7),
-    base_salary: '',
-    bonus: '0',
-    advance_deduction: '0',
-    payment_method: 'Cash',
-    account_id: '',
-    notes: ''
-  });
+  // Payroll / HR Integration States
+  const [salarySheetData, setSalarySheetData] = useState([]);
+  const [payrollMonth, setPayrollMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [selectedPayrollAccId, setSelectedPayrollAccId] = useState('');
+  const [payrollNotes, setPayrollNotes] = useState('');
+
+  const fetchSalarySheetData = async (mYear) => {
+    try {
+      const res = await authFetch(`/api/staff/salary-sheet?month_year=${mYear || payrollMonth}`);
+      const data = await res.json();
+      if (res.ok) setSalarySheetData(data);
+    } catch (e) { console.error(e); }
+  };
 
   const fetchFinance = async () => {
     try {
@@ -120,10 +122,6 @@ export const Finance = () => {
       const res = await authFetch('/api/finance/summary');
       const data = await res.json();
       if (res.ok) setFinanceData(data);
-
-      const staffRes = await authFetch('/api/staff');
-      const staffData = await staffRes.json();
-      if (staffRes.ok) setStaffList(staffData);
 
       const supRes = await authFetch('/api/suppliers');
       const supData = await supRes.json();
@@ -142,6 +140,12 @@ export const Finance = () => {
   useEffect(() => {
     fetchFinance();
   }, []);
+
+  useEffect(() => {
+    if (activeSubTab === 'payroll') {
+      fetchSalarySheetData(payrollMonth);
+    }
+  }, [activeSubTab, payrollMonth]);
 
   const handleOpenDenaAudit = async (denaItem) => {
     try {
@@ -477,27 +481,41 @@ export const Finance = () => {
 
   const handlePaySalarySubmit = async (e) => {
     e.preventDefault();
+    if (!selectedStaffId) return alert('Please select a staff employee.');
+    if (!selectedPayrollAccId) return alert('Please select a payment account.');
+
+    const empData = salarySheetData.find(s => String(s.employee_id) === String(selectedStaffId));
+    if (!empData) return alert('Employee salary details not found.');
+    if (empData.is_paid) return alert('Salary for this staff is already disbursed for this month!');
+
     try {
-      const res = await authFetch('/api/finance/payroll', {
+      const payload = {
+        employee_id: empData.employee_id,
+        month_year: payrollMonth,
+        base_salary: empData.base_salary,
+        bonus: empData.bonus_amount,
+        overtime_pay: empData.overtime_pay,
+        absent_penalty: empData.absent_penalty,
+        loan_deduction: empData.loan_deduction,
+        pf_deduction: empData.pf_deduction,
+        net_payable: empData.net_payable,
+        payment_method: 'Cash',
+        account_id: selectedPayrollAccId,
+        notes: payrollNotes
+      };
+
+      const res = await authFetch('/api/staff/salary-sheet/disburse', {
         method: 'POST',
-        body: JSON.stringify(payrollForm)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {
-        setPayrollForm({
-          staff_id: '',
-          staff_name: '',
-          month_year: new Date().toISOString().slice(0, 7),
-          base_salary: '',
-          bonus: '0',
-          advance_deduction: '0',
-          payment_method: 'Cash',
-          account_id: '',
-          notes: ''
-        });
+        setSelectedStaffId('');
+        setPayrollNotes('');
+        fetchSalarySheetData(payrollMonth);
         fetchFinance();
         refreshAllData();
-        alert('Staff salary disbursed and logged in expenses!');
+        alert(data.message || 'Staff salary disbursed successfully!');
       } else {
         alert(`Error: ${data.error}`);
       }
@@ -1124,160 +1142,188 @@ export const Finance = () => {
         );
       })()}
 
-      {/* 5. Staff Salary & Payroll Section */}
+      {/* 5. Staff Salary & Payroll Section (Master HR OS Sync) */}
       {activeSubTab === 'payroll' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '20px' }}>
           {/* Disburse Salary Form */}
           <div className="glass-card" style={{ padding: '20px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Disburse Staff Salary</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Disburse Staff Salary</h3>
+              <span className="badge badge-success" style={{ fontSize: '10px' }}>⚡ HR OS Synced</span>
+            </div>
 
             <form onSubmit={handlePaySalarySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
-                <label className="form-label">Select Staff Employee</label>
+                <label className="form-label">Month & Year *</label>
+                <input
+                  type="month"
+                  className="form-input"
+                  required
+                  value={payrollMonth}
+                  onChange={(e) => {
+                    setPayrollMonth(e.target.value);
+                    setSelectedStaffId('');
+                  }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Select Staff Employee *</label>
                 <select
                   className="form-select"
                   required
-                  value={payrollForm.staff_id}
-                  onChange={(e) => {
-                    const st = staffList.find(s => String(s.id) === e.target.value);
-                    setPayrollForm({
-                      ...payrollForm,
-                      staff_id: e.target.value,
-                      staff_name: st ? st.name : ''
-                    });
-                  }}
+                  value={selectedStaffId}
+                  onChange={(e) => setSelectedStaffId(e.target.value)}
                 >
                   <option value="">Choose Staff...</option>
-                  {staffList.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                  {salarySheetData.map(s => (
+                    <option key={s.employee_id} value={s.employee_id}>
+                      {s.name} ({s.designation}) — {s.is_paid ? '🟢 PAID' : `Net: ${currency}${s.net_payable.toFixed(2)}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Selected Employee Salary Breakdown */}
+              {(() => {
+                const activeEmp = salarySheetData.find(s => String(s.employee_id) === String(selectedStaffId));
+                if (!activeEmp) return null;
+
+                return (
+                  <div style={{ padding: '14px', background: 'var(--bg-secondary)', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Base Salary:</span>
+                      <strong>{currency}{activeEmp.base_salary.toFixed(2)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Overtime Pay ({activeEmp.overtime_hours}h):</span>
+                      <span style={{ color: 'var(--success)' }}>+{currency}{activeEmp.overtime_pay.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Bonus & Allowances:</span>
+                      <span style={{ color: '#8b5cf6' }}>+{currency}{activeEmp.bonus_amount.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Absent Cut ({activeEmp.absent_days}d):</span>
+                      <span style={{ color: 'var(--danger)' }}>-{currency}{activeEmp.absent_penalty.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Loan / Advance Cut:</span>
+                      <span style={{ color: 'var(--danger)' }}>-{currency}{activeEmp.loan_deduction.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Provident Fund (PF):</span>
+                      <span style={{ color: 'var(--danger)' }}>-{currency}{activeEmp.pf_deduction.toFixed(2)}</span>
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 'bold' }}>
+                      <span>Net Salary Payable:</span>
+                      <span style={{ color: activeEmp.is_paid ? 'var(--text-muted)' : 'var(--success)', fontSize: '18px' }}>
+                        {currency}{activeEmp.net_payable.toFixed(2)}
+                      </span>
+                    </div>
+                    {activeEmp.is_paid && (
+                      <div style={{ color: 'var(--success)', fontSize: '12px', fontWeight: 'bold', textAlign: 'center', marginTop: '4px' }}>
+                        ✓ Salary Already Disbursed for {payrollMonth}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="form-group">
+                <label className="form-label">Paid From Finance Account *</label>
+                <select
+                  className="form-select"
+                  required
+                  value={selectedPayrollAccId}
+                  onChange={(e) => setSelectedPayrollAccId(e.target.value)}
+                >
+                  <option value="">Select Account (Passbook)...</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.name} ({currency}{Number(a.balance).toFixed(2)})</option>
                   ))}
                 </select>
               </div>
 
               <div className="form-group">
-                <label className="form-label">Staff Name</label>
+                <label className="form-label">Notes / Payment Ref</label>
                 <input
                   type="text"
                   className="form-input"
-                  required
-                  placeholder="Employee Full Name"
-                  value={payrollForm.staff_name}
-                  onChange={(e) => setPayrollForm({ ...payrollForm, staff_name: e.target.value })}
+                  placeholder="e.g. Disbursed via Bank Transfer"
+                  value={payrollNotes}
+                  onChange={(e) => setPayrollNotes(e.target.value)}
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Month & Year</label>
-                <input
-                  type="month"
-                  className="form-input"
-                  required
-                  value={payrollForm.month_year}
-                  onChange={(e) => setPayrollForm({ ...payrollForm, month_year: e.target.value })}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div className="form-group">
-                  <label className="form-label">Base Salary ({currency})</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-input"
-                    required
-                    placeholder="15000"
-                    value={payrollForm.base_salary}
-                    onChange={(e) => setPayrollForm({ ...payrollForm, base_salary: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Bonus ({currency})</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-input"
-                    value={payrollForm.bonus}
-                    onChange={(e) => setPayrollForm({ ...payrollForm, bonus: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div className="form-group">
-                  <label className="form-label">Advance Cut ({currency})</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-input"
-                    value={payrollForm.advance_deduction}
-                    onChange={(e) => setPayrollForm({ ...payrollForm, advance_deduction: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Paid From Account</label>
-                  <select
-                    className="form-select"
-                    value={payrollForm.account_id}
-                    onChange={(e) => setPayrollForm({ ...payrollForm, account_id: e.target.value })}
-                  >
-                    <option value="">Select Account...</option>
-                    {accounts.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({currency}{a.balance})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ padding: '10px', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span>Net Salary Paid:</span>
-                <strong style={{ color: 'var(--success)' }}>
-                  {currency}{((Number(payrollForm.base_salary || 0) + Number(payrollForm.bonus || 0)) - Number(payrollForm.advance_deduction || 0)).toFixed(2)}
-                </strong>
-              </div>
-
-              <button type="submit" className="btn btn-success" style={{ marginTop: '8px' }}>
+              <button
+                type="submit"
+                className="btn btn-success"
+                style={{ marginTop: '8px' }}
+                disabled={(() => {
+                  const activeEmp = salarySheetData.find(s => String(s.employee_id) === String(selectedStaffId));
+                  return !activeEmp || activeEmp.is_paid;
+                })()}
+              >
                 <CheckCircle size={16} />
                 <span>Disburse & Log Salary</span>
               </button>
             </form>
           </div>
 
-          {/* Salary History Table */}
+          {/* Master Salary Sheet & Disbursal History Table */}
           <div className="glass-card" style={{ padding: '20px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Payroll & Salary Disbursal History</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Master Salary Sheet ({payrollMonth})</h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Live monthly attendance, bonus, loan & PF calculations from HR OS</span>
+              </div>
+            </div>
 
             <div className="table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Staff Name</th>
-                    <th>Month</th>
-                    <th>Base + Bonus</th>
-                    <th>Advance Cut</th>
-                    <th>Net Paid</th>
-                    <th>Payment Date</th>
+                    <th>Staff Employee</th>
+                    <th>Base Salary</th>
+                    <th>Bonus / OT</th>
+                    <th>Deductions</th>
+                    <th>Net Payable</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {payroll.length === 0 ? (
+                  {salarySheetData.length === 0 ? (
                     <tr>
                       <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                        No salary disbursements logged yet.
+                        No staff records found for {payrollMonth}.
                       </td>
                     </tr>
                   ) : (
-                    payroll.map(p => (
-                      <tr key={p.id}>
-                        <td><strong>{p.staff_name}</strong></td>
-                        <td>{p.month_year}</td>
-                        <td>{currency}{(Number(p.base_salary) + Number(p.bonus)).toFixed(2)}</td>
-                        <td style={{ color: 'var(--danger)' }}>-{currency}{Number(p.advance_deduction).toFixed(2)}</td>
-                        <td style={{ fontWeight: '800', color: 'var(--success)' }}>{currency}{Number(p.net_salary_paid).toFixed(2)}</td>
-                        <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{new Date(p.payment_date).toLocaleDateString()}</td>
-                      </tr>
-                    ))
+                    salarySheetData.map(item => {
+                      const totalAdditions = item.overtime_pay + item.bonus_amount;
+                      const totalDeductions = item.absent_penalty + item.loan_deduction + item.pf_deduction;
+
+                      return (
+                        <tr key={item.employee_id}>
+                          <td>
+                            <strong>{item.name}</strong>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.designation} ({item.employee_code})</div>
+                          </td>
+                          <td style={{ fontWeight: '600' }}>{currency}{item.base_salary.toFixed(2)}</td>
+                          <td style={{ color: 'var(--success)' }}>+{currency}{totalAdditions.toFixed(2)}</td>
+                          <td style={{ color: 'var(--danger)' }}>-{currency}{totalDeductions.toFixed(2)}</td>
+                          <td style={{ fontWeight: '800', color: 'var(--success)', fontSize: '15px' }}>
+                            {currency}{item.net_payable.toFixed(2)}
+                          </td>
+                          <td>
+                            <span className={`badge ${item.is_paid ? 'badge-success' : 'badge-warning'}`}>
+                              {item.is_paid ? '🟢 Disbursed' : '🟡 Pending'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
