@@ -562,9 +562,9 @@ exports.getMonthlySalarySheet = async (req, res) => {
 
       const totalLoanAndAdvanceDeduction = loanDeduction + advanceDeduction;
 
-      // 4. Existing disbursement record if already paid
+      // 4. Existing disbursement records if already paid
       const [paidRows] = await db.query(
-        'SELECT * FROM payroll WHERE tenant_id = ? AND (employee_id = ? OR staff_id = ?) AND month_year = ?',
+        'SELECT SUM(COALESCE(paid_amount, net_payable)) as total_paid FROM payroll WHERE tenant_id = ? AND (employee_id = ? OR staff_id = ?) AND month_year = ?',
         [tenantId, emp.id, emp.id, month_year]
       );
 
@@ -584,6 +584,13 @@ exports.getMonthlySalarySheet = async (req, res) => {
       const pfDeduction = baseSalary * (pfPct / 100);
 
       const netPayable = Math.max(0, baseSalary + bonusAmt + overtimePay - (absentPenalty + totalLoanAndAdvanceDeduction + pfDeduction));
+      const totalPaid = Number(paidRows[0]?.total_paid || 0);
+      const remainingDue = Math.max(0, netPayable - totalPaid);
+
+      let status = 'pending';
+      if (totalPaid > 0) {
+        status = remainingDue <= 0.05 ? 'paid' : 'partial';
+      }
 
       sheet.push({
         employee_id: emp.id,
@@ -605,8 +612,10 @@ exports.getMonthlySalarySheet = async (req, res) => {
         advance_salary_deduction: advanceDeduction,
         pf_deduction: pfDeduction,
         net_payable: netPayable,
-        is_paid: paidRows.length > 0,
-        paid_details: paidRows[0] || null
+        total_paid: totalPaid,
+        due_amount: remainingDue,
+        status: status,
+        is_paid: status === 'paid'
       });
     }
 
@@ -619,19 +628,37 @@ exports.getMonthlySalarySheet = async (req, res) => {
 exports.disburseSalary = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const { employee_id, month_year, base_salary, bonus, overtime_pay, absent_penalty, loan_deduction, pf_deduction, net_payable, account_id, payment_method, notes } = req.body;
+    const { employee_id, month_year, base_salary, bonus, overtime_pay, absent_penalty, loan_deduction, pf_deduction, net_payable, paid_amount, account_id, payment_method, notes } = req.body;
 
     if (!employee_id || !month_year || !account_id) {
       return res.status(400).json({ error: 'Employee, Month/Year, and Payment Account are required.' });
     }
 
-    const amount = Number(net_payable || 0);
+    const netPayableVal = Number(net_payable || 0);
+    let amountToPay = Number(paid_amount !== undefined ? paid_amount : netPayableVal);
+
+    if (amountToPay <= 0) {
+      return res.status(400).json({ error: 'Payment amount must be greater than 0.' });
+    }
+
+    // Previous payments check
+    const [prevRows] = await db.query(
+      'SELECT COALESCE(SUM(COALESCE(paid_amount, net_payable)), 0) as total_paid FROM payroll WHERE tenant_id = ? AND (employee_id = ? OR staff_id = ?) AND month_year = ?',
+      [tenantId, employee_id, employee_id, month_year]
+    );
+
+    const prevPaid = Number(prevRows[0]?.total_paid || 0);
+    const currentDue = Math.max(0, netPayableVal - prevPaid);
+
+    if (amountToPay > currentDue + 0.05) {
+      return res.status(400).json({ error: `Payment amount (৳${amountToPay.toFixed(2)}) exceeds remaining due salary (৳${currentDue.toFixed(2)}).` });
+    }
 
     // Check account balance
     const [accRows] = await db.query('SELECT name, balance FROM finance_accounts WHERE id = ? AND tenant_id = ?', [account_id, tenantId]);
     if (accRows.length === 0) return res.status(400).json({ error: 'Selected payment account not found.' });
 
-    if (Number(accRows[0].balance) < amount) {
+    if (Number(accRows[0].balance) < amountToPay) {
       return res.status(400).json({ error: `Insufficient account balance in ${accRows[0].name}` });
     }
 
@@ -639,39 +666,43 @@ exports.disburseSalary = async (req, res) => {
     const [emp] = await db.query('SELECT name, employee_code FROM employees WHERE id = ?', [employee_id]);
     const empName = emp[0]?.name || 'Employee';
 
+    const newTotalPaid = prevPaid + amountToPay;
+    const newDueAmount = Math.max(0, netPayableVal - newTotalPaid);
+    const paymentStatus = newDueAmount <= 0.05 ? 'paid' : 'partial';
+
     // 1. Insert Payroll Record
     const [payResult] = await db.query(
       `INSERT INTO payroll (
         tenant_id, staff_id, employee_id, staff_name, month_year, base_salary, bonus,
         overtime_pay, absent_penalty, loan_deduction, pf_deduction, net_payable,
-        payment_method, account_id, notes, payment_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid')`,
+        paid_amount, due_amount, payment_method, account_id, notes, payment_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tenantId, employee_id, employee_id, empName, month_year, Number(base_salary || 0), Number(bonus || 0),
-        Number(overtime_pay || 0), Number(absent_penalty || 0), Number(loan_deduction || 0), Number(pf_deduction || 0), amount,
-        payment_method || 'Cash', account_id, notes || null
+        Number(overtime_pay || 0), Number(absent_penalty || 0), Number(loan_deduction || 0), Number(pf_deduction || 0), netPayableVal,
+        amountToPay, newDueAmount, payment_method || 'Cash', account_id, notes || null, paymentStatus
       ]
     );
 
-    // 2. Deduct Net Salary from Finance Account
-    await db.query('UPDATE finance_accounts SET balance = balance - ? WHERE id = ?', [amount, account_id]);
+    // 2. Deduct Paid Amount from Finance Account
+    await db.query('UPDATE finance_accounts SET balance = balance - ? WHERE id = ?', [amountToPay, account_id]);
 
     // 3. Write Passbook Ledger entry
     await db.query(
       `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
        VALUES (?, ?, 'Staff Salary Disbursement', ?, 0.00, ?, ?, NOW())`,
-      [tenantId, account_id, amount, `PAYROLL-${payResult.insertId}`, `Staff Salary Paid to ${empName} (${month_year})`]
+      [tenantId, account_id, amountToPay, `PAYROLL-${payResult.insertId}`, `Staff Salary Paid to ${empName} (${month_year}) [${paymentStatus.toUpperCase()}]`]
     );
 
     // 4. Write Expenses Entry under 'Payroll'
     await db.query(
       `INSERT INTO expenses (tenant_id, title, category, amount, expense_date, notes)
        VALUES (?, ?, 'Payroll', ?, CURDATE(), ?)`,
-      [tenantId, `Salary - ${empName} (${month_year})`, amount, `Net Salary Disbursed via ${payment_method}`]
+      [tenantId, `Salary - ${empName} (${month_year})`, amountToPay, `Salary Disbursed via ${payment_method} (${paymentStatus.toUpperCase()})`]
     );
 
-    // 5. Update Provident Fund balance
-    if (Number(pf_deduction) > 0) {
+    // 5. Update Provident Fund balance (on first payment)
+    if (prevPaid === 0 && Number(pf_deduction) > 0) {
       const [pfRows] = await db.query(
         "SELECT id, employer_contrib_pct FROM employee_pf WHERE tenant_id = ? AND employee_id = ? AND status = 'active'",
         [tenantId, employee_id]
@@ -687,29 +718,36 @@ exports.disburseSalary = async (req, res) => {
       }
     }
 
-    // 6. Update Employee Loan & Advance Repayment Ledgers (only auto_deduct_salary = 1)
-    const [loans] = await db.query(
-      'SELECT id, loan_amount, paid_amount, monthly_installment FROM employee_loans WHERE tenant_id = ? AND employee_id = ? AND status = \'active\' AND auto_deduct_salary = 1',
-      [tenantId, employee_id]
-    );
+    // 6. Update Employee Loan & Advance Repayment Ledgers (on first payment)
+    if (prevPaid === 0) {
+      const [loans] = await db.query(
+        'SELECT id, loan_amount, paid_amount, monthly_installment FROM employee_loans WHERE tenant_id = ? AND employee_id = ? AND status = \'active\' AND auto_deduct_salary = 1',
+        [tenantId, employee_id]
+      );
 
-    for (const loan of loans) {
-      const remaining = Number(loan.loan_amount) - Number(loan.paid_amount);
-      if (remaining > 0) {
-        const emi = Number(loan.monthly_installment);
-        const deductAmt = emi > 0 ? Math.min(emi, remaining) : remaining;
-        const newPaid = Number(loan.paid_amount) + deductAmt;
-        const newStatus = newPaid >= Number(loan.loan_amount) ? 'cleared' : 'active';
+      for (const loan of loans) {
+        const remaining = Number(loan.loan_amount) - Number(loan.paid_amount);
+        if (remaining > 0) {
+          const emi = Number(loan.monthly_installment);
+          const deductAmt = emi > 0 ? Math.min(emi, remaining) : remaining;
+          const newPaid = Number(loan.paid_amount) + deductAmt;
+          const newStatus = newPaid >= Number(loan.loan_amount) ? 'cleared' : 'active';
 
-        await db.query('UPDATE employee_loans SET paid_amount = ?, status = ? WHERE id = ?', [newPaid, newStatus, loan.id]);
-        await db.query(
-          'INSERT INTO employee_loan_repayments (tenant_id, loan_id, employee_id, repayment_amount, repayment_source, payroll_id, notes) VALUES (?, ?, ?, ?, \'salary_deduction\', ?, ?)',
-          [tenantId, loan.id, employee_id, deductAmt, payResult.insertId, `Auto Deduction from Salary (${month_year})`]
-        );
+          await db.query('UPDATE employee_loans SET paid_amount = ?, status = ? WHERE id = ?', [newPaid, newStatus, loan.id]);
+          await db.query(
+            'INSERT INTO employee_loan_repayments (tenant_id, loan_id, employee_id, repayment_amount, repayment_source, payroll_id, notes) VALUES (?, ?, ?, ?, \'salary_deduction\', ?, ?)',
+            [tenantId, loan.id, employee_id, deductAmt, payResult.insertId, `Auto Deduction from Salary (${month_year})`]
+          );
+        }
       }
     }
 
-    res.status(201).json({ message: 'Salary disbursed successfully with Passbook & Expense integration.' });
+    res.status(201).json({
+      message: `Salary disbursement of ৳${amountToPay.toFixed(2)} logged successfully (${paymentStatus.toUpperCase()}).`,
+      payment_status: paymentStatus,
+      paid_amount: amountToPay,
+      due_amount: newDueAmount
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

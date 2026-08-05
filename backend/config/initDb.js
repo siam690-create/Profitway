@@ -445,6 +445,8 @@ async function autoMigrate() {
     await addColumnIfNotExists('payroll', 'loan_deduction', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('payroll', 'pf_deduction', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('payroll', 'payment_status', "VARCHAR(20) DEFAULT 'paid'");
+    await addColumnIfNotExists('payroll', 'paid_amount', 'DECIMAL(12,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payroll', 'due_amount', 'DECIMAL(12,2) DEFAULT 0.00');
 
     // Retroactive column additions to returns table
     await addColumnIfNotExists('returns', 'courier_charge', 'DECIMAL(10,2) DEFAULT 0.00');

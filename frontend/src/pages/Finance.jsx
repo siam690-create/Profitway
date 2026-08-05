@@ -107,6 +107,8 @@ export const Finance = () => {
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [selectedPayrollAccId, setSelectedPayrollAccId] = useState('');
   const [payrollNotes, setPayrollNotes] = useState('');
+  const [payType, setPayType] = useState('full'); // 'full' or 'partial'
+  const [customPayAmount, setCustomPayAmount] = useState('');
 
   const fetchSalarySheetData = async (mYear) => {
     try {
@@ -486,7 +488,13 @@ export const Finance = () => {
 
     const empData = salarySheetData.find(s => String(s.employee_id) === String(selectedStaffId));
     if (!empData) return alert('Employee salary details not found.');
-    if (empData.is_paid) return alert('Salary for this staff is already disbursed for this month!');
+    if (empData.is_paid) return alert('Salary for this staff is already fully disbursed for this month!');
+
+    const dueVal = empData.due_amount !== undefined ? empData.due_amount : empData.net_payable;
+    const amountToPay = payType === 'partial' ? Number(customPayAmount || 0) : dueVal;
+
+    if (amountToPay <= 0) return alert('Please enter a valid payment amount greater than 0.');
+    if (amountToPay > dueVal + 0.05) return alert(`Payment amount (৳${amountToPay.toFixed(2)}) cannot exceed current due salary (৳${dueVal.toFixed(2)}).`);
 
     try {
       const payload = {
@@ -499,7 +507,7 @@ export const Finance = () => {
         loan_deduction: empData.loan_deduction,
         pf_deduction: empData.pf_deduction,
         net_payable: empData.net_payable,
-        payment_method: 'Cash',
+        paid_amount: amountToPay,
         account_id: selectedPayrollAccId,
         notes: payrollNotes
       };
@@ -511,11 +519,13 @@ export const Finance = () => {
       const data = await res.json();
       if (res.ok) {
         setSelectedStaffId('');
+        setCustomPayAmount('');
+        setPayType('full');
         setPayrollNotes('');
         fetchSalarySheetData(payrollMonth);
         fetchFinance();
         refreshAllData();
-        alert(data.message || 'Staff salary disbursed successfully!');
+        alert(data.message || 'Staff salary disbursement logged successfully!');
       } else {
         alert(`Error: ${data.error}`);
       }
@@ -1142,9 +1152,9 @@ export const Finance = () => {
         );
       })()}
 
-      {/* 5. Staff Salary & Payroll Section (Master HR OS Sync) */}
+      {/* 5. Staff Salary & Payroll Section (Master HR OS Sync with Partial Payment) */}
       {activeSubTab === 'payroll' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: '20px' }}>
           {/* Disburse Salary Form */}
           <div className="glass-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
@@ -1163,6 +1173,7 @@ export const Finance = () => {
                   onChange={(e) => {
                     setPayrollMonth(e.target.value);
                     setSelectedStaffId('');
+                    setCustomPayAmount('');
                   }}
                 />
               </div>
@@ -1173,14 +1184,29 @@ export const Finance = () => {
                   className="form-select"
                   required
                   value={selectedStaffId}
-                  onChange={(e) => setSelectedStaffId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedStaffId(e.target.value);
+                    const emp = salarySheetData.find(s => String(s.employee_id) === e.target.value);
+                    if (emp) {
+                      const due = emp.due_amount !== undefined ? emp.due_amount : emp.net_payable;
+                      setCustomPayAmount(due > 0 ? String(due) : '');
+                    }
+                    setPayType('full');
+                  }}
                 >
                   <option value="">Choose Staff...</option>
-                  {salarySheetData.map(s => (
-                    <option key={s.employee_id} value={s.employee_id}>
-                      {s.name} ({s.designation}) — {s.is_paid ? '🟢 PAID' : `Net: ${currency}${s.net_payable.toFixed(2)}`}
-                    </option>
-                  ))}
+                  {salarySheetData.map(s => {
+                    const due = s.due_amount !== undefined ? s.due_amount : s.net_payable;
+                    let labelStatus = `Net: ${currency}${s.net_payable.toFixed(2)}`;
+                    if (s.status === 'paid' || s.is_paid) labelStatus = '🟢 FULL PAID';
+                    else if (s.status === 'partial') labelStatus = `🟠 PARTIAL (Due: ${currency}${due.toFixed(2)})`;
+
+                    return (
+                      <option key={s.employee_id} value={s.employee_id}>
+                        {s.name} ({s.designation}) — {labelStatus}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1188,6 +1214,11 @@ export const Finance = () => {
               {(() => {
                 const activeEmp = salarySheetData.find(s => String(s.employee_id) === String(selectedStaffId));
                 if (!activeEmp) return null;
+
+                const dueVal = activeEmp.due_amount !== undefined ? activeEmp.due_amount : activeEmp.net_payable;
+                const paidSoFar = activeEmp.total_paid || 0;
+                const enteringAmt = payType === 'partial' ? Number(customPayAmount || 0) : dueVal;
+                const remainingAfter = Math.max(0, dueVal - enteringAmt);
 
                 return (
                   <div style={{ padding: '14px', background: 'var(--bg-secondary)', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
@@ -1215,18 +1246,86 @@ export const Finance = () => {
                       <span style={{ color: 'var(--text-muted)' }}>Provident Fund (PF):</span>
                       <span style={{ color: 'var(--danger)' }}>-{currency}{activeEmp.pf_deduction.toFixed(2)}</span>
                     </div>
-                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 'bold' }}>
+                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '700' }}>
                       <span>Net Salary Payable:</span>
-                      <span style={{ color: activeEmp.is_paid ? 'var(--text-muted)' : 'var(--success)', fontSize: '18px' }}>
-                        {currency}{activeEmp.net_payable.toFixed(2)}
-                      </span>
+                      <span>{currency}{activeEmp.net_payable.toFixed(2)}</span>
                     </div>
+
+                    {paidSoFar > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--success)', fontSize: '13px' }}>
+                        <span>Paid So Far:</span>
+                        <strong>+{currency}{paidSoFar.toFixed(2)}</strong>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: dueVal > 0 ? 'var(--danger)' : 'var(--success)', fontSize: '15px', fontWeight: '800' }}>
+                      <span>Current Salary Due:</span>
+                      <span>{currency}{dueVal.toFixed(2)}</span>
+                    </div>
+
                     {activeEmp.is_paid && (
                       <div style={{ color: 'var(--success)', fontSize: '12px', fontWeight: 'bold', textAlign: 'center', marginTop: '4px' }}>
-                        ✓ Salary Already Disbursed for {payrollMonth}
+                        ✓ Salary 100% Fully Disbursed for {payrollMonth}
                       </div>
                     )}
                   </div>
+                );
+              })()}
+
+              {/* Payment Type Selection */}
+              {(() => {
+                const activeEmp = salarySheetData.find(s => String(s.employee_id) === String(selectedStaffId));
+                if (!activeEmp || activeEmp.is_paid) return null;
+                const dueVal = activeEmp.due_amount !== undefined ? activeEmp.due_amount : activeEmp.net_payable;
+
+                return (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Payment Mode *</label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${payType === 'full' ? 'btn-primary' : 'btn-secondary'}`}
+                          onClick={() => {
+                            setPayType('full');
+                            setCustomPayAmount(String(dueVal));
+                          }}
+                        >
+                          Full ({currency}{dueVal.toFixed(2)})
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${payType === 'partial' ? 'btn-warning' : 'btn-secondary'}`}
+                          style={payType === 'partial' ? { background: '#f59e0b', color: '#fff', borderColor: '#f59e0b' } : {}}
+                          onClick={() => {
+                            setPayType('partial');
+                            setCustomPayAmount(customPayAmount || String(dueVal));
+                          }}
+                        >
+                          ⚡ Partial Pay (আংশিক)
+                        </button>
+                      </div>
+                    </div>
+
+                    {payType === 'partial' && (
+                      <div className="form-group">
+                        <label className="form-label">Paying Amount ({currency}) *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          max={dueVal}
+                          className="form-input"
+                          required
+                          placeholder="e.g. 5000"
+                          value={customPayAmount}
+                          onChange={(e) => setCustomPayAmount(e.target.value)}
+                        />
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          * পরিশোধের পর বাকি থাকবে: <strong style={{ color: 'var(--danger)' }}>{currency}{Math.max(0, dueVal - Number(customPayAmount || 0)).toFixed(2)}</strong>
+                        </span>
+                      </div>
+                    )}
+                  </>
                 );
               })()}
 
@@ -1266,7 +1365,9 @@ export const Finance = () => {
                 })()}
               >
                 <CheckCircle size={16} />
-                <span>Disburse & Log Salary</span>
+                <span>
+                  {payType === 'partial' ? 'Disburse Partial Salary' : 'Disburse & Log Salary'}
+                </span>
               </button>
             </form>
           </div>
@@ -1276,7 +1377,7 @@ export const Finance = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Master Salary Sheet ({payrollMonth})</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Live monthly attendance, bonus, loan & PF calculations from HR OS</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Live monthly attendance, bonus, loan, PF & partial payment ledger</span>
               </div>
             </div>
 
@@ -1289,13 +1390,14 @@ export const Finance = () => {
                     <th>Bonus / OT</th>
                     <th>Deductions</th>
                     <th>Net Payable</th>
+                    <th>Paid / Due</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {salarySheetData.length === 0 ? (
                     <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
                         No staff records found for {payrollMonth}.
                       </td>
                     </tr>
@@ -1303,6 +1405,8 @@ export const Finance = () => {
                     salarySheetData.map(item => {
                       const totalAdditions = item.overtime_pay + item.bonus_amount;
                       const totalDeductions = item.absent_penalty + item.loan_deduction + item.pf_deduction;
+                      const paid = item.total_paid || 0;
+                      const due = item.due_amount !== undefined ? item.due_amount : item.net_payable;
 
                       return (
                         <tr key={item.employee_id}>
@@ -1313,13 +1417,23 @@ export const Finance = () => {
                           <td style={{ fontWeight: '600' }}>{currency}{item.base_salary.toFixed(2)}</td>
                           <td style={{ color: 'var(--success)' }}>+{currency}{totalAdditions.toFixed(2)}</td>
                           <td style={{ color: 'var(--danger)' }}>-{currency}{totalDeductions.toFixed(2)}</td>
-                          <td style={{ fontWeight: '800', color: 'var(--success)', fontSize: '15px' }}>
+                          <td style={{ fontWeight: '800', color: 'var(--text-main)', fontSize: '15px' }}>
                             {currency}{item.net_payable.toFixed(2)}
                           </td>
+                          <td style={{ fontSize: '12px' }}>
+                            <div style={{ color: 'var(--success)', fontWeight: '700' }}>Paid: {currency}{paid.toFixed(2)}</div>
+                            <div style={{ color: due > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>Due: {currency}{due.toFixed(2)}</div>
+                          </td>
                           <td>
-                            <span className={`badge ${item.is_paid ? 'badge-success' : 'badge-warning'}`}>
-                              {item.is_paid ? '🟢 Disbursed' : '🟡 Pending'}
-                            </span>
+                            {item.status === 'paid' || item.is_paid ? (
+                              <span className="badge badge-success">🟢 Full Paid</span>
+                            ) : item.status === 'partial' ? (
+                              <span className="badge badge-warning" style={{ background: '#f59e0b20', color: '#f59e0b', border: '1px solid #f59e0b50' }}>
+                                🟠 Partial Paid
+                              </span>
+                            ) : (
+                              <span className="badge badge-warning">🟡 Pending</span>
+                            )}
                           </td>
                         </tr>
                       );
