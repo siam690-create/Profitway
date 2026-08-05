@@ -50,6 +50,7 @@ export const StaffManager = () => {
     name: '', designation: 'Staff', department: 'General', phone: '', email: '', joining_date: new Date().toISOString().slice(0, 10),
     nid_number: '', blood_group: 'B+', emergency_contact_name: '', emergency_contact_phone: '',
     photo_url: '', nid_front_url: '', nid_back_url: '', documents_url: '',
+    documents_list: [{ title: '', url: '' }],
     base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: ''
   });
 
@@ -81,6 +82,57 @@ export const StaffManager = () => {
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDocItemUpload = async (e, index) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 15 * 1024 * 1024) {
+      alert('File size exceeds 15MB limit.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const payload = { filename: file.name, filedata: reader.result };
+        const res = await authFetch('/api/upload', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setEmpForm(prev => {
+            const list = [...(prev.documents_list || [])];
+            list[index] = {
+              title: list[index]?.title || file.name.split('.')[0],
+              url: data.url
+            };
+            return { ...prev, documents_list: list };
+          });
+        } else {
+          alert(`Upload failed: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`Upload error: ${err.message}`);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddDocRow = () => {
+    setEmpForm(prev => ({
+      ...prev,
+      documents_list: [...(prev.documents_list || []), { title: '', url: '' }]
+    }));
+  };
+
+  const handleRemoveDocRow = (index) => {
+    setEmpForm(prev => ({
+      ...prev,
+      documents_list: (prev.documents_list || []).filter((_, i) => i !== index)
+    }));
   };
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -185,7 +237,14 @@ export const StaffManager = () => {
     try {
       const url = editingEmp ? `/api/staff/employees/${editingEmp.id}` : '/api/staff/employees';
       const method = editingEmp ? 'PUT' : 'POST';
-      const res = await authFetch(url, { method, body: JSON.stringify(empForm) });
+
+      const validDocs = (empForm.documents_list || []).filter(d => d.url || (d.title && d.title.trim()));
+      const payload = {
+        ...empForm,
+        documents_url: JSON.stringify(validDocs)
+      };
+
+      const res = await authFetch(url, { method, body: JSON.stringify(payload) });
       const data = await res.json();
       if (res.ok) {
         setShowEmpModal(false);
@@ -415,6 +474,16 @@ export const StaffManager = () => {
                           </button>
                           <button
                             onClick={() => {
+                              let docsList = [];
+                              try {
+                                docsList = emp.documents_url ? JSON.parse(emp.documents_url) : [];
+                              } catch (e) {
+                                if (emp.documents_url) docsList = [{ title: 'Attached Document', url: emp.documents_url }];
+                              }
+                              if (!Array.isArray(docsList) || docsList.length === 0) {
+                                docsList = [{ title: '', url: '' }];
+                              }
+
                               setEditingEmp(emp);
                               setEmpForm({
                                 ...emp,
@@ -423,7 +492,8 @@ export const StaffManager = () => {
                                 photo_url: emp.photo_url || '',
                                 nid_front_url: emp.nid_front_url || '',
                                 nid_back_url: emp.nid_back_url || '',
-                                documents_url: emp.documents_url || ''
+                                documents_url: emp.documents_url || '',
+                                documents_list: docsList
                               });
                               setShowEmpModal(true);
                             }}
@@ -1117,15 +1187,51 @@ export const StaffManager = () => {
                     </div>
                   </div>
 
-                  {/* Other Documents */}
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '12px' }}>Other Certificates / CV / Contract (অন্যান্য ডকুমেন্ট)</label>
-                    <input type="file" accept="image/*,application/pdf,.doc,.docx" className="form-input" style={{ fontSize: '11px', padding: '6px' }} onChange={(e) => handleFileUpload(e, 'documents_url')} />
-                    {empForm.documents_url && (
-                      <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--success)' }}>
-                        ✓ Document Uploaded (<a href={empForm.documents_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)' }}>View File</a>)
+                  {/* Multi-Document Section with Titles */}
+                  <div className="form-group" style={{ marginTop: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <label className="form-label" style={{ fontSize: '12px', margin: 0 }}>Other Certificates / CV / Contract (শিরোনামসহ অন্যান্য ডকুমেন্ট)</label>
+                      <button type="button" onClick={handleAddDocRow} className="btn btn-secondary btn-sm" style={{ fontSize: '11px', padding: '4px 8px' }}>
+                        <Plus size={12} /> + Add Document
+                      </button>
+                    </div>
+
+                    {(empForm.documents_list || []).map((doc, idx) => (
+                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 30px', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ fontSize: '11px', padding: '6px' }}
+                          placeholder="Document Title (e.g. CV / Certificate)"
+                          value={doc.title || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEmpForm(prev => {
+                              const list = [...(prev.documents_list || [])];
+                              list[idx] = { ...list[idx], title: val };
+                              return { ...prev, documents_list: list };
+                            });
+                          }}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf,.doc,.docx"
+                            className="form-input"
+                            style={{ fontSize: '11px', padding: '4px' }}
+                            onChange={(e) => handleDocItemUpload(e, idx)}
+                          />
+                          {doc.url && (
+                            <a href={doc.url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: 'var(--success)', whiteSpace: 'nowrap' }}>
+                              ✓ View
+                            </a>
+                          )}
+                        </div>
+                        <button type="button" onClick={() => handleRemoveDocRow(idx)} className="btn btn-danger btn-icon btn-sm" style={{ padding: '4px' }}>
+                          <X size={12} />
+                        </button>
                       </div>
-                    )}
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1200,16 +1306,36 @@ export const StaffManager = () => {
                 </div>
               </div>
 
-              {/* Other Documents */}
+              {/* Other Documents List with Custom Titles */}
               <div style={{ padding: '12px', background: 'var(--bg-primary)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-                <h4 style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>📄 Certificates & CV Documents</h4>
-                {selectedEmpForDocs.documents_url ? (
-                  <a href={selectedEmpForDocs.documents_url} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <ExternalLink size={14} /> View Attached Document / Certificate
-                  </a>
-                ) : (
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No additional documents attached.</div>
-                )}
+                <h4 style={{ fontSize: '13px', fontWeight: '700', marginBottom: '10px' }}>📄 Certificates & Profile Documents</h4>
+                {(() => {
+                  let docItems = [];
+                  try {
+                    docItems = selectedEmpForDocs.documents_url ? JSON.parse(selectedEmpForDocs.documents_url) : [];
+                  } catch (e) {
+                    if (selectedEmpForDocs.documents_url) docItems = [{ title: 'Attached Document', url: selectedEmpForDocs.documents_url }];
+                  }
+
+                  if (!Array.isArray(docItems) || docItems.length === 0 || !docItems.some(d => d.url)) {
+                    return <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No additional documents attached.</div>;
+                  }
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {docItems.map((doc, i) => doc.url && (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-secondary)', padding: '8px 12px', borderRadius: '6px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600' }}>
+                            • {doc.title || `Document ${i + 1}`}
+                          </span>
+                          <a href={doc.url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <ExternalLink size={12} /> View File
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             <div className="modal-footer">
