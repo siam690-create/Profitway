@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Landmark, Wallet, ArrowUpRight, ArrowDownRight, Plus, RefreshCw, DollarSign, Send, CheckCircle, UserCheck, ShieldAlert, X, TrendingUp, HandCoins, Eye, Printer, FileText, Calendar, Building2, Download, UserPlus, FileSpreadsheet } from 'lucide-react';
 import { DateRangeFilter } from '../components/DateRangeFilter';
+import { ResponsiveSubTabs } from '../components/ResponsiveSubTabs';
 
 const formatDateTimeBD = (dateStr) => {
   if (!dateStr) return 'N/A';
@@ -678,38 +679,17 @@ export const Finance = () => {
       </div>
 
       {/* Sub-Tabs Navigation */}
-      <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', flexWrap: 'wrap' }}>
-        <button
-          onClick={() => setActiveSubTab('accounts')}
-          className={`btn ${activeSubTab === 'accounts' ? 'btn-primary' : 'btn-secondary'}`}
-        >
-          💵 Cash & Bank Accounts ({accounts.length})
-        </button>
-        <button
-          onClick={() => setActiveSubTab('pawna')}
-          className={`btn ${activeSubTab === 'pawna' ? 'btn-primary' : 'btn-secondary'}`}
-        >
-          📥 Pawna (পাওনা / Dues)
-        </button>
-        <button
-          onClick={() => setActiveSubTab('dena')}
-          className={`btn ${activeSubTab === 'dena' ? 'btn-primary' : 'btn-secondary'}`}
-        >
-          📤 Dena (দেনা / Payables)
-        </button>
-        <button
-          onClick={() => setActiveSubTab('investments')}
-          className={`btn ${activeSubTab === 'investments' ? 'btn-primary' : 'btn-secondary'}`}
-        >
-          📈 Investments (বিনিয়োগ খাত)
-        </button>
-        <button
-          onClick={() => setActiveSubTab('payroll')}
-          className={`btn ${activeSubTab === 'payroll' ? 'btn-primary' : 'btn-secondary'}`}
-        >
-          👔 Staff Salary & Payroll
-        </button>
-      </div>
+      <ResponsiveSubTabs
+        tabs={[
+          { id: 'accounts', label: `Cash & Bank Accounts (${accounts.length})`, icon: Wallet },
+          { id: 'pawna', label: 'Pawna (পাওনা / Dues)', icon: ArrowUpRight },
+          { id: 'dena', label: 'Dena (দেনা / Payables)', icon: ArrowDownRight },
+          { id: 'investments', label: 'Investments (বিনিয়োগ খাত)', icon: HandCoins },
+          { id: 'payroll', label: 'Staff Salary & Payroll', icon: Landmark }
+        ]}
+        activeTab={activeSubTab}
+        onSelectTab={setActiveSubTab}
+      />
 
       {/* 1. Cash & Bank Accounts Section */}
       {activeSubTab === 'accounts' && (

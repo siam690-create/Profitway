@@ -22,9 +22,13 @@ export const AppProvider = ({ children }) => {
   const [activeTab, setActiveTabState] = useState(() => {
     return localStorage.getItem('profitway_active_tab') || 'dashboard';
   });
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  const toggleMobileSidebar = () => setMobileSidebarOpen(prev => !prev);
 
   const setActiveTab = (tab) => {
     setActiveTabState(tab);
+    setMobileSidebarOpen(false);
     if (tab) {
       localStorage.setItem('profitway_active_tab', tab);
     }
@@ -494,6 +498,9 @@ export const AppProvider = ({ children }) => {
         setView,
         activeTab,
         setActiveTab,
+        mobileSidebarOpen,
+        setMobileSidebarOpen,
+        toggleMobileSidebar,
         dashboardData,
         products,
         categories,

@@ -360,3 +360,58 @@ h1, h2, h3, h4, h5, h6 {
     padding: 20px;
   }
 }
+
+/* Responsive SubTabs & Three-Tier Navigation Menu Styles */
+.mobile-menu-toggle-btn {
+  display: none !important;
+}
+
+.responsive-subtabs-container {
+  white-space: nowrap !important;
+}
+
+.responsive-subtabs-container button {
+  white-space: nowrap !important;
+}
+
+/* Mobile & Tablet Responsiveness (< 768px) */
+@media (max-width: 768px) {
+  .mobile-menu-toggle-btn {
+    display: inline-flex !important;
+  }
+
+  aside.sidebar-container {
+    position: fixed !important;
+    top: 0;
+    left: -280px;
+    width: 270px !important;
+    height: 100vh !important;
+    z-index: 99999 !important;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  }
+
+  aside.sidebar-container.mobile-open {
+    left: 0 !important;
+  }
+
+  .mobile-overlay-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(4px);
+    z-index: 99998;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .page-wrapper {
+    padding: 16px 12px !important;
+  }
+
+  header {
+    padding: 14px 16px !important;
+  }
+}

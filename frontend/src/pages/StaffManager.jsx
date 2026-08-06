@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { ResponsiveSubTabs } from '../components/ResponsiveSubTabs';
 import { 
   Users, UserPlus, Shield, Trash2, Key, CheckCircle, X, Edit3, Lock, 
   Calendar, Clock, CreditCard, DollarSign, Gift, FileText, Printer, 
   Award, Briefcase, Phone, Mail, QrCode, Plus, Search, Building2, Check, AlertCircle, FileCheck,
-  Upload, Image, Eye, ExternalLink, File
+  Upload, Image, Eye, ExternalLink, File, Landmark
 } from 'lucide-react';
 
 const MODULE_LIST = [
@@ -442,38 +443,22 @@ export const StaffManager = () => {
       </div>
 
       {/* Navigation Sub-Tabs Bar */}
-      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', borderBottom: '1px solid var(--border-color)' }}>
-        <button onClick={() => setActiveTab('employees')} className={`btn btn-sm ${activeTab === 'employees' ? 'btn-primary' : 'btn-secondary'}`}>
-          👤 Employees ({employeesList.length})
-        </button>
-        <button onClick={() => setActiveTab('attendance')} className={`btn btn-sm ${activeTab === 'attendance' ? 'btn-primary' : 'btn-secondary'}`}>
-          📅 Attendance Log
-        </button>
-        <button onClick={() => setActiveTab('leaves')} className={`btn btn-sm ${activeTab === 'leaves' ? 'btn-primary' : 'btn-secondary'}`}>
-          🏖️ Leave Manager
-        </button>
-        <button onClick={() => setActiveTab('salary-sheet')} className={`btn btn-sm ${activeTab === 'salary-sheet' ? 'btn-primary' : 'btn-secondary'}`}>
-          📄 Master Salary Sheet
-        </button>
-        <button onClick={() => setActiveTab('payroll')} className={`btn btn-sm ${activeTab === 'payroll' ? 'btn-primary' : 'btn-secondary'}`}>
-          💳 Payroll Disbursement
-        </button>
-        <button onClick={() => setActiveTab('bonuses')} className={`btn btn-sm ${activeTab === 'bonuses' ? 'btn-primary' : 'btn-secondary'}`}>
-          🎁 Bonuses & Allowances
-        </button>
-        <button onClick={() => setActiveTab('loans')} className={`btn btn-sm ${activeTab === 'loans' ? 'btn-primary' : 'btn-secondary'}`}>
-          💸 Loans & Advances
-        </button>
-        <button onClick={() => setActiveTab('pf')} className={`btn btn-sm ${activeTab === 'pf' ? 'btn-primary' : 'btn-secondary'}`}>
-          🏦 Provident Fund (PF)
-        </button>
-        <button onClick={() => setActiveTab('idcards')} className={`btn btn-sm ${activeTab === 'idcards' ? 'btn-primary' : 'btn-secondary'}`}>
-          🎴 Employee ID Cards
-        </button>
-        <button onClick={() => setActiveTab('users')} className={`btn btn-sm ${activeTab === 'users' ? 'btn-primary' : 'btn-secondary'}`}>
-          🔐 System Roles ({usersList.length})
-        </button>
-      </div>
+      <ResponsiveSubTabs
+        tabs={[
+          { id: 'employees', label: `Employees (${employeesList.length})`, icon: Users },
+          { id: 'attendance', label: 'Attendance Log', icon: Calendar },
+          { id: 'leaves', label: 'Leave Manager', icon: Clock },
+          { id: 'salary-sheet', label: 'Master Salary Sheet', icon: FileText },
+          { id: 'payroll', label: 'Payroll Disbursement', icon: CreditCard },
+          { id: 'bonuses', label: 'Bonuses & Allowances', icon: Gift },
+          { id: 'loans', label: 'Loans & Advances', icon: DollarSign },
+          { id: 'pf', label: 'Provident Fund (PF)', icon: Landmark },
+          { id: 'idcards', label: 'Employee Badges / Cards', icon: Printer },
+          { id: 'users', label: `System Roles (${usersList.length})`, icon: Key }
+        ]}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+      />
 
       {/* 1. EMPLOYEE DIRECTORY & PROFILES TAB */}
       {activeTab === 'employees' && (

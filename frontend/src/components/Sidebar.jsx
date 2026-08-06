@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 export const Sidebar = () => {
-  const { activeTab, setActiveTab, theme, toggleTheme, cart, dashboardData, tenant, user, logout } = useApp();
+  const { activeTab, setActiveTab, theme, toggleTheme, cart, dashboardData, tenant, user, logout, mobileSidebarOpen, setMobileSidebarOpen } = useApp();
 
   const lowStockCount = dashboardData?.summary?.low_stock_count || 0;
 
@@ -62,7 +62,17 @@ export const Sidebar = () => {
   const isTrial = tenant?.subscription_status === 'trial';
 
   return (
-    <aside style={styles.sidebar}>
+    <>
+      {mobileSidebarOpen && (
+        <div 
+          className="mobile-overlay-backdrop"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+      <aside 
+        className={`sidebar-container ${mobileSidebarOpen ? 'mobile-open' : ''}`}
+        style={styles.sidebar}
+      >
       {/* App & Tenant Brand Header */}
       <div style={styles.brand}>
         <div style={styles.logoIcon}>
@@ -126,6 +136,7 @@ export const Sidebar = () => {
         </button>
       </div>
     </aside>
+    </>
   );
 };
 

@@ -1,9 +1,9 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { RefreshCw, ShoppingBag, AlertTriangle, Truck, Undo2, Megaphone, BarChart3 } from 'lucide-react';
+import { RefreshCw, ShoppingBag, AlertTriangle, Truck, Undo2, Megaphone, BarChart3, Menu } from 'lucide-react';
 
 export const Header = () => {
-  const { activeTab, setActiveTab, refreshAllData, loading, dashboardData, tenant } = useApp();
+  const { activeTab, setActiveTab, refreshAllData, loading, dashboardData, tenant, toggleMobileSidebar } = useApp();
 
   const getTitle = () => {
     switch (activeTab) {
@@ -27,11 +27,23 @@ export const Header = () => {
 
   return (
     <header style={styles.header}>
-      <div>
-        <h1 style={styles.title}>{getTitle()}</h1>
-        <p style={styles.subtitle}>
-          Shop: <strong>{tenant?.shop_name}</strong> • Real-time inventory & live profit calculation
-        </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button
+          type="button"
+          onClick={toggleMobileSidebar}
+          className="btn btn-secondary mobile-menu-toggle-btn"
+          style={{ padding: '8px 12px', borderRadius: '8px' }}
+          title="Open Three-Tier Navigation Menu"
+        >
+          <Menu size={20} />
+        </button>
+
+        <div>
+          <h1 style={styles.title}>{getTitle()}</h1>
+          <p style={styles.subtitle}>
+            Shop: <strong>{tenant?.shop_name}</strong> • Real-time inventory & live profit calculation
+          </p>
+        </div>
       </div>
 
       <div style={styles.actions}>
