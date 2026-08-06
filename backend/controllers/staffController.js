@@ -676,12 +676,12 @@ exports.disburseSalary = async (req, res) => {
     const [payResult] = await db.query(
       `INSERT INTO payroll (
         tenant_id, staff_id, employee_id, staff_name, month_year, base_salary, bonus,
-        overtime_pay, absent_penalty, loan_deduction, pf_deduction, net_payable,
+        overtime_pay, absent_penalty, loan_deduction, pf_deduction, net_payable, net_salary_paid,
         paid_amount, due_amount, payment_method, account_id, notes, payment_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tenantId, employee_id, employee_id, empName, month_year, Number(base_salary || 0), Number(bonus || 0),
-        Number(overtime_pay || 0), Number(absent_penalty || 0), Number(loan_deduction || 0), Number(pf_deduction || 0), netPayableVal,
+        Number(overtime_pay || 0), Number(absent_penalty || 0), Number(loan_deduction || 0), Number(pf_deduction || 0), netPayableVal, netPayableVal,
         amountToPay, newDueAmount, payment_method || 'Cash', account_id, notes || null, paymentStatus
       ]
     );
