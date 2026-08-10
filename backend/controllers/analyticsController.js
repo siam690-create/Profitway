@@ -247,20 +247,31 @@ exports.getProductAnalytics = async (req, res) => {
 
     let returnsAgg = [];
     try {
+      let returnsWhere = 'WHERE r.tenant_id = ?';
+      let returnsParams = [tenantId];
+      if (!isAllTime) {
+        returnsWhere += ' AND (r.return_date IS NULL OR DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?)';
+        returnsParams.push(startDate, endDate);
+      }
+
       const [rows] = await db.query(
         `SELECT 
-           ri.product_id,
+           COALESCE(ri.product_id, p_sub.id) as product_id,
            SUM(ri.quantity) as units_returned,
            SUM(ri.quantity * (COALESCE(p_sub.selling_price, 0) - COALESCE(p_sub.cost_price, 0))) as returned_profit_reversal,
-           SUM(COALESCE(r.return_delivery_loss, CASE WHEN s_sub.total_amount > 0 THEN (s_sub.delivery_profit * ((ri.quantity * p_sub.selling_price) / s_sub.total_amount)) ELSE 0 END, 0)) as returned_deliv_profit_reversal,
-           SUM(COALESCE(r.courier_charge, 0)) as return_charges
+           SUM(COALESCE(r.return_delivery_loss, 0) * (ri.quantity / GREATEST(COALESCE(r_tot.total_qty, 1), 1))) as returned_deliv_profit_reversal,
+           SUM(COALESCE(r.courier_charge, 0) * (ri.quantity / GREATEST(COALESCE(r_tot.total_qty, 1), 1))) as return_charges
          FROM return_items ri
-         JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
-         JOIN products p_sub ON ri.product_id = p_sub.id AND ri.tenant_id = p_sub.tenant_id
-         LEFT JOIN sales s_sub ON r.invoice_no = s_sub.invoice_no AND r.tenant_id = s_sub.tenant_id
-         ${prodReturnsWhere}
-         GROUP BY ri.product_id`,
-        returnsAggParams
+         JOIN returns r ON ri.return_id = r.id
+         LEFT JOIN products p_sub ON (ri.product_id = p_sub.id OR (p_sub.tenant_id = r.tenant_id AND (p_sub.sku = ri.product_name OR p_sub.name = ri.product_name)))
+         LEFT JOIN (
+           SELECT return_id, SUM(quantity) as total_qty 
+           FROM return_items 
+           GROUP BY return_id
+         ) r_tot ON r_tot.return_id = r.id
+         ${returnsWhere}
+         GROUP BY COALESCE(ri.product_id, p_sub.id)`,
+        returnsParams
       );
       returnsAgg = rows;
     } catch (e) {
