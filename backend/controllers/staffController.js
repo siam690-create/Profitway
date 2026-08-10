@@ -518,6 +518,23 @@ exports.createBonus = async (req, res) => {
   }
 };
 
+exports.deleteBonus = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+
+    const [existing] = await db.query('SELECT * FROM employee_bonuses WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Bonus record not found.' });
+    }
+
+    await db.query('DELETE FROM employee_bonuses WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    res.json({ message: 'Bonus/Allowance record deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // 6. Master Monthly Salary Sheet & Payroll Disbursement
 exports.getMonthlySalarySheet = async (req, res) => {
   try {

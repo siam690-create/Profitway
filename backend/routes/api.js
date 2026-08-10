@@ -217,6 +217,7 @@ router.delete('/staff/loans/:id', checkActiveSubscription, staffController.delet
 
 router.get('/staff/bonuses', staffController.getBonuses);
 router.post('/staff/bonuses', checkActiveSubscription, staffController.createBonus);
+router.delete('/staff/bonuses/:id', checkActiveSubscription, staffController.deleteBonus);
 
 router.get('/staff/salary-sheet', staffController.getMonthlySalarySheet);
 router.post('/staff/salary-sheet/disburse', checkActiveSubscription, staffController.disburseSalary);

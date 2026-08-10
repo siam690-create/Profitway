@@ -493,6 +493,21 @@ export const StaffManager = () => {
     } catch (err) { alert(`Error: ${err.message}`); }
   };
 
+  const handleDeleteBonus = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this bonus/allowance record?')) return;
+    try {
+      const res = await authFetch(`/api/staff/bonuses/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchBonuses();
+        fetchSalarySheet();
+        alert('Bonus record deleted successfully.');
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
   const handleDisburseSalary = async (e) => {
     e.preventDefault();
     if (!showDisburseModal || !disburseAccount) return alert('Select payment account');
@@ -1221,11 +1236,12 @@ export const StaffManager = () => {
                   <th>Target Salary Month</th>
                   <th>Issued Date</th>
                   <th>Notes</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {bonusesList.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px' }}>No bonuses issued.</td></tr>
+                  <tr><td colSpan="7" style={{ textAlign: 'center', padding: '30px' }}>No bonuses issued.</td></tr>
                 ) : (
                   bonusesList.map(b => (
                     <tr key={b.id}>
@@ -1239,6 +1255,15 @@ export const StaffManager = () => {
                       </td>
                       <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{b.bonus_date ? new Date(b.bonus_date).toLocaleDateString() : 'N/A'}</td>
                       <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{b.notes || 'Festival Allowance'}</td>
+                      <td>
+                        <button
+                          onClick={() => handleDeleteBonus(b.id)}
+                          className="btn btn-danger btn-icon btn-xs"
+                          title="Delete Bonus Record"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
