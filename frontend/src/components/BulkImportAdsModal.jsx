@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Megaphone,
   Trash2,
-  Edit3
+  AlertTriangle
 } from 'lucide-react';
 
 export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch, products = [] }) => {
@@ -68,22 +68,36 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
     XLSX.writeFile(workbook, 'Profitway_Sample_Paid_Ads_Template.xlsx');
   };
 
-  // Helper to match product
-  const findProductMatch = (codeStr) => {
-    if (!codeStr) return { id: null, name: 'General Shop Campaign' };
-    const cleanCode = String(codeStr).trim().toLowerCase();
+  // Helper to match product by code or explicit ID selection
+  const findProductMatch = (codeStr, selectedProdId = null) => {
+    if (selectedProdId === 'general') {
+      return { id: null, name: 'General Shop Campaign', isMatched: true };
+    }
+
+    if (selectedProdId) {
+      const p = products.find(prod => Number(prod.id) === Number(selectedProdId));
+      if (p) return { id: p.id, name: p.name, isMatched: true };
+    }
+
+    const cleanCode = String(codeStr || '').trim().toLowerCase();
+    if (!cleanCode) {
+      return { id: null, name: 'General Shop Campaign', isMatched: true };
+    }
+
     const found = products.find(p => {
       const pSku = String(p.sku || '').toLowerCase();
       const pCode = String(p.product_code || '').toLowerCase();
       const pId = String(p.id || '').toLowerCase();
       const pName = String(p.name || '').toLowerCase();
-      return pSku === cleanCode || pCode === cleanCode || pId === cleanCode || pName.includes(cleanCode);
+      return pSku === cleanCode || pCode === cleanCode || pId === cleanCode || pName === cleanCode;
     });
 
     if (found) {
-      return { id: found.id, name: found.name };
+      return { id: found.id, name: found.name, isMatched: true };
     }
-    return { id: null, name: `Code: ${codeStr} (General)` };
+
+    // Unmatched Product Code Error
+    return { id: null, name: `⚠️ Code "${codeStr}" Not Found`, isMatched: false };
   };
 
   // 2. Parse Excel/CSV File & Match Product Code with Inventory Products
@@ -160,6 +174,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
             product_code,
             product_id: match.id,
             product_name: match.name,
+            isMatched: match.isMatched,
             amount_usd,
             platform: platform || 'Facebook Ads',
             exchange_rate: exchange_rate > 0 ? exchange_rate : 122.00,
@@ -197,9 +212,10 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
       const row = { ...updated[index], [field]: value };
 
       if (field === 'product_code') {
-        const match = findProductMatch(value);
+        const match = findProductMatch(value, row.product_id);
         row.product_id = match.id;
         row.product_name = match.name;
+        row.isMatched = match.isMatched;
       }
 
       const usd = Number(field === 'amount_usd' ? value : row.amount_usd || 0);
@@ -215,7 +231,32 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
     });
   };
 
-  // 5. Confirm & Import Batch to API
+  // 5. Select product directly from dropdown to resolve unmatched code
+  const handleSelectProductForRow = (index, selectedVal) => {
+    setParsedAds(prev => {
+      const updated = [...prev];
+      const row = { ...updated[index] };
+
+      if (selectedVal === 'general') {
+        row.product_id = null;
+        row.product_name = 'General Shop Campaign';
+        row.isMatched = true;
+      } else if (selectedVal) {
+        const found = products.find(p => String(p.id) === String(selectedVal));
+        if (found) {
+          row.product_id = found.id;
+          row.product_name = found.name;
+          row.product_code = found.sku || found.product_code || String(found.id);
+          row.isMatched = true;
+        }
+      }
+
+      updated[index] = row;
+      return updated;
+    });
+  };
+
+  // 6. Confirm & Import Batch to API
   const handleConfirmImport = async () => {
     const validItems = parsedAds.filter(a => a.isValid);
     if (validItems.length === 0) {
@@ -249,10 +290,11 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
 
   const totalImportUsd = parsedAds.filter(a => a.isValid).reduce((sum, a) => sum + Number(a.amount_usd || 0), 0);
   const totalImportBdt = parsedAds.filter(a => a.isValid).reduce((sum, a) => sum + Number(a.total_bdt_cost || 0), 0);
+  const unmatchedCount = parsedAds.filter(a => !a.isMatched).length;
 
   return (
     <div className="modal-overlay" style={{ background: 'rgba(10, 15, 29, 0.85)', backdropFilter: 'blur(10px)', zIndex: 1100 }}>
-      <div className="modal-content" style={{ maxWidth: '980px', background: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '20px', padding: '28px', color: '#fff' }}>
+      <div className="modal-content" style={{ maxWidth: '1020px', background: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '20px', padding: '28px', color: '#fff' }}>
         
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -262,7 +304,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
             </div>
             <div>
               <h3 style={{ fontSize: '18px', fontWeight: '800' }}>Bulk Excel / CSV Paid Ads Import</h3>
-              <p style={{ fontSize: '12px', color: '#94a3b8' }}>Import, preview, edit values or remove products before saving</p>
+              <p style={{ fontSize: '12px', color: '#94a3b8' }}>Smart Product Code matching, error detection & 1-click dropdown resolution</p>
             </div>
           </div>
 
@@ -329,10 +371,18 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
         {/* STEP 2: PREVIEW & INLINE EDIT TABLE */}
         {step === 2 && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', background: '#1e293b', padding: '12px 16px', borderRadius: '10px' }}>
+            {/* Top Summary Bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', background: '#1e293b', padding: '12px 16px', borderRadius: '10px' }}>
               <div style={{ fontSize: '13px', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <span>Total Items: <strong>{parsedAds.length}</strong></span>
                 <span style={{ color: '#10b981' }}>Valid: <strong>{parsedAds.length - invalidCount}</strong></span>
+                {unmatchedCount > 0 ? (
+                  <span style={{ color: '#f87171', fontWeight: '700', background: 'rgba(239, 68, 68, 0.2)', padding: '2px 8px', borderRadius: '6px' }}>
+                    ⚠️ Unmatched Codes: <strong>{unmatchedCount}</strong>
+                  </span>
+                ) : (
+                  <span style={{ color: '#10b981', fontWeight: '700' }}>✓ All Product Codes Matched</span>
+                )}
                 <span>Total USD: <strong style={{ color: '#6366f1' }}>${totalImportUsd.toFixed(2)}</strong></span>
                 <span>Total Expense: <strong style={{ color: '#f87171' }}>৳{totalImportBdt.toFixed(2)}</strong></span>
               </div>
@@ -343,20 +393,30 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
               </button>
             </div>
 
-            {/* Scrollable Preview Table with Inline Edit & Delete */}
+            {/* Unmatched Code Resolution Banner */}
+            {unmatchedCount > 0 && (
+              <div style={{ padding: '10px 14px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '8px', fontSize: '12px', color: '#fbbf24', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={16} />
+                <span>
+                  <strong>Notice:</strong> {unmatchedCount} product code(s) were not found in your inventory. Select the correct product from the dropdown in the row, edit the SKU code, or choose "General Shop Campaign".
+                </span>
+              </div>
+            )}
+
+            {/* Scrollable Preview Table with Error Highlight & Dropdown Resolution */}
             <div style={{ maxHeight: '380px', overflowY: 'auto', borderRadius: '10px', border: '1px solid #334155', marginBottom: '20px' }}>
               <table className="data-table" style={{ fontSize: '12px', width: '100%' }}>
                 <thead>
                   <tr style={{ background: '#1e293b', position: 'sticky', top: 0, zIndex: 10 }}>
-                    <th style={{ width: '45px' }}>#</th>
-                    <th style={{ minWidth: '120px' }}>Ad Date</th>
-                    <th style={{ minWidth: '130px' }}>Product Code</th>
-                    <th style={{ minWidth: '180px' }}>Matched Product</th>
-                    <th style={{ minWidth: '130px' }}>Platform</th>
-                    <th style={{ minWidth: '110px' }}>Ad Spend ($)</th>
-                    <th style={{ minWidth: '100px' }}>Rate (৳/$)</th>
-                    <th style={{ minWidth: '100px' }}>Total (৳)</th>
-                    <th style={{ width: '60px', textAlign: 'center' }}>Action</th>
+                    <th style={{ width: '40px' }}>#</th>
+                    <th style={{ minWidth: '115px' }}>Ad Date</th>
+                    <th style={{ minWidth: '125px' }}>Product Code</th>
+                    <th style={{ minWidth: '220px' }}>Matched Product / Resolve Dropdown</th>
+                    <th style={{ minWidth: '120px' }}>Platform</th>
+                    <th style={{ minWidth: '100px' }}>Ad Spend ($)</th>
+                    <th style={{ minWidth: '90px' }}>Rate (৳/$)</th>
+                    <th style={{ minWidth: '95px' }}>Total (৳)</th>
+                    <th style={{ width: '55px', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -368,7 +428,13 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
                     </tr>
                   ) : (
                     parsedAds.map((a, idx) => (
-                      <tr key={idx} style={{ background: a.isValid ? 'transparent' : 'rgba(239, 68, 68, 0.12)' }}>
+                      <tr 
+                        key={idx} 
+                        style={{ 
+                          background: !a.isMatched ? 'rgba(239, 68, 68, 0.14)' : (!a.isValid ? 'rgba(245, 158, 11, 0.12)' : 'transparent'),
+                          borderLeft: !a.isMatched ? '4px solid #ef4444' : 'none'
+                        }}
+                      >
                         <td>{idx + 1}</td>
                         
                         {/* 1. Editable Ad Date */}
@@ -382,21 +448,55 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
                           />
                         </td>
 
-                        {/* 2. Editable Product Code */}
+                        {/* 2. Editable Product Code (Red Highlight if Unmatched) */}
                         <td>
                           <input 
                             type="text"
                             className="form-input"
-                            style={{ padding: '4px 8px', fontSize: '12px' }}
+                            style={{ 
+                              padding: '4px 8px', 
+                              fontSize: '12px',
+                              borderColor: a.isMatched ? 'var(--border-color)' : '#ef4444',
+                              color: a.isMatched ? '#f8fafc' : '#f87171',
+                              fontWeight: a.isMatched ? '400' : '700'
+                            }}
                             placeholder="Code/SKU..."
                             value={a.product_code}
                             onChange={(e) => handleUpdateRow(idx, 'product_code', e.target.value)}
                           />
                         </td>
 
-                        {/* 3. Matched Product Name (Live status indicator) */}
-                        <td style={{ fontWeight: '700', color: a.product_id ? '#10b981' : '#f8fafc', fontSize: '12px' }}>
-                          {a.product_name}
+                        {/* 3. Matched Product Name & 1-Click Dropdown Resolver */}
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <select
+                              className="form-select"
+                              style={{ 
+                                padding: '4px 6px', 
+                                fontSize: '11px', 
+                                borderColor: a.isMatched ? 'rgba(255, 255, 255, 0.15)' : '#ef4444',
+                                color: a.isMatched ? '#10b981' : '#f87171',
+                                fontWeight: '700',
+                                background: '#0f172a'
+                              }}
+                              value={a.product_id ? String(a.product_id) : (a.isMatched ? 'general' : '')}
+                              onChange={(e) => handleSelectProductForRow(idx, e.target.value)}
+                            >
+                              <option value="" disabled>-- ⚠️ Select Product to Resolve --</option>
+                              <option value="general">🌐 General Shop Campaign (No Product)</option>
+                              {products.map(p => (
+                                <option key={p.id} value={String(p.id)}>
+                                  {p.name} ({p.sku || p.product_code || `ID:${p.id}`})
+                                </option>
+                              ))}
+                            </select>
+
+                            {!a.isMatched && (
+                              <span style={{ fontSize: '10px', color: '#f87171', fontWeight: '700' }}>
+                                ⚠️ Code "{a.product_code}" not found. Select product above to fix.
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* 4. Editable Platform Select */}
@@ -471,7 +571,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                💡 Tip: You can edit dates, amounts or click <Trash2 size={12} inline color="#f87171" /> to remove any product row before confirming.
+                💡 Tip: Type a valid SKU or pick from the dropdown to resolve unmatched product code errors before importing.
               </span>
 
               <div style={{ display: 'flex', gap: '12px' }}>
