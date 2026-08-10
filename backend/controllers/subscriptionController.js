@@ -33,7 +33,9 @@ exports.getMySubscription = async (req, res) => {
 
     // Calculate remaining trial / subscription days
     const now = new Date();
-    const expiryDate = tenant.subscription_status === 'trial' ? new Date(tenant.trial_ends_at) : (subRows[0] ? new Date(subRows[0].ends_at) : new Date(tenant.trial_ends_at));
+    const expiryDate = tenant.subscription_ends_at 
+      ? new Date(tenant.subscription_ends_at) 
+      : (tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : (subRows[0] ? new Date(subRows[0].ends_at) : new Date()));
     
     const diffTime = expiryDate - now;
     const remainingDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
@@ -43,18 +45,22 @@ exports.getMySubscription = async (req, res) => {
     const usedDays = Math.min(totalPeriodDays, totalPeriodDays - remainingDays);
     const progressPercentage = Math.min(100, Math.max(0, (usedDays / totalPeriodDays) * 100));
 
-    // Current Plan object
+    // Current Plan object (prioritize tenant.plan_name and limits set by Super Admin)
     let currentPlan = null;
     if (subRows.length > 0) {
-      currentPlan = subRows[0];
-    } else {
-      // Default to Trial Plan details
       currentPlan = {
-        plan_name: '14-Day Free Trial Plan',
-        plan_code: 'trial',
+        ...subRows[0],
+        plan_name: tenant.plan_name || subRows[0].plan_name,
+        max_products: tenant.max_products || subRows[0].max_products,
+        max_staff: tenant.max_staff || subRows[0].max_staff
+      };
+    } else {
+      currentPlan = {
+        plan_name: tenant.plan_name || (tenant.subscription_status === 'trial' ? '14-Day Free Trial Plan' : 'Active Subscription Plan'),
+        plan_code: tenant.plan_id ? `plan-${tenant.plan_id}` : (tenant.subscription_status === 'trial' ? 'trial' : 'active'),
         price_monthly: '0.00',
-        max_products: 300,
-        max_staff: 5,
+        max_products: tenant.max_products || (tenant.subscription_status === 'trial' ? 300 : 99999),
+        max_staff: tenant.max_staff || (tenant.subscription_status === 'trial' ? 5 : 99),
         features_json: JSON.stringify({ pos: true, inventory: true, analytics: true, wholesale: true, finance: true, ads: true })
       };
     }

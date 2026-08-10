@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 export const Subscription = () => {
-  const { authFetch, currency, formatCurrency } = useApp();
+  const { authFetch, currency, formatCurrency, setTenant } = useApp();
   const [subData, setSubData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' or 'yearly'
@@ -34,7 +34,12 @@ export const Subscription = () => {
       setLoading(true);
       const res = await authFetch('/api/subscription/my-plan');
       const data = await res.json();
-      if (res.ok) setSubData(data);
+      if (res.ok) {
+        setSubData(data);
+        if (setTenant && data.current_plan?.plan_name) {
+          setTenant(prev => prev ? { ...prev, plan_name: data.current_plan.plan_name, subscription_status: data.subscription_status } : prev);
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {

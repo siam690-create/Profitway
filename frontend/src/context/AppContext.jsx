@@ -240,6 +240,31 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // Fetch Subscription & Sync Tenant Details Live
+  const fetchTenantSubscription = async () => {
+    if (!token) return;
+    try {
+      const res = await authFetch('/api/subscription/my-plan');
+      const data = await res.json();
+      if (res.ok && data.current_plan) {
+        setTenant(prev => {
+          if (!prev) return prev;
+          const updated = {
+            ...prev,
+            subscription_status: data.subscription_status,
+            plan_name: data.current_plan.plan_name,
+            max_products: data.usage?.max_products,
+            max_staff: data.usage?.max_staff
+          };
+          localStorage.setItem('tenant', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Subscription sync error:', err);
+    }
+  };
+
   // Refresh All Application Data
   const refreshAllData = () => {
     if (token) {
@@ -249,6 +274,7 @@ export const AppProvider = ({ children }) => {
       fetchSales();
       fetchExpenses();
       fetchSettings();
+      fetchTenantSubscription();
     }
   };
 
@@ -494,6 +520,7 @@ export const AppProvider = ({ children }) => {
         token,
         user,
         tenant,
+        setTenant,
         view,
         setView,
         activeTab,
