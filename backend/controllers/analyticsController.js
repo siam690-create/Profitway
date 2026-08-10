@@ -504,6 +504,9 @@ exports.getProductAnalytics = async (req, res) => {
       };
     });
 
+    // Sort all products by Net Real Profit descending (Most profitable products at the top)
+    formattedProducts.sort((a, b) => b.net_real_profit - a.net_real_profit);
+
     // Top Selling Products
     const topSellers = [...formattedProducts]
       .filter(p => p.units_sold > 0)
