@@ -256,21 +256,28 @@ exports.getProductAnalytics = async (req, res) => {
 
       const [rows] = await db.query(
         `SELECT 
-           COALESCE(ri.product_id, p_sub.id) as product_id,
+           COALESCE(p_sub.id, ri.product_id) as product_id,
            SUM(ri.quantity) as units_returned,
            SUM(ri.quantity * (COALESCE(p_sub.selling_price, 0) - COALESCE(p_sub.cost_price, 0))) as returned_profit_reversal,
            SUM(COALESCE(r.return_delivery_loss, 0) * (ri.quantity / GREATEST(COALESCE(r_tot.total_qty, 1), 1))) as returned_deliv_profit_reversal,
            SUM(COALESCE(r.courier_charge, 0) * (ri.quantity / GREATEST(COALESCE(r_tot.total_qty, 1), 1))) as return_charges
          FROM return_items ri
          JOIN returns r ON ri.return_id = r.id
-         LEFT JOIN products p_sub ON (ri.product_id = p_sub.id OR (p_sub.tenant_id = r.tenant_id AND (p_sub.sku = ri.product_name OR p_sub.name = ri.product_name)))
+         LEFT JOIN products p_sub ON (
+           (ri.product_id IS NOT NULL AND p_sub.id = ri.product_id) OR
+           (p_sub.tenant_id = r.tenant_id AND (
+             LOWER(TRIM(p_sub.sku)) = LOWER(TRIM(ri.product_name)) OR 
+             LOWER(TRIM(p_sub.name)) = LOWER(TRIM(ri.product_name)) OR
+             LOWER(TRIM(ri.product_name)) LIKE CONCAT('%', LOWER(TRIM(p_sub.name)), '%')
+           ))
+         )
          LEFT JOIN (
            SELECT return_id, SUM(quantity) as total_qty 
            FROM return_items 
            GROUP BY return_id
          ) r_tot ON r_tot.return_id = r.id
          ${returnsWhere}
-         GROUP BY COALESCE(ri.product_id, p_sub.id)`,
+         GROUP BY COALESCE(p_sub.id, ri.product_id)`,
         returnsParams
       );
       returnsAgg = rows;
@@ -296,14 +303,37 @@ exports.getProductAnalytics = async (req, res) => {
 
     const [allProducts] = await db.query('SELECT id, name, sku, is_combo, stock_quantity, cost_price, selling_price FROM products WHERE tenant_id = ?', [tenantId]);
 
-    const salesMap = new Map(salesAgg.map(s => [s.product_id, s]));
-    const returnsMap = new Map(returnsAgg.map(r => [r.product_id, r]));
-    const adsMap = new Map(adsAgg.map(a => [a.product_id, a]));
+    const salesMap = new Map();
+    salesAgg.forEach(s => {
+      if (s.product_id !== null && s.product_id !== undefined) {
+        salesMap.set(Number(s.product_id), s);
+        salesMap.set(String(s.product_id), s);
+      }
+    });
+
+    const returnsMap = new Map();
+    returnsAgg.forEach(r => {
+      if (r.product_id !== null && r.product_id !== undefined) {
+        returnsMap.set(Number(r.product_id), r);
+        returnsMap.set(String(r.product_id), r);
+      }
+    });
+
+    const adsMap = new Map();
+    adsAgg.forEach(a => {
+      if (a.product_id !== null && a.product_id !== undefined) {
+        adsMap.set(Number(a.product_id), a);
+        adsMap.set(String(a.product_id), a);
+      }
+    });
 
     const formattedProducts = allProducts.map(p => {
-      const s = salesMap.get(p.id) || {};
-      const r = returnsMap.get(p.id) || {};
-      const a = adsMap.get(p.id) || {};
+      const pIdNum = Number(p.id);
+      const pIdStr = String(p.id);
+
+      const s = salesMap.get(pIdNum) || salesMap.get(pIdStr) || {};
+      const r = returnsMap.get(pIdNum) || returnsMap.get(pIdStr) || {};
+      const a = adsMap.get(pIdNum) || adsMap.get(pIdStr) || {};
 
       const gProfit = Number(s.gross_profit || 0);
       const delivProfit = Number(s.product_delivery_profit || 0);
