@@ -672,6 +672,11 @@ exports.disburseSalary = async (req, res) => {
     const newDueAmount = Math.max(0, netPayableVal - newTotalPaid);
     const paymentStatus = newDueAmount <= 0.05 ? 'paid' : 'partial';
 
+    // Auto-migration fallback check for account_id column on payroll table
+    try {
+      await db.query('ALTER TABLE payroll ADD COLUMN account_id INT DEFAULT NULL');
+    } catch (e) {}
+
     // 1. Insert Payroll Record
     const [payResult] = await db.query(
       `INSERT INTO payroll (

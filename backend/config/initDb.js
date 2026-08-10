@@ -439,6 +439,7 @@ async function autoMigrate() {
 
     // Retroactive column additions to payroll table
     await addColumnIfNotExists('payroll', 'employee_id', 'INT NULL');
+    await addColumnIfNotExists('payroll', 'account_id', 'INT NULL');
     await addColumnIfNotExists('payroll', 'net_payable', 'DECIMAL(12,2) DEFAULT 0.00');
     await addColumnIfNotExists('payroll', 'net_salary_paid', 'DECIMAL(12,2) DEFAULT 0.00');
     await addColumnIfNotExists('payroll', 'overtime_pay', 'DECIMAL(10,2) DEFAULT 0.00');
