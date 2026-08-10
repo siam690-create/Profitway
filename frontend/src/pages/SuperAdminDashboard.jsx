@@ -16,7 +16,11 @@ import {
   HelpCircle,
   MessageSquare,
   Send,
-  CheckSquare
+  CheckSquare,
+  CreditCard,
+  Sparkles,
+  Zap,
+  Crown
 } from 'lucide-react';
 
 export const SuperAdminDashboard = () => {
@@ -31,6 +35,15 @@ export const SuperAdminDashboard = () => {
   const [editingShop, setEditingShop] = useState(null);
   const [editShopName, setEditShopName] = useState('');
   const [editShopCode, setEditShopCode] = useState('');
+
+  // Super Admin Plan Management Modal State
+  const [editingPlanShop, setEditingPlanShop] = useState(null);
+  const [planId, setPlanId] = useState('');
+  const [planName, setPlanName] = useState('14-Day Free Trial Plan');
+  const [subscriptionStatus, setSubscriptionStatus] = useState('active');
+  const [maxProducts, setMaxProducts] = useState(300);
+  const [maxStaff, setMaxStaff] = useState(5);
+  const [expiryDate, setExpiryDate] = useState('');
 
   // Super Admin Ticket Reply Modal State
   const [selectedTicketData, setSelectedTicketData] = useState(null);
@@ -94,6 +107,103 @@ export const SuperAdminDashboard = () => {
         setEditingShop(null);
         fetchSuperAdminData();
         alert('Master Shop Name & Unique Shop Code updated successfully!');
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  // Open Subscription Plan Manager Modal for a Tenant Shop
+  const handleOpenManagePlan = (shop) => {
+    setEditingPlanShop(shop);
+    setPlanId(shop.plan_id || '');
+    setPlanName(shop.plan_name || '14-Day Free Trial Plan');
+    setSubscriptionStatus(shop.subscription_status || 'active');
+    setMaxProducts(shop.max_products || 300);
+    setMaxStaff(shop.max_staff || 5);
+
+    const rawDate = shop.subscription_ends_at || shop.trial_ends_at;
+    if (rawDate) {
+      setExpiryDate(new Date(rawDate).toISOString().slice(0, 10));
+    } else {
+      const future = new Date();
+      future.setDate(future.getDate() + 30);
+      setExpiryDate(future.toISOString().slice(0, 10));
+    }
+  };
+
+  // Quick Preset Plan Selection
+  const handleSelectPresetPlan = (presetKey) => {
+    const curDate = expiryDate ? new Date(expiryDate) : new Date();
+    if (presetKey === 'trial') {
+      setPlanId('');
+      setPlanName('14-Day Free Trial Plan');
+      setMaxProducts(300);
+      setMaxStaff(5);
+      setSubscriptionStatus('trial');
+      curDate.setDate(new Date().getDate() + 14);
+      setExpiryDate(curDate.toISOString().slice(0, 10));
+    } else if (presetKey === 'basic') {
+      setPlanId('1');
+      setPlanName('Basic Starter Plan');
+      setMaxProducts(500);
+      setMaxStaff(2);
+      setSubscriptionStatus('active');
+      curDate.setDate(new Date().getDate() + 30);
+      setExpiryDate(curDate.toISOString().slice(0, 10));
+    } else if (presetKey === 'pro') {
+      setPlanId('2');
+      setPlanName('Professional Plan');
+      setMaxProducts(2000);
+      setMaxStaff(5);
+      setSubscriptionStatus('active');
+      curDate.setDate(new Date().getDate() + 30);
+      setExpiryDate(curDate.toISOString().slice(0, 10));
+    } else if (presetKey === 'enterprise') {
+      setPlanId('3');
+      setPlanName('Enterprise Unlimited Plan');
+      setMaxProducts(99999);
+      setMaxStaff(99);
+      setSubscriptionStatus('active');
+      curDate.setDate(new Date().getDate() + 365);
+      setExpiryDate(curDate.toISOString().slice(0, 10));
+    } else if (presetKey === 'custom') {
+      setPlanId('');
+      setPlanName('Custom VIP Dedicated Plan');
+      setSubscriptionStatus('active');
+    }
+  };
+
+  const handleAddDaysToExpiry = (daysToAdd) => {
+    const base = expiryDate ? new Date(expiryDate) : new Date();
+    base.setDate(base.getDate() + daysToAdd);
+    setExpiryDate(base.toISOString().slice(0, 10));
+  };
+
+  const handleSaveSubscriptionPlan = async (e) => {
+    e.preventDefault();
+    if (!editingPlanShop) return;
+
+    try {
+      const res = await authFetch(`/api/super-admin/tenants/${editingPlanShop.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          plan_id: planId || null,
+          plan_name: planName,
+          subscription_status: subscriptionStatus,
+          max_products: Number(maxProducts),
+          max_staff: Number(maxStaff),
+          expiry_date: expiryDate
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setEditingPlanShop(null);
+        fetchSuperAdminData();
+        alert(`🎉 Subscription Plan updated & synced with "${editingPlanShop.shop_name}" successfully!`);
       } else {
         alert(`Error: ${data.error}`);
       }
@@ -230,7 +340,7 @@ export const SuperAdminDashboard = () => {
             <h1 style={{ fontSize: '26px', fontWeight: '800' }}>Super Admin SaaS Controller</h1>
           </div>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Platform metrics, shop subscriptions, master shop names, and support help desk tickets
+            Platform metrics, shop subscriptions, plan assignment & capacity limits management
           </p>
         </div>
 
@@ -306,13 +416,14 @@ export const SuperAdminDashboard = () => {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Unique Shop Code</th>
+                  <th>Shop Code</th>
                   <th>Master Shop Name</th>
+                  <th>Assigned Plan</th>
                   <th>Owner Details</th>
                   <th>Products</th>
-                  <th>Sales Count</th>
+                  <th>Sales</th>
                   <th>Status</th>
-                  <th>Trial / Period Ends</th>
+                  <th>Period Ends</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -322,6 +433,8 @@ export const SuperAdminDashboard = () => {
                   const isTrial = shop.subscription_status === 'trial';
                   const isActive = shop.subscription_status === 'active';
                   const isSuspended = shop.subscription_status === 'suspended';
+
+                  const endDate = shop.subscription_ends_at || shop.trial_ends_at;
 
                   return (
                     <tr key={shop.id} style={{ background: isPending ? 'rgba(245, 158, 11, 0.08)' : undefined }}>
@@ -335,6 +448,14 @@ export const SuperAdminDashboard = () => {
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>slug: {shop.slug}</span>
                       </td>
                       <td>
+                        <span className="badge badge-primary" style={{ fontWeight: '800', fontSize: '11px' }}>
+                          {shop.plan_name || '14-Day Free Trial Plan'}
+                        </span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
+                          Capacity: {shop.max_products || 300} prods | {shop.max_staff || 5} staff
+                        </span>
+                      </td>
+                      <td>
                         <div style={{ fontSize: '13px' }}>{shop.owner_name || shop.owner_user_name}</div>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{shop.email}</div>
                       </td>
@@ -346,7 +467,7 @@ export const SuperAdminDashboard = () => {
                         </span>
                       </td>
                       <td style={{ fontSize: '12px' }}>
-                        {new Date(shop.trial_ends_at).toLocaleDateString()}
+                        {endDate ? new Date(endDate).toLocaleDateString() : '-'}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -355,18 +476,17 @@ export const SuperAdminDashboard = () => {
                               ✓ Approve Account
                             </button>
                           )}
+                          
+                          <button onClick={() => handleOpenManagePlan(shop)} className="btn btn-primary btn-sm" style={{ fontWeight: '800' }} title="Assign Subscription Plan & Change Capacity Limits">
+                            <CreditCard size={14} />
+                            <span>Manage Plan</span>
+                          </button>
+
                           <button onClick={() => handleOpenEditShop(shop)} className="btn btn-secondary btn-sm" title="Edit Master Shop Name & Unique Code">
                             <Edit2 size={14} />
                             <span>Edit</span>
                           </button>
-                          <button onClick={() => handleExtendTrial(shop.id)} className="btn btn-secondary btn-sm" title="Extend Trial">
-                            + Trial
-                          </button>
-                          {!isActive && !isPending && (
-                            <button onClick={() => handleActivateSubscription(shop.id)} className="btn btn-success btn-sm">
-                              Activate
-                            </button>
-                          )}
+
                           {!isSuspended && (
                             <button onClick={() => handleApproveShop(shop.id, 'suspended')} className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} title="Suspend Shop Account">
                               Suspend
@@ -411,10 +531,6 @@ export const SuperAdminDashboard = () => {
                   </tr>
                 ) : (
                   tickets.map(t => {
-                    const isOpen = t.status === 'Open';
-                    const isResolved = t.status === 'Resolved';
-                    const isClosed = t.status === 'Closed';
-
                     return (
                       <tr key={t.id}>
                         <td><strong style={{ color: 'var(--accent-primary)' }}>#{t.ticket_no}</strong></td>
@@ -458,6 +574,196 @@ export const SuperAdminDashboard = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* 💳 Manage Subscription Plan Modal (Super Admin Only) */}
+      {editingPlanShop && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '640px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <CreditCard size={22} color="var(--accent-primary)" />
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '800' }}>Manage Subscription Plan & Limits</h3>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Shop: <strong>{editingPlanShop.shop_name}</strong> [{editingPlanShop.shop_code || `SHOP-${1000 + editingPlanShop.id}`}]
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setEditingPlanShop(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleSaveSubscriptionPlan}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                {/* Preset Plans Quick Select Buttons */}
+                <div>
+                  <label className="form-label">Select Preset Subscription Plan</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPresetPlan('trial')}
+                      style={{
+                        padding: '12px',
+                        borderRadius: '10px',
+                        border: planName === '14-Day Free Trial Plan' ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                        background: planName === '14-Day Free Trial Plan' ? 'var(--bg-secondary)' : 'transparent',
+                        textAlign: 'left',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>🆓 14-Day Free Trial</strong>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>300 Prods | 5 Staff | ৳0</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPresetPlan('basic')}
+                      style={{
+                        padding: '12px',
+                        borderRadius: '10px',
+                        border: planName === 'Basic Starter Plan' ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                        background: planName === 'Basic Starter Plan' ? 'var(--bg-secondary)' : 'transparent',
+                        textAlign: 'left',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>🚀 Basic Starter Plan</strong>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>500 Prods | 2 Staff | ৳990/mo</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPresetPlan('pro')}
+                      style={{
+                        padding: '12px',
+                        borderRadius: '10px',
+                        border: planName === 'Professional Plan' ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                        background: planName === 'Professional Plan' ? 'var(--bg-secondary)' : 'transparent',
+                        textAlign: 'left',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>⚡ Professional Plan</strong>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>2,000 Prods | 5 Staff | ৳1,990/mo</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPresetPlan('enterprise')}
+                      style={{
+                        padding: '12px',
+                        borderRadius: '10px',
+                        border: planName === 'Enterprise Unlimited Plan' ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                        background: planName === 'Enterprise Unlimited Plan' ? 'var(--bg-secondary)' : 'transparent',
+                        textAlign: 'left',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>👑 Enterprise Unlimited</strong>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>99,999 Prods | 99 Staff | ৳3,490/mo</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Plan Name Input */}
+                <div className="form-group">
+                  <label className="form-label">Subscription Plan Name (Displayed on Shop Dashboard)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    value={planName}
+                    onChange={(e) => setPlanName(e.target.value)}
+                    placeholder="e.g. Professional Plan or VIP Customized Plan"
+                  />
+                </div>
+
+                {/* Account Status & Expiry Date Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Account Status</label>
+                    <select
+                      className="form-select"
+                      value={subscriptionStatus}
+                      onChange={(e) => setSubscriptionStatus(e.target.value)}
+                    >
+                      <option value="active">🟢 ACTIVE (Full Subscription)</option>
+                      <option value="trial">⏳ TRIAL (Free Trial)</option>
+                      <option value="suspended">🛑 SUSPENDED (Blocked Access)</option>
+                      <option value="pending_approval">⏳ PENDING APPROVAL</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Subscription Expiry Date</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      required
+                      value={expiryDate}
+                      onChange={(e) => setExpiryDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Extend Buttons */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Quick Expiry Extension:</span>
+                  <button type="button" onClick={() => handleAddDaysToExpiry(30)} className="btn btn-secondary btn-sm" style={{ fontSize: '11px' }}>
+                    + 30 Days (1 Mo)
+                  </button>
+                  <button type="button" onClick={() => handleAddDaysToExpiry(90)} className="btn btn-secondary btn-sm" style={{ fontSize: '11px' }}>
+                    + 90 Days (3 Mo)
+                  </button>
+                  <button type="button" onClick={() => handleAddDaysToExpiry(180)} className="btn btn-secondary btn-sm" style={{ fontSize: '11px' }}>
+                    + 180 Days (6 Mo)
+                  </button>
+                  <button type="button" onClick={() => handleAddDaysToExpiry(365)} className="btn btn-secondary btn-sm" style={{ fontSize: '11px' }}>
+                    + 1 Year
+                  </button>
+                </div>
+
+                {/* Capacity Limits Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Max Product Catalog Capacity Limit</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      required
+                      value={maxProducts}
+                      onChange={(e) => setMaxProducts(e.target.value)}
+                      placeholder="e.g. 500 or 2000"
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Max Staff Accounts Capacity Limit</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      required
+                      value={maxStaff}
+                      onChange={(e) => setMaxStaff(e.target.value)}
+                      placeholder="e.g. 2 or 5"
+                    />
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setEditingPlanShop(null)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-success" style={{ fontWeight: '800' }}>
+                  Save & Sync Subscription to Shop
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

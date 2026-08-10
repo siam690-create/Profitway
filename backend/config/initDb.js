@@ -537,6 +537,13 @@ async function autoMigrate() {
     await addColumnIfNotExists('employee_loans', 'type', "VARCHAR(20) DEFAULT 'loan'");
     await addColumnIfNotExists('employee_loans', 'auto_deduct_salary', 'TINYINT(1) DEFAULT 1');
 
+    // Retroactive tenant table subscription plan columns
+    await addColumnIfNotExists('tenants', 'plan_id', 'INT NULL');
+    await addColumnIfNotExists('tenants', 'plan_name', "VARCHAR(150) DEFAULT '14-Day Free Trial Plan'");
+    await addColumnIfNotExists('tenants', 'max_products', 'INT DEFAULT 300');
+    await addColumnIfNotExists('tenants', 'max_staff', 'INT DEFAULT 5');
+    await addColumnIfNotExists('tenants', 'subscription_ends_at', 'DATETIME NULL');
+
     // Retroactive column type expansion for liabilities & receivables status & party_type column to prevent data truncation
     try {
       await db.query("ALTER TABLE liabilities MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");

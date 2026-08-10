@@ -67,11 +67,21 @@ exports.getTenants = async (req, res) => {
   }
 };
 
-// Update Tenant Subscription Status, Master Shop Name & Unique Shop Code (SUPER ADMIN ONLY)
+// Update Tenant Subscription Status, Plan Assignment, Limits, Dates, Shop Name & Code (SUPER ADMIN ONLY)
 exports.updateTenantSubscription = async (req, res) => {
   try {
     const { tenant_id } = req.params;
-    const { subscription_status, extend_days, shop_name, shop_code } = req.body;
+    const { 
+      subscription_status, 
+      extend_days, 
+      shop_name, 
+      shop_code,
+      plan_id,
+      plan_name,
+      max_products,
+      max_staff,
+      expiry_date
+    } = req.body;
 
     const [tenantRows] = await db.query('SELECT * FROM tenants WHERE id = ?', [tenant_id]);
     if (tenantRows.length === 0) {
@@ -79,25 +89,60 @@ exports.updateTenantSubscription = async (req, res) => {
     }
     const tenant = tenantRows[0];
 
+    // 1. Update basic status if provided
     if (subscription_status) {
-      // If approving a pending account, reset trial ends at to 14 days from now
       if (tenant.subscription_status === 'pending_approval' && (subscription_status === 'trial' || subscription_status === 'active')) {
-        const trialEndsAt = new Date();
-        trialEndsAt.setDate(trialEndsAt.getDate() + 14);
-        await db.query('UPDATE tenants SET subscription_status = ?, trial_ends_at = ? WHERE id = ?', [subscription_status, trialEndsAt, tenant_id]);
+        const trialEndsAt = expiry_date ? new Date(expiry_date) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        await db.query(
+          'UPDATE tenants SET subscription_status = ?, trial_ends_at = ?, subscription_ends_at = ? WHERE id = ?', 
+          [subscription_status, trialEndsAt, trialEndsAt, tenant_id]
+        );
       } else {
         await db.query('UPDATE tenants SET subscription_status = ? WHERE id = ?', [subscription_status, tenant_id]);
       }
 
-      // Send status update notification email to shop owner
+      // Email notification
       try {
         await mailer.sendMail({
           to: tenant.email,
-          subject: `🎉 Profitway Shop Account Approved: ${tenant.shop_name} [${tenant.shop_code}]`,
-          text: `Hello ${tenant.owner_name},\n\nGreat news! Your shop account "${tenant.shop_name}" (${tenant.shop_code}) has been APPROVED by Super Admin!\n\nStatus: ${subscription_status.toUpperCase()}\n\nYou can now log in to your dashboard at https://profitway.bd and start managing your inventory and sales.\n\nThank you,\nProfitway Support Team`
+          subject: `🎉 Profitway Shop Account Status Update: ${tenant.shop_name} [${tenant.shop_code || `SHOP-${1000 + tenant.id}`}]`,
+          text: `Hello ${tenant.owner_name},\n\nYour shop account "${tenant.shop_name}" status has been updated to ${subscription_status.toUpperCase()}.\n\nYou can log in to your dashboard at https://profitway.bd.\n\nThank you,\nProfitway Support Team`
         });
       } catch (e) {
         console.error('Email error:', e.message);
+      }
+    }
+
+    // 2. Update Plan Assignment & Capacity Limits if provided
+    if (plan_name || max_products !== undefined || max_staff !== undefined || expiry_date) {
+      const pName = plan_name || tenant.plan_name || '14-Day Free Trial Plan';
+      const maxProd = max_products !== undefined ? Number(max_products) : (tenant.max_products || 300);
+      const maxStf = max_staff !== undefined ? Number(max_staff) : (tenant.max_staff || 5);
+      const expDate = expiry_date ? new Date(expiry_date) : (tenant.subscription_ends_at || tenant.trial_ends_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+      await db.query(
+        `UPDATE tenants 
+         SET plan_id = ?, plan_name = ?, max_products = ?, max_staff = ?, trial_ends_at = ?, subscription_ends_at = ?
+         WHERE id = ?`,
+        [
+          plan_id ? Number(plan_id) : null,
+          pName,
+          maxProd,
+          maxStf,
+          expDate,
+          expDate,
+          tenant_id
+        ]
+      );
+
+      // Upsert into subscriptions table if plan_id is provided or matched
+      if (plan_id) {
+        await db.query('UPDATE subscriptions SET status = "cancelled" WHERE tenant_id = ?', [tenant_id]);
+        await db.query(
+          `INSERT INTO subscriptions (tenant_id, plan_id, billing_cycle, start_date, ends_at, status)
+           VALUES (?, ?, 'monthly', NOW(), ?, 'active')`,
+          [tenant_id, Number(plan_id), expDate]
+        );
       }
     }
 
@@ -111,12 +156,12 @@ exports.updateTenantSubscription = async (req, res) => {
 
     if (extend_days && !isNaN(extend_days)) {
       await db.query(
-        'UPDATE tenants SET trial_ends_at = DATE_ADD(trial_ends_at, INTERVAL ? DAY) WHERE id = ?',
-        [Number(extend_days), tenant_id]
+        'UPDATE tenants SET trial_ends_at = DATE_ADD(COALESCE(trial_ends_at, NOW()), INTERVAL ? DAY), subscription_ends_at = DATE_ADD(COALESCE(subscription_ends_at, NOW()), INTERVAL ? DAY) WHERE id = ?',
+        [Number(extend_days), Number(extend_days), tenant_id]
       );
     }
 
-    res.json({ message: 'Tenant updated successfully by Super Admin' });
+    res.json({ message: 'Tenant subscription and shop settings updated successfully by Super Admin' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

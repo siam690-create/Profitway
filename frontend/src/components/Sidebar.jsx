@@ -82,7 +82,7 @@ export const Sidebar = () => {
           <h2 style={styles.brandTitle} title={tenant?.shop_name}>{tenant?.shop_name || 'Profitway'}</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', flexWrap: 'wrap' }}>
             <span className={`badge ${isTrial ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
-              {isTrial ? '14-Day Free Trial' : 'Active Plan'}
+              {tenant?.plan_name || (isTrial ? '14-Day Free Trial' : 'Active Plan')}
             </span>
             <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--accent-primary)', background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
               {tenant?.shop_code || `SHOP-${1000 + (tenant?.id || 1)}`}
