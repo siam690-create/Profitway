@@ -138,7 +138,15 @@ export const StaffManager = () => {
   };
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [leaveForm, setLeaveForm] = useState({ employee_id: '', leave_type: 'casual', start_date: new Date().toISOString().slice(0, 10), end_date: new Date().toISOString().slice(0, 10), total_days: 1, reason: '' });
+  const [leaveForm, setLeaveForm] = useState({
+    employee_id: '',
+    leave_type: 'casual',
+    leave_category: 'paid',
+    start_date: new Date().toISOString().slice(0, 10),
+    end_date: new Date().toISOString().slice(0, 10),
+    total_days: 1,
+    reason: ''
+  });
 
   const [loanTypeFilter, setLoanTypeFilter] = useState('all'); // 'all', 'loan', 'advance'
   const [showLoanModal, setShowLoanModal] = useState(false);
@@ -394,14 +402,47 @@ export const StaffManager = () => {
 
   const handleCreateLeave = async (e) => {
     e.preventDefault();
+    if (!leaveForm.employee_id) return alert('Please select an employee.');
     try {
       const res = await authFetch('/api/staff/leaves', { method: 'POST', body: JSON.stringify(leaveForm) });
       const data = await res.json();
       if (res.ok) {
         setShowLeaveModal(false);
         fetchLeaves();
-        alert('Leave recorded successfully!');
+        fetchSalarySheet();
+        alert('Leave record added successfully!');
       } else alert(`Error: ${data.error}`);
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const handleUpdateLeaveStatus = async (id, newStatus) => {
+    try {
+      const res = await authFetch(`/api/staff/leaves/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        fetchLeaves();
+        fetchSalarySheet();
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const handleDeleteLeave = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this leave record?')) return;
+    try {
+      const res = await authFetch(`/api/staff/leaves/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchLeaves();
+        fetchSalarySheet();
+        alert('Leave record deleted successfully.');
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
     } catch (err) { alert(`Error: ${err.message}`); }
   };
 
@@ -879,27 +920,71 @@ export const StaffManager = () => {
                 <tr>
                   <th>Employee</th>
                   <th>Leave Type</th>
-                  <th>Start Date</th>
-                  <th>End Date</th>
-                  <th>Days</th>
+                  <th>Duration (Dates)</th>
+                  <th>Total Days</th>
+                  <th>Pay Category</th>
                   <th>Reason</th>
                   <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {leavesList.length === 0 ? (
-                  <tr><td colSpan="7" style={{ textAlign: 'center', padding: '30px' }}>No leave applications recorded.</td></tr>
+                  <tr><td colSpan="8" style={{ textAlign: 'center', padding: '30px' }}>No leave applications recorded. Click "+ Record Employee Leave" to add one.</td></tr>
                 ) : (
                   leavesList.map(l => (
                     <tr key={l.id}>
-                      <td><strong>{l.employee_name}</strong> ({l.employee_code})</td>
-                      <td style={{ textTransform: 'capitalize' }}>{l.leave_type} Leave</td>
-                      <td>{new Date(l.start_date).toLocaleDateString()}</td>
-                      <td>{new Date(l.end_date).toLocaleDateString()}</td>
-                      <td style={{ fontWeight: '700' }}>{l.total_days} Days</td>
-                      <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{l.reason || 'Personal'}</td>
                       <td>
-                        <span className="badge badge-success" style={{ textTransform: 'capitalize' }}>{l.status}</span>
+                        <strong>{l.employee_name}</strong>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{l.employee_code} • {l.designation}</div>
+                      </td>
+                      <td style={{ textTransform: 'capitalize', fontWeight: '600' }}>{l.leave_type} Leave</td>
+                      <td style={{ fontSize: '12px' }}>
+                        {new Date(l.start_date).toLocaleDateString()} - {new Date(l.end_date).toLocaleDateString()}
+                      </td>
+                      <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{l.total_days} Days</td>
+                      <td>
+                        <span className={`badge ${l.leave_category === 'unpaid' ? 'badge-danger' : 'badge-success'}`} style={{ fontSize: '11px' }}>
+                          {l.leave_category === 'unpaid' ? '❌ Unpaid Leave (বেতনহীন)' : '✓ Paid Leave (বেতনসহ)'}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{l.reason || 'Personal / Official'}</td>
+                      <td>
+                        <span className={`badge ${l.status === 'approved' ? 'badge-success' : l.status === 'rejected' ? 'badge-danger' : 'badge-warning'}`} style={{ textTransform: 'capitalize' }}>
+                          {l.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {l.status !== 'approved' && (
+                            <button
+                              onClick={() => handleUpdateLeaveStatus(l.id, 'approved')}
+                              className="btn btn-success btn-xs"
+                              style={{ fontSize: '11px', padding: '3px 6px' }}
+                              title="Approve Leave"
+                            >
+                              Approve
+                            </button>
+                          )}
+                          {l.status !== 'rejected' && (
+                            <button
+                              onClick={() => handleUpdateLeaveStatus(l.id, 'rejected')}
+                              className="btn btn-warning btn-xs"
+                              style={{ fontSize: '11px', padding: '3px 6px' }}
+                              title="Reject Leave"
+                            >
+                              Reject
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteLeave(l.id)}
+                            className="btn btn-danger btn-icon btn-xs"
+                            style={{ padding: '3px 6px' }}
+                            title="Delete Record"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1783,6 +1868,122 @@ export const StaffManager = () => {
             <div className="modal-footer">
               <button onClick={() => setSelectedEmpForDocs(null)} className="btn btn-secondary">Close</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: RECORD EMPLOYEE LEAVE */}
+      {showLeaveModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h3>Record Employee Leave Application</h3>
+              <button onClick={() => setShowLeaveModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleCreateLeave}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Select Employee *</label>
+                  <select
+                    className="form-select"
+                    required
+                    value={leaveForm.employee_id}
+                    onChange={(e) => setLeaveForm({ ...leaveForm, employee_id: e.target.value })}
+                  >
+                    <option value="">Select Staff...</option>
+                    {employeesList.map(e => (
+                      <option key={e.id} value={e.id}>{e.name} ({e.employee_code})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Leave Type (ছুটির ধরন) *</label>
+                  <select
+                    className="form-select"
+                    value={leaveForm.leave_type}
+                    onChange={(e) => setLeaveForm({ ...leaveForm, leave_type: e.target.value })}
+                  >
+                    <option value="casual">🌴 Casual Leave (সাধারণ ছুটি)</option>
+                    <option value="sick">🩺 Sick Leave (অসুস্থতাজনিত ছুটি)</option>
+                    <option value="earned">⭐ Earned Leave (অর্জিত ছুটি)</option>
+                    <option value="unpaid">❌ Unpaid Leave (বেতনহীন ছুটি)</option>
+                    <option value="maternity">🤱 Maternity Leave (মাতৃত্বকালীন ছুটি)</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Pay Category (বেতন ক্যাটাগরি) *</label>
+                  <select
+                    className="form-select"
+                    value={leaveForm.leave_category}
+                    onChange={(e) => setLeaveForm({ ...leaveForm, leave_category: e.target.value })}
+                  >
+                    <option value="paid">✓ Paid Leave (বেতনসহ ছুটি - সেলারি কাটবে না)</option>
+                    <option value="unpaid">❌ Unpaid Leave (বেতনহীন ছুটি - স্যালারি শিটে অটো টাকা কর্তন হবে)</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Start Date *</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      required
+                      value={leaveForm.start_date}
+                      onChange={(e) => {
+                        const start = e.target.value;
+                        const end = leaveForm.end_date || start;
+                        const days = Math.max(1, Math.round((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1);
+                        setLeaveForm({ ...leaveForm, start_date: start, total_days: days });
+                      }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">End Date *</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      required
+                      value={leaveForm.end_date}
+                      onChange={(e) => {
+                        const end = e.target.value;
+                        const start = leaveForm.start_date || end;
+                        const days = Math.max(1, Math.round((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1);
+                        setLeaveForm({ ...leaveForm, end_date: end, total_days: days });
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Total Days (মোট ছুটির দিন)</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={leaveForm.total_days}
+                    onChange={(e) => setLeaveForm({ ...leaveForm, total_days: Number(e.target.value || 1) })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Reason / Notes</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Family emergency / Personal travel"
+                    value={leaveForm.reason}
+                    onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowLeaveModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Submit & Record Leave</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

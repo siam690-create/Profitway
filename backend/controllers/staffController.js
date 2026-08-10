@@ -348,19 +348,19 @@ exports.getLeaves = async (req, res) => {
 exports.createLeave = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const { employee_id, leave_type, start_date, end_date, total_days, reason } = req.body;
+    const { employee_id, leave_type, leave_category, start_date, end_date, total_days, reason, status } = req.body;
 
     if (!employee_id || !start_date || !end_date) {
-      return res.status(400).json({ error: 'Employee ID, Start Date, and End Date are required.' });
+      return res.status(400).json({ error: 'Employee, Start Date, and End Date are required.' });
     }
 
     const [result] = await db.query(
-      `INSERT INTO employee_leaves (tenant_id, employee_id, leave_type, start_date, end_date, total_days, reason, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'approved')`,
-      [tenantId, employee_id, leave_type || 'casual', start_date, end_date, Number(total_days || 1), reason || null]
+      `INSERT INTO employee_leaves (tenant_id, employee_id, leave_type, leave_category, start_date, end_date, total_days, reason, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [tenantId, employee_id, leave_type || 'casual', leave_category || 'paid', start_date, end_date, Number(total_days || 1), reason || null, status || 'approved']
     );
 
-    res.status(201).json({ message: 'Leave application recorded successfully', leaveId: result.insertId });
+    res.status(201).json({ message: 'Leave record added successfully', leaveId: result.insertId });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -374,10 +374,21 @@ exports.updateLeaveStatus = async (req, res) => {
 
     await db.query(
       'UPDATE employee_leaves SET status = ?, approved_by = ? WHERE id = ? AND tenant_id = ?',
-      [status, approved_by || req.user.name || 'Admin', id, tenantId]
+      [status, approved_by || 'Admin', id, tenantId]
     );
 
-    res.json({ message: `Leave application status updated to ${status}` });
+    res.json({ message: `Leave status updated to ${status}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.deleteLeave = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+    await db.query('DELETE FROM employee_leaves WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    res.json({ message: 'Leave record deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

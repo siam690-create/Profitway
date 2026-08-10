@@ -539,6 +539,7 @@ async function autoMigrate() {
     await addColumnIfNotExists('employees', 'holiday_duty_allowance', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('employee_loans', 'type', "VARCHAR(20) DEFAULT 'loan'");
     await addColumnIfNotExists('employee_loans', 'auto_deduct_salary', 'TINYINT(1) DEFAULT 1');
+    await addColumnIfNotExists('employee_leaves', 'leave_category', "VARCHAR(20) DEFAULT 'paid'");
 
     // Retroactive tenant table subscription plan columns
     await addColumnIfNotExists('tenants', 'plan_id', 'INT NULL');

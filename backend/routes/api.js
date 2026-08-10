@@ -203,6 +203,7 @@ router.post('/staff/attendance/batch', checkActiveSubscription, staffController.
 router.get('/staff/leaves', staffController.getLeaves);
 router.post('/staff/leaves', checkActiveSubscription, staffController.createLeave);
 router.patch('/staff/leaves/:id/status', checkActiveSubscription, staffController.updateLeaveStatus);
+router.delete('/staff/leaves/:id', checkActiveSubscription, staffController.deleteLeave);
 
 router.get('/staff/loans', staffController.getLoans);
 router.post('/staff/loans/disburse', checkActiveSubscription, staffController.disburseLoan);
