@@ -214,6 +214,41 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
+/* Global Native Calendar & Month Picker Icon Styling (Dark & Light Mode) */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(1) brightness(1.8);
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="month"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  background: rgba(255, 255, 255, 0.15);
+  filter: invert(1) brightness(2.2);
+}
+
+[data-theme='light'] input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme='light'] input[type="month"]::-webkit-calendar-picker-indicator,
+[data-theme='light'] input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+[data-theme='light'] input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0) brightness(0.2);
+}
+
+[data-theme='light'] input[type="date"]::-webkit-calendar-picker-indicator:hover,
+[data-theme='light'] input[type="month"]::-webkit-calendar-picker-indicator:hover,
+[data-theme='light'] input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+[data-theme='light'] input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  background: rgba(0, 0, 0, 0.08);
+  filter: invert(0) brightness(0);
+}
+
 /* Badges */
 .badge {
   display: inline-flex;
