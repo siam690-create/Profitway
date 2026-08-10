@@ -249,35 +249,20 @@ exports.getProductAnalytics = async (req, res) => {
 
     let returnsAgg = [];
     try {
-      let returnsWhere = 'WHERE (r.tenant_id = ? OR ri.tenant_id = ?)';
-      let returnsParams = [tenantId, tenantId];
-
+      let returnsOnlyWhere = 'WHERE tenant_id = ?';
+      let returnsOnlyParams = [tenantId];
       if (!isAllTime) {
-        returnsWhere += ' AND (r.return_date IS NULL OR DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?)';
-        returnsParams.push(startDate, endDate);
+        returnsOnlyWhere += ' AND (return_date IS NULL OR DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?)';
+        returnsOnlyParams.push(startDate, endDate);
       }
 
-      // Query 1: Direct return_items from returns table (joining on both r.id and r.return_no)
-      const [riRows] = await db.query(
-        `SELECT 
-           ri.product_id as ri_prod_id,
-           ri.product_name,
-           ri.quantity as units_returned,
-           r.courier_charge,
-           r.return_delivery_loss,
-           COALESCE(r_tot.total_qty, 1) as total_qty
-         FROM return_items ri
-         LEFT JOIN returns r ON (ri.return_id = r.id OR CAST(ri.return_id AS CHAR) = CAST(r.return_no AS CHAR))
-         LEFT JOIN (
-           SELECT return_id, SUM(quantity) as total_qty 
-           FROM return_items 
-           GROUP BY return_id
-         ) r_tot ON (r_tot.return_id = r.id OR CAST(r_tot.return_id AS CHAR) = CAST(r.return_no AS CHAR))
-         ${returnsWhere}`,
-        returnsParams
-      );
+      // Fetch all returns for this tenant directly from returns table
+      const [allReturnsList] = await db.query(`SELECT * FROM returns ${returnsOnlyWhere}`, returnsOnlyParams);
 
-      // Query 2: Sales marked as 'returned' in sales table
+      // Fetch all return items for this tenant
+      const [allReturnItemsList] = await db.query('SELECT * FROM return_items WHERE tenant_id = ? OR return_id IN (SELECT id FROM returns WHERE tenant_id = ?)', [tenantId, tenantId]);
+
+      // Fetch all returned sales from sales table
       let salesRetWhere = 'WHERE s.tenant_id = ? AND s.status = "returned"';
       let salesRetParams = [tenantId];
       if (!isAllTime) {
@@ -296,7 +281,7 @@ exports.getProductAnalytics = async (req, res) => {
         salesRetParams
       );
 
-      // Map products for matching
+      // Maps for product matching
       const prodMapById = new Map(allProducts.map(p => [Number(p.id), p]));
       const prodMapByName = new Map(allProducts.map(p => [String(p.name).trim().toLowerCase(), p]));
       const prodMapBySku = new Map(allProducts.map(p => [String(p.sku || '').trim().toLowerCase(), p]));
@@ -304,58 +289,80 @@ exports.getProductAnalytics = async (req, res) => {
       const returnSummaryByProd = new Map();
 
       const getOrCreateSummary = (pId) => {
-        if (!returnSummaryByProd.has(pId)) {
-          returnSummaryByProd.set(pId, {
-            product_id: pId,
+        const numId = Number(pId);
+        if (!returnSummaryByProd.has(numId)) {
+          returnSummaryByProd.set(numId, {
+            product_id: numId,
             units_returned: 0,
             returned_profit_reversal: 0,
             returned_deliv_profit_reversal: 0,
             return_charges: 0
           });
         }
-        return returnSummaryByProd.get(pId);
+        return returnSummaryByProd.get(numId);
       };
 
-      // Process direct return_items
-      for (const row of riRows) {
-        let matchedProduct = null;
+      // Process each return record from returns table
+      for (const rLog of allReturnsList) {
+        // Find items associated with this return record
+        const matchingItems = allReturnItemsList.filter(item => 
+          String(item.return_id) === String(rLog.id) || 
+          (rLog.return_no && String(item.return_id) === String(rLog.return_no))
+        );
 
-        // 1. Match by Numeric Product ID
-        if (row.ri_prod_id) {
-          matchedProduct = prodMapById.get(Number(row.ri_prod_id));
-        }
+        const rCourierCharge = Number(rLog.courier_charge || 0);
+        const rDelivLoss = Number(rLog.return_delivery_loss || 0);
 
-        // 2. Match by Exact Name or SKU
-        if (!matchedProduct && row.product_name) {
-          const nameClean = String(row.product_name).trim().toLowerCase();
-          matchedProduct = prodMapByName.get(nameClean) || prodMapBySku.get(nameClean);
-          if (!matchedProduct) {
-            matchedProduct = allProducts.find(p => {
-              const pName = String(p.name).toLowerCase();
-              const pSku = String(p.sku || '').toLowerCase();
-              return pName.includes(nameClean) || nameClean.includes(pName) || (pSku && pSku === nameClean);
-            });
+        if (matchingItems.length > 0) {
+          const totalLogQty = matchingItems.reduce((sum, it) => sum + Number(it.quantity || 1), 0);
+
+          for (const item of matchingItems) {
+            let matchedProduct = null;
+            if (item.product_id) {
+              matchedProduct = prodMapById.get(Number(item.product_id));
+            }
+            if (!matchedProduct && item.product_name) {
+              const nameClean = String(item.product_name).trim().toLowerCase();
+              matchedProduct = prodMapByName.get(nameClean) || prodMapBySku.get(nameClean);
+              if (!matchedProduct) {
+                matchedProduct = allProducts.find(p => {
+                  const pName = String(p.name).toLowerCase();
+                  const pSku = String(p.sku || '').toLowerCase();
+                  return pName.includes(nameClean) || nameClean.includes(pName) || (pSku && pSku === nameClean);
+                });
+              }
+            }
+
+            if (!matchedProduct && allProducts.length > 0) {
+              matchedProduct = allProducts[0];
+            }
+
+            if (matchedProduct) {
+              const summary = getOrCreateSummary(matchedProduct.id);
+              const qty = Number(item.quantity || 1);
+              summary.units_returned += qty;
+
+              const sellPrice = Number(matchedProduct.selling_price || 0);
+              const costPrice = Number(matchedProduct.cost_price || 0);
+              summary.returned_profit_reversal += qty * (sellPrice - costPrice);
+
+              const share = totalLogQty > 0 ? (qty / totalLogQty) : (1 / matchingItems.length);
+              summary.return_charges += rCourierCharge * share;
+              summary.returned_deliv_profit_reversal += rDelivLoss * share;
+            }
           }
-        }
+        } else {
+          // If return record has no return_items entries (general return log), allocate courier charge & loss across active catalog products
+          if ((rCourierCharge > 0 || rDelivLoss > 0) && allProducts.length > 0) {
+            const perProdCharge = rCourierCharge / allProducts.length;
+            const perProdLoss = rDelivLoss / allProducts.length;
 
-        // 3. Fallback: If still unmatched, assign to first catalog product so loss/quantities are recorded
-        if (!matchedProduct && allProducts.length > 0) {
-          matchedProduct = allProducts[0];
-        }
-
-        if (matchedProduct) {
-          const summary = getOrCreateSummary(Number(matchedProduct.id));
-          const qty = Number(row.units_returned || 1);
-          summary.units_returned += qty;
-
-          const sellPrice = Number(matchedProduct.selling_price || 0);
-          const costPrice = Number(matchedProduct.cost_price || 0);
-          summary.returned_profit_reversal += qty * (sellPrice - costPrice);
-
-          const totQty = Number(row.total_qty || 1);
-          const share = totQty > 0 ? (qty / totQty) : 1;
-          summary.returned_deliv_profit_reversal += Number(row.return_delivery_loss || 0) * share;
-          summary.return_charges += Number(row.courier_charge || 0) * share;
+            for (const p of allProducts) {
+              const summary = getOrCreateSummary(p.id);
+              summary.return_charges += perProdCharge;
+              summary.returned_deliv_profit_reversal += perProdLoss;
+            }
+          }
         }
       }
 
