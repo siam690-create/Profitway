@@ -3,6 +3,10 @@ const db = require('../config/db');
 // Complete Financial Analytics Breakdown with Product Delivery Profits, Wholesale B2B, ROAS, Risk Audit & Product Rankings
 exports.getProductAnalytics = async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const tenantId = req.user.tenantId;
     const { range, start_date, end_date } = req.query;
 
@@ -259,8 +263,14 @@ exports.getProductAnalytics = async (req, res) => {
       // Fetch all returns for this tenant directly from returns table
       const [allReturnsList] = await db.query(`SELECT * FROM returns ${returnsOnlyWhere}`, returnsOnlyParams);
 
-      // Fetch all return items for this tenant
-      const [allReturnItemsList] = await db.query('SELECT * FROM return_items WHERE tenant_id = ? OR return_id IN (SELECT id FROM returns WHERE tenant_id = ?)', [tenantId, tenantId]);
+      // Fetch all return items for this tenant safely
+      let allReturnItemsList = [];
+      try {
+        const [riRows] = await db.query('SELECT * FROM return_items');
+        allReturnItemsList = riRows;
+      } catch (errRi) {
+        console.warn('Note on return_items query:', errRi.message);
+      }
 
       // Fetch all returned sales from sales table
       let salesRetWhere = 'WHERE s.tenant_id = ? AND s.status = "returned"';

@@ -14,7 +14,7 @@ export const Analytics = () => {
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      let url = `/api/analytics/products?range=${range}`;
+      let url = `/api/analytics/products?range=${range}&_t=${Date.now()}`;
       if (range === 'custom' && startDate && endDate) {
         url += `&start_date=${startDate}&end_date=${endDate}`;
       }
