@@ -23,6 +23,9 @@ import { Settings } from './pages/Settings';
 import { Subscription } from './pages/Subscription';
 import { Support } from './pages/Support';
 
+import StaffPortal from './pages/StaffPortal';
+import TeamChat from './pages/TeamChat';
+
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -70,6 +73,8 @@ function MainApp() {
   const renderActivePage = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard />;
+      case 'staff-portal': return <StaffPortal />;
+      case 'team-chat': return <TeamChat />;
       case 'inventory': return <Inventory />;
       case 'analytics': return <Analytics />;
       case 'purchases': return <Purchases />;

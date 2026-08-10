@@ -437,6 +437,21 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 22. Team Messages Table for Internal Staff Chat System
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS team_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        user_id INT DEFAULT NULL,
+        sender_name VARCHAR(150) NOT NULL,
+        sender_role VARCHAR(50) DEFAULT 'Staff',
+        message TEXT NOT NULL,
+        attachment_url TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_tm_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // Retroactive column additions to payroll table
     await addColumnIfNotExists('payroll', 'employee_id', 'INT NULL');
     await addColumnIfNotExists('payroll', 'account_id', 'INT NULL');

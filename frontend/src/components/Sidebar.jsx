@@ -21,7 +21,9 @@ import {
   Landmark,
   ShoppingBag,
   HelpCircle,
-  CreditCard
+  CreditCard,
+  Zap,
+  MessageSquare
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -31,6 +33,8 @@ export const Sidebar = () => {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'staff-portal', label: 'Staff Portal & Punch In', icon: Zap },
+    { id: 'team-chat', label: 'Internal Team Chat', icon: MessageSquare },
     { id: 'pos', label: 'POS / New Sale', icon: ShoppingCart, badge: cart.length > 0 ? cart.length : null, badgeType: 'success' },
     { id: 'wholesale', label: 'Wholesale B2B Sales', icon: ShoppingBag },
     { id: 'reseller-parcels', label: 'Reseller Parcels', icon: Package },
@@ -55,7 +59,8 @@ export const Sidebar = () => {
 
   const visibleNavItems = navItems.filter(item => {
     if (isOwnerOrAdmin || !userPermissions || !Array.isArray(userPermissions)) return true;
-    if (item.id === 'dashboard') return true;
+    if (item.id === 'dashboard' || item.id === 'staff-portal') return true;
+    if (item.id === 'team-chat') return userPermissions.includes('chat') || userPermissions.includes('team-chat');
     return userPermissions.includes(item.id);
   });
 

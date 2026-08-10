@@ -855,3 +855,187 @@ exports.updatePF = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// 8. Self-Service Attendance Punch In / Clock Out
+exports.punchIn = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const userId = req.user.id;
+    const userName = req.user.name;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const nowTimeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+    const [empRows] = await db.query(
+      'SELECT id, name, weekly_off_day FROM employees WHERE tenant_id = ? AND (user_id = ? OR email = ?) LIMIT 1',
+      [tenantId, userId, req.user.email || '']
+    );
+
+    let empId = empRows[0]?.id;
+    if (!empId) {
+      const [byName] = await db.query(
+        'SELECT id FROM employees WHERE tenant_id = ? AND name LIKE ? LIMIT 1',
+        [tenantId, `%${userName}%`]
+      );
+      empId = byName[0]?.id;
+    }
+
+    if (!empId) {
+      return res.status(400).json({ error: 'Your user account is not linked to an employee profile in Staff Directory.' });
+    }
+
+    const [att] = await db.query(
+      'SELECT * FROM employee_attendance WHERE tenant_id = ? AND employee_id = ? AND date = ?',
+      [tenantId, empId, todayStr]
+    );
+
+    if (att.length > 0 && att[0].in_time) {
+      return res.status(400).json({ error: `You have already punched in today at ${att[0].in_time}.` });
+    }
+
+    if (att.length > 0) {
+      await db.query(
+        "UPDATE employee_attendance SET status = 'present', in_time = ? WHERE id = ?",
+        [nowTimeStr, att[0].id]
+      );
+    } else {
+      await db.query(
+        "INSERT INTO employee_attendance (tenant_id, employee_id, date, status, in_time, notes) VALUES (?, ?, ?, 'present', ?, 'Self Punch-In')",
+        [tenantId, empId, todayStr, nowTimeStr]
+      );
+    }
+
+    res.json({ message: `Punch In successful at ${nowTimeStr}! Have a great working day.`, in_time: nowTimeStr });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.punchOut = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const userId = req.user.id;
+    const userName = req.user.name;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const nowTimeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+    const [empRows] = await db.query(
+      'SELECT id FROM employees WHERE tenant_id = ? AND (user_id = ? OR email = ?) LIMIT 1',
+      [tenantId, userId, req.user.email || '']
+    );
+
+    let empId = empRows[0]?.id;
+    if (!empId) {
+      const [byName] = await db.query('SELECT id FROM employees WHERE tenant_id = ? AND name LIKE ? LIMIT 1', [tenantId, `%${userName}%`]);
+      empId = byName[0]?.id;
+    }
+
+    if (!empId) return res.status(400).json({ error: 'Employee profile not linked.' });
+
+    const [att] = await db.query(
+      'SELECT * FROM employee_attendance WHERE tenant_id = ? AND employee_id = ? AND date = ?',
+      [tenantId, empId, todayStr]
+    );
+
+    if (att.length === 0 || !att[0].in_time) {
+      return res.status(400).json({ error: 'You have not punched in today yet.' });
+    }
+
+    await db.query(
+      'UPDATE employee_attendance SET out_time = ? WHERE id = ?',
+      [nowTimeStr, att[0].id]
+    );
+
+    res.json({ message: `Clock Out recorded at ${nowTimeStr}. Thank you for your work!`, out_time: nowTimeStr });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getMyAttendanceStatus = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const userId = req.user.id;
+    const userName = req.user.name;
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    const [empRows] = await db.query(
+      'SELECT id, name, employee_code, designation, weekly_off_day FROM employees WHERE tenant_id = ? AND (user_id = ? OR email = ?) LIMIT 1',
+      [tenantId, userId, req.user.email || '']
+    );
+
+    let emp = empRows[0];
+    if (!emp) {
+      const [byName] = await db.query('SELECT id, name, employee_code, designation, weekly_off_day FROM employees WHERE tenant_id = ? AND name LIKE ? LIMIT 1', [tenantId, `%${userName}%`]);
+      emp = byName[0];
+    }
+
+    if (!emp) {
+      return res.json({ punched_in: false, attendance: null, employee: null });
+    }
+
+    const [att] = await db.query(
+      'SELECT * FROM employee_attendance WHERE tenant_id = ? AND employee_id = ? AND date = ?',
+      [tenantId, emp.id, todayStr]
+    );
+
+    res.json({
+      punched_in: att.length > 0 && !!att[0].in_time,
+      punched_out: att.length > 0 && !!att[0].out_time,
+      attendance: att[0] || null,
+      employee: emp
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 9. Team Chat & Internal Messaging
+exports.getTeamMessages = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const [rows] = await db.query(
+      `SELECT tm.*, u.role as user_role, u.name as u_name
+       FROM team_messages tm
+       LEFT JOIN users u ON u.id = tm.user_id
+       WHERE tm.tenant_id = ?
+       ORDER BY tm.id ASC
+       LIMIT 150`,
+      [tenantId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.createTeamMessage = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const userId = req.user.id;
+    const senderName = req.user.name || 'Staff Member';
+    const senderRole = req.user.role || 'staff';
+    const { message, attachment_url } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message cannot be empty.' });
+    }
+
+    const [result] = await db.query(
+      'INSERT INTO team_messages (tenant_id, user_id, sender_name, sender_role, message, attachment_url) VALUES (?, ?, ?, ?, ?, ?)',
+      [tenantId, userId, senderName, senderRole, message.trim(), attachment_url || null]
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+      tenant_id: tenantId,
+      user_id: userId,
+      sender_name: senderName,
+      sender_role: senderRole,
+      message: message.trim(),
+      attachment_url: attachment_url || null,
+      created_at: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

@@ -199,6 +199,12 @@ router.delete('/staff/employees/:id', checkActiveSubscription, staffController.d
 
 router.get('/staff/attendance', staffController.getAttendance);
 router.post('/staff/attendance/batch', checkActiveSubscription, staffController.markAttendanceBatch);
+router.post('/staff/attendance/punch-in', staffController.punchIn);
+router.post('/staff/attendance/punch-out', staffController.punchOut);
+router.get('/staff/attendance/my-status', staffController.getMyAttendanceStatus);
+
+router.get('/staff/team-messages', staffController.getTeamMessages);
+router.post('/staff/team-messages', staffController.createTeamMessage);
 
 router.get('/staff/leaves', staffController.getLeaves);
 router.post('/staff/leaves', checkActiveSubscription, staffController.createLeave);

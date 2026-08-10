@@ -512,6 +512,44 @@ export const StaffManager = () => {
     } catch (err) { alert(`Error: ${err.message}`); }
   };
 
+  const handleCreateUserAccount = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await authFetch('/api/staff', {
+        method: 'POST',
+        body: JSON.stringify(userFormData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowUserModal(false);
+        setUserFormData({ name: '', email: '', password: '', role: 'cashier', permissions: ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'] });
+        fetchUsers();
+        alert('Staff login account created successfully!');
+      } else alert(`Error: ${data.error}`);
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const handleToggleUserPermission = async (userObj, permKey) => {
+    let currentPerms = Array.isArray(userObj.permissions) ? [...userObj.permissions] : ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'];
+    if (currentPerms.includes(permKey)) {
+      currentPerms = currentPerms.filter(p => p !== permKey);
+    } else {
+      currentPerms.push(permKey);
+    }
+    try {
+      const res = await authFetch(`/api/staff/${userObj.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role: userObj.role, permissions: currentPerms })
+      });
+      if (res.ok) {
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
   const handlePrintIDCard = () => {
     window.print();
   };
@@ -1546,28 +1584,77 @@ export const StaffManager = () => {
       {/* 10. SYSTEM USERS & ROLES TAB */}
       {activeTab === 'users' && (
         <div className="glass-card" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Shop Admin & Staff Logins</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Shop Admin & Staff Login Accounts</h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Manage logins and toggle individual feature access permissions per staff member.</p>
+            </div>
+            <button onClick={() => setShowUserModal(true)} className="btn btn-primary">
+              <UserPlus size={15} />
+              <span>+ Create Staff Login Account</span>
+            </button>
+          </div>
+
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Email</th>
+                  <th>User Name</th>
+                  <th>Login Email</th>
                   <th>Role</th>
-                  <th>Module Permissions</th>
+                  <th>Granular Module Permissions</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {usersList.map(u => (
-                  <tr key={u.id}>
-                    <td><strong>{u.name}</strong></td>
-                    <td>{u.email}</td>
-                    <td><span className="badge badge-primary">{u.role.toUpperCase()}</span></td>
-                    <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      {u.permissions ? u.permissions.join(', ') : 'Full Access'}
-                    </td>
-                  </tr>
-                ))}
+                {usersList.map(u => {
+                  const uPerms = Array.isArray(u.permissions) ? u.permissions : ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'];
+                  const isOwner = u.role === 'owner' || u.role === 'superadmin';
+
+                  return (
+                    <tr key={u.id}>
+                      <td><strong>{u.name}</strong></td>
+                      <td>{u.email}</td>
+                      <td>
+                        <span className={`badge ${isOwner ? 'badge-primary' : 'badge-secondary'}`}>
+                          {u.role.toUpperCase()}
+                        </span>
+                      </td>
+                      <td>
+                        {isOwner ? (
+                          <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: '700' }}>👑 Full Admin Access (All Permissions Granted)</span>
+                        ) : (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '11px' }}>
+                            {[
+                              { key: 'inventory', label: '📦 Stock' },
+                              { key: 'pos', label: '🛒 POS' },
+                              { key: 'orders', label: '🚚 Orders' },
+                              { key: 'chat', label: '💬 Team Chat' },
+                              { key: 'attendance', label: '⏱️ Punch In' },
+                              { key: 'tasks', label: '📋 Tasks' },
+                              { key: 'finance', label: '💵 Passbook' }
+                            ].map(p => {
+                              const checked = uPerms.includes(p.key);
+                              return (
+                                <label key={p.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: checked ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '6px', border: `1px solid ${checked ? 'var(--accent-primary)' : 'var(--border-color)'}`, cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => handleToggleUserPermission(u, p.key)}
+                                  />
+                                  <span>{p.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <span className="badge badge-success">Active</span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -2304,6 +2391,73 @@ export const StaffManager = () => {
               <div className="modal-footer">
                 <button type="button" onClick={() => setEditingPf(null)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" className="btn btn-primary">Save PF Settings</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CREATE STAFF LOGIN ACCOUNT */}
+      {showUserModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h3>Create Staff Login Credentials</h3>
+              <button onClick={() => setShowUserModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleCreateUserAccount}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Full Name *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. Adiat Rahman"
+                    value={userFormData.name}
+                    onChange={(e) => setUserFormData({ ...userFormData, name: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Login Email Address *</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    required
+                    placeholder="staff@shop.com"
+                    value={userFormData.email}
+                    onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Password *</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    required
+                    placeholder="At least 6 characters"
+                    value={userFormData.password}
+                    onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Role *</label>
+                  <select
+                    className="form-select"
+                    value={userFormData.role}
+                    onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value })}
+                  >
+                    <option value="cashier">Cashier (ক্যাশিয়ার / বিক্রয়কর্মী)</option>
+                    <option value="manager">Manager (ম্যানেজার)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowUserModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Create Staff Account</button>
               </div>
             </form>
           </div>
