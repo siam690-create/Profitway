@@ -251,6 +251,14 @@ exports.getProductAnalytics = async (req, res) => {
 
     const [allProducts] = await db.query('SELECT id, name, sku, is_combo, stock_quantity, cost_price, selling_price FROM products WHERE tenant_id = ?', [tenantId]);
 
+    const salesMap = new Map();
+    salesAgg.forEach(s => {
+      if (s.product_id !== null && s.product_id !== undefined) {
+        salesMap.set(Number(s.product_id), s);
+        salesMap.set(String(s.product_id), s);
+      }
+    });
+
     let returnsAgg = [];
     try {
       let returnsOnlyWhere = 'WHERE tenant_id = ?';
@@ -426,13 +434,7 @@ exports.getProductAnalytics = async (req, res) => {
       console.error('Analytics adsAgg Query Error:', e.message);
     }
 
-    const salesMap = new Map();
-    salesAgg.forEach(s => {
-      if (s.product_id !== null && s.product_id !== undefined) {
-        salesMap.set(Number(s.product_id), s);
-        salesMap.set(String(s.product_id), s);
-      }
-    });
+
 
     const returnsMap = new Map();
     returnsAgg.forEach(r => {
