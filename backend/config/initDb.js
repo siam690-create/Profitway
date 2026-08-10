@@ -535,6 +535,8 @@ async function autoMigrate() {
     await addColumnIfNotExists('employees', 'nid_front_url', 'TEXT DEFAULT NULL');
     await addColumnIfNotExists('employees', 'nid_back_url', 'TEXT DEFAULT NULL');
     await addColumnIfNotExists('employees', 'documents_url', 'TEXT DEFAULT NULL');
+    await addColumnIfNotExists('employees', 'weekly_off_day', "VARCHAR(50) DEFAULT 'Friday'");
+    await addColumnIfNotExists('employees', 'holiday_duty_allowance', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('employee_loans', 'type', "VARCHAR(20) DEFAULT 'loan'");
     await addColumnIfNotExists('employee_loans', 'auto_deduct_salary', 'TINYINT(1) DEFAULT 1');
 

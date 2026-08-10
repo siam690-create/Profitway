@@ -52,7 +52,8 @@ export const StaffManager = () => {
     nid_number: '', blood_group: 'B+', emergency_contact_name: '', emergency_contact_phone: '',
     photo_url: '', nid_front_url: '', nid_back_url: '', documents_url: '',
     documents_list: [{ title: '', url: '' }],
-    base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: ''
+    base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: '',
+    weekly_off_day: 'Friday', holiday_duty_allowance: ''
   });
 
   const handleFileUpload = async (e, fieldName) => {
@@ -321,14 +322,73 @@ export const StaffManager = () => {
     } catch (err) { alert(`Error: ${err.message}`); }
   };
 
-  const handleMarkAttendance = async (empId, status, inTime, outTime, otHours) => {
+  const handleMarkAttendance = async (empId, status, inTime, outTime, otHours, notes) => {
     try {
       const payload = {
         date: attendanceDate,
-        attendanceList: [{ employee_id: empId, status, in_time: inTime, out_time: outTime, overtime_hours: otHours }]
+        attendanceList: [{ employee_id: empId, status, in_time: inTime, out_time: outTime, overtime_hours: otHours, notes: notes || null }]
       };
       const res = await authFetch('/api/staff/attendance/batch', { method: 'POST', body: JSON.stringify(payload) });
       if (res.ok) fetchAttendance();
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const handleMarkAllPresent = async () => {
+    if (!employeesList.length) return;
+    try {
+      const list = employeesList.map(emp => {
+        const att = attendanceList.find(a => Number(a.employee_id) === Number(emp.id)) || {};
+        return {
+          employee_id: emp.id,
+          status: 'present',
+          in_time: att.in_time || '09:00',
+          out_time: att.out_time || '18:00',
+          overtime_hours: att.overtime_hours || 0,
+          notes: att.notes || null
+        };
+      });
+      const res = await authFetch('/api/staff/attendance/batch', {
+        method: 'POST',
+        body: JSON.stringify({ date: attendanceDate, attendanceList: list })
+      });
+      if (res.ok) {
+        fetchAttendance();
+        alert('All active staff marked as Present for ' + attendanceDate);
+      }
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const handleAutoMarkWeeklyOffs = async () => {
+    if (!employeesList.length) return;
+    const selectedDateObj = new Date(attendanceDate);
+    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const currentDayName = daysOfWeek[selectedDateObj.getDay()];
+
+    const offEmployees = employeesList.filter(e => (e.weekly_off_day || 'Friday').toLowerCase() === currentDayName.toLowerCase());
+
+    if (offEmployees.length === 0) {
+      alert(`No employees have their weekly off scheduled on ${currentDayName}.`);
+      return;
+    }
+
+    try {
+      const list = offEmployees.map(emp => ({
+        employee_id: emp.id,
+        status: 'weekly_off',
+        in_time: null,
+        out_time: null,
+        overtime_hours: 0,
+        notes: `Weekly Off (${currentDayName})`
+      }));
+
+      const res = await authFetch('/api/staff/attendance/batch', {
+        method: 'POST',
+        body: JSON.stringify({ date: attendanceDate, attendanceList: list })
+      });
+      if (res.ok) {
+        fetchAttendance();
+        alert(`Auto-marked ${offEmployees.length} staff member(s) as Weekly Off for ${currentDayName} (${attendanceDate}).`);
+      }
     } catch (err) { alert(`Error: ${err.message}`); }
   };
 
@@ -586,110 +646,189 @@ export const StaffManager = () => {
       )}
 
       {/* 2. DAILY ATTENDANCE TAB */}
-      {activeTab === 'attendance' && (
-        <div className="glass-card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Daily Attendance Log</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <label style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Attendance Date:</label>
-              <input
-                type="date"
-                className="form-input"
-                value={attendanceDate}
-                onChange={(e) => setAttendanceDate(e.target.value)}
-                style={{ width: '160px' }}
-              />
+      {activeTab === 'attendance' && (() => {
+        const selectedDateObj = new Date(attendanceDate);
+        const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const currentDayName = daysOfWeek[selectedDateObj.getDay()];
+
+        return (
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>Daily Attendance Log & Shift Management</span>
+                  <span className="badge badge-info" style={{ fontSize: '12px' }}>
+                    📅 {currentDayName} ({attendanceDate})
+                  </span>
+                </h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Manage attendance, weekly off days, overtime hours, and extra holiday duty allowances.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <button type="button" onClick={handleMarkAllPresent} className="btn btn-success btn-sm" style={{ fontSize: '12px' }}>
+                  ⚡ Mark All Present
+                </button>
+                <button type="button" onClick={handleAutoMarkWeeklyOffs} className="btn btn-secondary btn-sm" style={{ fontSize: '12px', color: '#3b82f6', borderColor: '#3b82f6' }}>
+                  🏖️ Auto-Mark Weekly Offs ({currentDayName})
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Date:</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={attendanceDate}
+                    onChange={(e) => setAttendanceDate(e.target.value)}
+                    style={{ width: '160px' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Weekly Off</th>
+                    <th>Attendance Status</th>
+                    <th>In Time</th>
+                    <th>Out Time</th>
+                    <th>Overtime (Hrs)</th>
+                    <th>Notes / Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeesList.length === 0 ? (
+                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: '30px' }}>No active employees found.</td></tr>
+                  ) : (
+                    employeesList.map(emp => {
+                      const att = attendanceList.find(a => Number(a.employee_id) === Number(emp.id)) || {};
+                      const currentStatus = att.status || 'present';
+                      const empOffDay = emp.weekly_off_day || 'Friday';
+                      const isTodayOffDay = empOffDay.toLowerCase() === currentDayName.toLowerCase();
+
+                      return (
+                        <tr key={emp.id} style={{ background: isTodayOffDay ? 'rgba(59, 130, 246, 0.05)' : 'transparent' }}>
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <strong>{emp.name}</strong>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emp.employee_code} • {emp.designation}</span>
+                            </div>
+                          </td>
+                          <td>
+                            {isTodayOffDay ? (
+                              <span className="badge badge-warning" style={{ fontSize: '11px', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' }}>
+                                🔥 Today Off ({empOffDay})
+                              </span>
+                            ) : (
+                              <span className="badge badge-secondary" style={{ fontSize: '11px' }}>
+                                🏖️ {empOffDay}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkAttendance(emp.id, 'present', att.in_time, att.out_time, att.overtime_hours, att.notes)}
+                                className={`btn btn-xs ${currentStatus === 'present' ? 'btn-success' : 'btn-secondary'}`}
+                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                              >
+                                Present
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkAttendance(emp.id, 'absent', att.in_time, att.out_time, att.overtime_hours, att.notes)}
+                                className={`btn btn-xs ${currentStatus === 'absent' ? 'btn-danger' : 'btn-secondary'}`}
+                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                              >
+                                Absent
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkAttendance(emp.id, 'late', att.in_time, att.out_time, att.overtime_hours, att.notes)}
+                                className={`btn btn-xs ${currentStatus === 'late' ? 'btn-warning' : 'btn-secondary'}`}
+                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                              >
+                                Late
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkAttendance(emp.id, 'half_day', att.in_time, att.out_time, att.overtime_hours, att.notes)}
+                                className={`btn btn-xs ${currentStatus === 'half_day' ? 'btn-warning' : 'btn-secondary'}`}
+                                style={{ fontSize: '11px', padding: '4px 8px', background: currentStatus === 'half_day' ? '#f97316' : '', color: currentStatus === 'half_day' ? '#fff' : '' }}
+                              >
+                                Half Day
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkAttendance(emp.id, 'weekly_off', att.in_time, att.out_time, att.overtime_hours, att.notes)}
+                                className={`btn btn-xs ${currentStatus === 'weekly_off' ? 'btn-info' : 'btn-secondary'}`}
+                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                              >
+                                Weekly Off
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMarkAttendance(emp.id, 'holiday_duty', att.in_time, att.out_time, att.overtime_hours, att.notes || 'Holiday Extra Duty')}
+                                className={`btn btn-xs ${currentStatus === 'holiday_duty' ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{ fontSize: '11px', padding: '4px 8px', background: currentStatus === 'holiday_duty' ? '#8b5cf6' : '', color: currentStatus === 'holiday_duty' ? '#fff' : '' }}
+                                title="Worked on Weekly Off / Holiday - Extra Duty Allowance Added to Salary"
+                              >
+                                🌟 Holiday Duty (Extra)
+                              </button>
+                            </div>
+                          </td>
+                          <td>
+                            <input
+                              type="time"
+                              className="form-input"
+                              style={{ padding: '2px 6px', fontSize: '12px', width: '100px' }}
+                              defaultValue={att.in_time || '09:00'}
+                              onBlur={(e) => handleMarkAttendance(emp.id, currentStatus, e.target.value, att.out_time, att.overtime_hours, att.notes)}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="time"
+                              className="form-input"
+                              style={{ padding: '2px 6px', fontSize: '12px', width: '100px' }}
+                              defaultValue={att.out_time || '18:00'}
+                              onBlur={(e) => handleMarkAttendance(emp.id, currentStatus, att.in_time, e.target.value, att.overtime_hours, att.notes)}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              step="0.5"
+                              className="form-input"
+                              style={{ width: '70px', padding: '2px 6px', fontSize: '12px' }}
+                              defaultValue={att.overtime_hours || 0}
+                              onBlur={(e) => handleMarkAttendance(emp.id, currentStatus, att.in_time, att.out_time, e.target.value, att.notes)}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="form-input"
+                              style={{ padding: '2px 6px', fontSize: '11px' }}
+                              placeholder="Notes..."
+                              defaultValue={att.notes || ''}
+                              onBlur={(e) => handleMarkAttendance(emp.id, currentStatus, att.in_time, att.out_time, att.overtime_hours, e.target.value)}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Employee</th>
-                  <th>Designation</th>
-                  <th>Attendance Status</th>
-                  <th>In Time</th>
-                  <th>Out Time</th>
-                  <th>Overtime Hours</th>
-                  <th>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employeesList.length === 0 ? (
-                  <tr><td colSpan="7" style={{ textAlign: 'center', padding: '30px' }}>No active employees found.</td></tr>
-                ) : (
-                  employeesList.map(emp => {
-                    const att = attendanceList.find(a => Number(a.employee_id) === Number(emp.id)) || {};
-                    const currentStatus = att.status || 'present';
-
-                    return (
-                      <tr key={emp.id}>
-                        <td>
-                          <strong>{emp.name}</strong>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{emp.employee_code}</div>
-                        </td>
-                        <td>{emp.designation}</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <button
-                              onClick={() => handleMarkAttendance(emp.id, 'present', att.in_time, att.out_time, att.overtime_hours)}
-                              className={`btn btn-sm ${currentStatus === 'present' ? 'btn-success' : 'btn-secondary'}`}
-                            >
-                              Present
-                            </button>
-                            <button
-                              onClick={() => handleMarkAttendance(emp.id, 'absent', att.in_time, att.out_time, att.overtime_hours)}
-                              className={`btn btn-sm ${currentStatus === 'absent' ? 'btn-danger' : 'btn-secondary'}`}
-                            >
-                              Absent
-                            </button>
-                            <button
-                              onClick={() => handleMarkAttendance(emp.id, 'late', att.in_time, att.out_time, att.overtime_hours)}
-                              className={`btn btn-sm ${currentStatus === 'late' ? 'btn-warning' : 'btn-secondary'}`}
-                            >
-                              Late
-                            </button>
-                          </div>
-                        </td>
-                        <td>
-                          <input
-                            type="time"
-                            className="form-input"
-                            style={{ padding: '2px 6px', fontSize: '12px' }}
-                            defaultValue={att.in_time || '09:00'}
-                            onBlur={(e) => handleMarkAttendance(emp.id, currentStatus, e.target.value, att.out_time, att.overtime_hours)}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="time"
-                            className="form-input"
-                            style={{ padding: '2px 6px', fontSize: '12px' }}
-                            defaultValue={att.out_time || '18:00'}
-                            onBlur={(e) => handleMarkAttendance(emp.id, currentStatus, att.in_time, e.target.value, att.overtime_hours)}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.5"
-                            className="form-input"
-                            style={{ width: '80px', padding: '2px 6px', fontSize: '12px' }}
-                            defaultValue={att.overtime_hours || 0}
-                            onBlur={(e) => handleMarkAttendance(emp.id, currentStatus, att.in_time, att.out_time, e.target.value)}
-                          />
-                        </td>
-                        <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{att.notes || 'Recorded'}</td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 3. LEAVE MANAGEMENT TAB */}
       {activeTab === 'leaves' && (
@@ -769,8 +908,8 @@ export const StaffManager = () => {
                 <tr>
                   <th>Employee</th>
                   <th>Base Salary</th>
-                  <th>Present / Absent</th>
-                  <th>Overtime Pay</th>
+                  <th>Attendance Summary</th>
+                  <th>Overtime & Extra Duty</th>
                   <th>Bonus</th>
                   <th>Deductions (Loan/PF/Absent)</th>
                   <th>Net Payable</th>
@@ -786,13 +925,25 @@ export const StaffManager = () => {
                     <tr key={idx}>
                       <td>
                         <strong>{item.name}</strong>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.designation}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.designation} ({item.weekly_off_day || 'Friday'} Off)</div>
                       </td>
                       <td style={{ fontWeight: '700' }}>{currency}{item.base_salary.toFixed(2)}</td>
                       <td style={{ fontSize: '12px' }}>
                         <span style={{ color: 'var(--success)' }}>{item.present_days}P</span> / <span style={{ color: 'var(--danger)' }}>{item.absent_days}A</span>
+                        {item.half_days > 0 && <span style={{ color: '#f97316' }}> / {item.half_days}Half</span>}
+                        {item.holiday_duty_days > 0 && <span style={{ color: '#8b5cf6', fontWeight: 'bold' }}> / {item.holiday_duty_days}Extra Duty</span>}
                       </td>
-                      <td style={{ color: 'var(--success)' }}>+{currency}{item.overtime_pay.toFixed(2)}</td>
+                      <td>
+                        <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--success)' }}>
+                          +{currency}{(item.overtime_pay + (item.holiday_duty_pay || 0)).toFixed(2)}
+                        </div>
+                        {(item.overtime_hours > 0 || item.holiday_duty_days > 0) && (
+                          <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                            {item.overtime_hours > 0 ? `OT: ${item.overtime_hours}h ` : ''}
+                            {item.holiday_duty_days > 0 ? `Extra: ${item.holiday_duty_days}d` : ''}
+                          </div>
+                        )}
+                      </td>
                       <td style={{ color: '#8b5cf6' }}>+{currency}{item.bonus_amount.toFixed(2)}</td>
                       <td style={{ color: 'var(--danger)', fontSize: '12px' }}>
                         -{currency}{(item.absent_penalty + item.loan_deduction + item.pf_deduction).toFixed(2)}
@@ -1349,6 +1500,39 @@ export const StaffManager = () => {
                 <div className="form-group">
                   <label className="form-label">Overtime Rate / Hour ({currency})</label>
                   <input type="number" step="0.01" className="form-input" placeholder="150" value={empForm.overtime_rate} onChange={(e) => setEmpForm({ ...empForm, overtime_rate: e.target.value })} />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Weekly Off Day (সাপ্তাহিক ছুটির দিন)</label>
+                  <select
+                    className="form-select"
+                    value={empForm.weekly_off_day || 'Friday'}
+                    onChange={(e) => setEmpForm({ ...empForm, weekly_off_day: e.target.value })}
+                  >
+                    <option value="Friday">Friday (শুক্রবার)</option>
+                    <option value="Saturday">Saturday (শনিবার)</option>
+                    <option value="Sunday">Sunday (রবিবার)</option>
+                    <option value="Monday">Monday (সোমবার)</option>
+                    <option value="Tuesday">Tuesday (মঙ্গলবার)</option>
+                    <option value="Wednesday">Wednesday (বুধবার)</option>
+                    <option value="Thursday">Thursday (বৃহস্পতিবার)</option>
+                    <option value="None">None (কোনো নির্দিষ্ট ছুটি নেই)</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Holiday Extra Duty Allowance / Day ({currency})</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="form-input"
+                    placeholder="e.g. 1000 (খালি রাখলে 1.5x রেট কাউন্ট হবে)"
+                    value={empForm.holiday_duty_allowance || ''}
+                    onChange={(e) => setEmpForm({ ...empForm, holiday_duty_allowance: e.target.value })}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>
+                    * ছুটির দিনে কাজ করলে অতিরিক্ত ডিউটি ভাতা/হাজিরা। 0 রাখলে মূল বেতনের ১.৫ গুণ কাউন্ট হবে।
+                  </span>
                 </div>
 
                 <div className="form-group">

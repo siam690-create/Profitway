@@ -162,7 +162,8 @@ exports.createEmployee = async (req, res) => {
       name, designation, department, phone, email, joining_date,
       nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
       photo_url, nid_front_url, nid_back_url, documents_url,
-      base_salary, hourly_rate, overtime_rate, payment_method, account_number
+      base_salary, hourly_rate, overtime_rate, payment_method, account_number,
+      weekly_off_day, holiday_duty_allowance
     } = req.body;
 
     if (!name) return res.status(400).json({ error: 'Employee name is required.' });
@@ -179,14 +180,16 @@ exports.createEmployee = async (req, res) => {
         tenant_id, employee_code, name, designation, department, phone, email,
         joining_date, nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
         photo_url, nid_front_url, nid_back_url, documents_url,
-        base_salary, hourly_rate, overtime_rate, payment_method, account_number
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        base_salary, hourly_rate, overtime_rate, payment_method, account_number,
+        weekly_off_day, holiday_duty_allowance
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tenantId, empCode, name, designation || 'Staff', department || 'General', phone || null, email || null,
         formattedJoiningDate, nid_number || null, blood_group || null, emergency_contact_name || null, emergency_contact_phone || null,
         photo_url || null, nid_front_url || null, nid_back_url || null, documents_url || null,
         Number(base_salary || 0), Number(hourly_rate || 0), Number(overtime_rate || 0),
-        payment_method || 'Cash', account_number || null
+        payment_method || 'Cash', account_number || null,
+        weekly_off_day || 'Friday', Number(holiday_duty_allowance || 0)
       ]
     );
 
@@ -210,7 +213,8 @@ exports.updateEmployee = async (req, res) => {
       name, designation, department, phone, email, joining_date,
       nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
       photo_url, nid_front_url, nid_back_url, documents_url,
-      base_salary, hourly_rate, overtime_rate, payment_method, account_number, is_active
+      base_salary, hourly_rate, overtime_rate, payment_method, account_number, is_active,
+      weekly_off_day, holiday_duty_allowance
     } = req.body;
 
     const formattedJoiningDate = joining_date ? new Date(joining_date).toISOString().slice(0, 10) : null;
@@ -220,13 +224,15 @@ exports.updateEmployee = async (req, res) => {
         name = ?, designation = ?, department = ?, phone = ?, email = ?,
         joining_date = ?, nid_number = ?, blood_group = ?, emergency_contact_name = ?, emergency_contact_phone = ?,
         photo_url = ?, nid_front_url = ?, nid_back_url = ?, documents_url = ?,
-        base_salary = ?, hourly_rate = ?, overtime_rate = ?, payment_method = ?, account_number = ?, is_active = ?
+        base_salary = ?, hourly_rate = ?, overtime_rate = ?, payment_method = ?, account_number = ?, is_active = ?,
+        weekly_off_day = ?, holiday_duty_allowance = ?
       WHERE id = ? AND tenant_id = ?`,
       [
         name, designation, department, phone, email,
         formattedJoiningDate, nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
         photo_url, nid_front_url, nid_back_url, documents_url,
         Number(base_salary || 0), Number(hourly_rate || 0), Number(overtime_rate || 0), payment_method, account_number, is_active ? 1 : 0,
+        weekly_off_day || 'Friday', Number(holiday_duty_allowance || 0),
         id, tenantId
       ]
     );
@@ -267,7 +273,7 @@ exports.getAttendance = async (req, res) => {
     }
 
     const [rows] = await db.query(
-      `SELECT a.*, e.name as employee_name, e.employee_code, e.designation
+      `SELECT a.*, e.name as employee_name, e.employee_code, e.designation, e.weekly_off_day, e.holiday_duty_allowance
        FROM employee_attendance a
        JOIN employees e ON e.id = a.employee_id
        ${whereClause}
@@ -524,6 +530,9 @@ exports.getMonthlySalarySheet = async (req, res) => {
           SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present_days,
           SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_days,
           SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_days,
+          SUM(CASE WHEN status = 'half_day' THEN 1 ELSE 0 END) as half_days,
+          SUM(CASE WHEN status = 'holiday_duty' THEN 1 ELSE 0 END) as holiday_duty_days,
+          SUM(CASE WHEN status = 'weekly_off' THEN 1 ELSE 0 END) as weekly_off_days,
           SUM(COALESCE(overtime_hours, 0)) as total_overtime_hours
          FROM employee_attendance
          WHERE tenant_id = ? AND employee_id = ? AND DATE_FORMAT(date, '%Y-%m') = ?`,
@@ -573,10 +582,21 @@ exports.getMonthlySalarySheet = async (req, res) => {
       );
 
       const baseSalary = Number(emp.base_salary || 0);
-      const overtimePay = Number(attRows[0]?.total_overtime_hours || 0) * Number(emp.overtime_rate || 0);
-      const absentDays = Number(attRows[0]?.absent_days || 0);
       const perDaySalary = baseSalary / 30;
-      const absentPenalty = absentDays * perDaySalary;
+
+      // Overtime Pay
+      const overtimePay = Number(attRows[0]?.total_overtime_hours || 0) * Number(emp.overtime_rate || 0);
+
+      // Holiday / Extra Duty Pay
+      const holidayDutyDays = Number(attRows[0]?.holiday_duty_days || 0);
+      const holidayRate = Number(emp.holiday_duty_allowance || 0) > 0 ? Number(emp.holiday_duty_allowance) : (perDaySalary * 1.5);
+      const holidayDutyPay = holidayDutyDays * holidayRate;
+
+      // Absent & Half-day deductions
+      const absentDays = Number(attRows[0]?.absent_days || 0);
+      const halfDays = Number(attRows[0]?.half_days || 0);
+      const absentPenalty = (absentDays * perDaySalary) + (halfDays * (perDaySalary * 0.5));
+
       const bonusAmt = Number(bonusRows[0]?.total_bonus || 0);
 
       // 5. Active Provident Fund (PF) contribution (only if PF is active for this employee)
@@ -587,7 +607,7 @@ exports.getMonthlySalarySheet = async (req, res) => {
       const pfPct = pfRows.length > 0 ? Number(pfRows[0].employee_contrib_pct || 0) : 0;
       const pfDeduction = baseSalary * (pfPct / 100);
 
-      const netPayable = Math.max(0, baseSalary + bonusAmt + overtimePay - (absentPenalty + totalLoanAndAdvanceDeduction + pfDeduction));
+      const netPayable = Math.max(0, baseSalary + bonusAmt + overtimePay + holidayDutyPay - (absentPenalty + totalLoanAndAdvanceDeduction + pfDeduction));
       const totalPaid = Number(paidRows[0]?.total_paid || 0);
       const remainingDue = Math.max(0, netPayable - totalPaid);
 
@@ -607,6 +627,10 @@ exports.getMonthlySalarySheet = async (req, res) => {
         base_salary: baseSalary,
         present_days: Number(attRows[0]?.present_days || 0),
         absent_days: absentDays,
+        half_days: halfDays,
+        holiday_duty_days: holidayDutyDays,
+        holiday_duty_pay: holidayDutyPay,
+        weekly_off_day: emp.weekly_off_day || 'Friday',
         overtime_hours: Number(attRows[0]?.total_overtime_hours || 0),
         overtime_pay: overtimePay,
         absent_penalty: absentPenalty,
