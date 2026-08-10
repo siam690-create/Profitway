@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X } from 'lucide-react';
+import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X, Layers } from 'lucide-react';
 
 import { ProductSelectSearch } from '../components/ProductSelectSearch';
 import { DateRangeFilter } from '../components/DateRangeFilter';
@@ -12,10 +12,11 @@ export const PaidAds = () => {
   const [endDate, setEndDate] = useState('');
   const [showModal, setShowModal] = useState(false);
 
-  // Form State
-  const [selectedProductId, setSelectedProductId] = useState('');
+  // Multi-Product Ad Items Form State
+  const [adItems, setAdItems] = useState([
+    { product_id: '', amount_usd: '', notes: '' }
+  ]);
   const [platform, setPlatform] = useState('Facebook Ads');
-  const [amountUsd, setAmountUsd] = useState('120');
   const [exchangeRate, setExchangeRate] = useState('122');
   const [adDate, setAdDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
@@ -34,17 +35,41 @@ export const PaidAds = () => {
     fetchAds();
   }, []);
 
+  const handleAddAdItem = () => {
+    setAdItems(prev => [...prev, { product_id: '', amount_usd: '', notes: '' }]);
+  };
+
+  const handleRemoveAdItem = (index) => {
+    if (adItems.length <= 1) return;
+    setAdItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAdItemChange = (index, field, value) => {
+    setAdItems(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
   const handleSubmitAd = async (e) => {
     e.preventDefault();
-    if (!amountUsd || Number(amountUsd) <= 0) return alert('Enter a valid USD ad cost.');
+
+    const validItems = adItems.filter(item => Number(item.amount_usd) > 0);
+    if (validItems.length === 0) {
+      return alert('Please enter at least one product with a valid USD ad spend amount ($).');
+    }
 
     try {
       const res = await authFetch('/api/ads', {
         method: 'POST',
         body: JSON.stringify({
-          product_id: selectedProductId ? Number(selectedProductId) : null,
+          items: validItems.map(item => ({
+            product_id: item.product_id ? Number(item.product_id) : null,
+            amount_usd: Number(item.amount_usd),
+            notes: item.notes
+          })),
           platform,
-          amount_usd: Number(amountUsd),
           exchange_rate: Number(exchangeRate || 120),
           ad_date: adDate,
           notes
@@ -54,11 +79,11 @@ export const PaidAds = () => {
       const data = await res.json();
       if (res.ok) {
         setShowModal(false);
-        setAmountUsd('');
+        setAdItems([{ product_id: '', amount_usd: '', notes: '' }]);
         setNotes('');
         refreshAllData();
         fetchAds();
-        alert('Paid Ad expense logged and synced with operating expenses successfully!');
+        alert(data.message || 'Paid Ad expenses logged and synced with operating expenses successfully!');
       } else {
         alert(`Error: ${data.error}`);
       }
@@ -94,10 +119,11 @@ export const PaidAds = () => {
   const totalBdtSpent = filteredAdsList.reduce((sum, ad) => sum + Number(ad.total_bdt_cost), 0);
   const isOwner = user?.role === 'owner' || user?.role === 'superadmin';
 
-  // Live Conversion Calculation for Form
-  const usdNum = Number(amountUsd || 0);
+  // Live Batch Calculation
+  const totalBatchUsd = adItems.reduce((sum, item) => sum + Number(item.amount_usd || 0), 0);
   const rateNum = Number(exchangeRate || 120);
-  const calculatedBdt = (usdNum * rateNum).toFixed(2);
+  const totalBatchBdt = (totalBatchUsd * rateNum).toFixed(2);
+  const validProductsCount = adItems.filter(i => Number(i.amount_usd) > 0).length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -109,7 +135,7 @@ export const PaidAds = () => {
             <h2 style={{ fontSize: '20px', fontWeight: '800' }}>Paid Ads & Marketing Tracker</h2>
           </div>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Log product-wise Facebook/Google ad costs in USD ($) with custom exchange rate (৳/$)
+            Log product-wise Facebook/Google ad costs in USD ($) with custom exchange rate (৳/$) and multi-product batch entries
           </p>
         </div>
 
@@ -121,7 +147,13 @@ export const PaidAds = () => {
             }}
           />
 
-          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <button 
+            onClick={() => {
+              setAdItems([{ product_id: '', amount_usd: '', notes: '' }]);
+              setShowModal(true);
+            }} 
+            className="btn btn-primary"
+          >
             <Plus size={16} />
             <span>+ Log Paid Ad Expense</span>
           </button>
@@ -210,14 +242,17 @@ export const PaidAds = () => {
         </div>
       </div>
 
-      {/* Log Paid Ad Modal */}
+      {/* Log Paid Ad Modal (Multi-Product Supported) */}
       {showModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
+          <div className="modal-content" style={{ maxWidth: '720px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Megaphone size={20} color="var(--accent-primary)" />
-                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Log Paid Ad Marketing Expense</h3>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Log Paid Ad Marketing Expense</h3>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Log ad spend for single or multiple products simultaneously</span>
+                </div>
               </div>
               <button onClick={() => setShowModal(false)} className="btn btn-secondary btn-icon">
                 <X size={18} />
@@ -226,18 +261,10 @@ export const PaidAds = () => {
 
             <form onSubmit={handleSubmitAd}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Target Product (Optional)</label>
-                    <ProductSelectSearch
-                      products={products}
-                      selectedId={selectedProductId}
-                      onSelect={(id) => setSelectedProductId(id)}
-                      placeholder="Type product name or code/SKU..."
-                    />
-                  </div>
-
-                  <div className="form-group">
+                
+                {/* 1. Shared Campaign Settings Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', background: 'var(--bg-primary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Ad Campaign Date</label>
                     <input
                       type="date"
@@ -247,44 +274,24 @@ export const PaidAds = () => {
                       onChange={(e) => setAdDate(e.target.value)}
                     />
                   </div>
-                </div>
 
-                <div className="form-group">
-                  <label className="form-label">Ad Platform</label>
-                  <select
-                    className="form-select"
-                    value={platform}
-                    onChange={(e) => setPlatform(e.target.value)}
-                  >
-                    <option value="Facebook Ads">Facebook / Meta Ads</option>
-                    <option value="Google Ads">Google / YouTube Ads</option>
-                    <option value="TikTok Ads">TikTok Ads</option>
-                    <option value="Influencer Marketing">Influencer Marketing</option>
-                    <option value="Others">Others</option>
-                  </select>
-                </div>
-
-                {/* USD Amount & Exchange Rate Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Ad Spend Amount ($ USD)</label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: '700', color: 'var(--text-muted)' }}>$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="form-input"
-                        style={{ paddingLeft: '28px' }}
-                        required
-                        placeholder="120.00"
-                        value={amountUsd}
-                        onChange={(e) => setAmountUsd(e.target.value)}
-                      />
-                    </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Ad Platform</label>
+                    <select
+                      className="form-select"
+                      value={platform}
+                      onChange={(e) => setPlatform(e.target.value)}
+                    >
+                      <option value="Facebook Ads">Facebook / Meta Ads</option>
+                      <option value="Google Ads">Google / YouTube Ads</option>
+                      <option value="TikTok Ads">TikTok Ads</option>
+                      <option value="Influencer Marketing">Influencer Marketing</option>
+                      <option value="Others">Others</option>
+                    </select>
                   </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Dollar Rate (৳ BDT per 1$)</label>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Dollar Rate (৳ BDT per $1)</label>
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: '700', color: 'var(--text-muted)' }}>৳</span>
                       <input
@@ -301,31 +308,142 @@ export const PaidAds = () => {
                   </div>
                 </div>
 
-                {/* Live Currency Conversion Card */}
-                {amountUsd && exchangeRate && (
-                  <div style={{ padding: '14px 16px', background: 'var(--bg-secondary)', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                      <span>Calculation Formula: </span>
-                      <strong>${usdNum.toFixed(2)} × ৳{rateNum.toFixed(2)}</strong>
+                {/* 2. Product-wise Ad Cost Rows (Multi-Product Section) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Layers size={16} color="var(--accent-primary)" />
+                      <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>Product-wise Ad Cost Breakdown</strong>
                     </div>
-
-                    <div>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textAlign: 'right' }}>Total Expense</span>
-                      <strong style={{ fontSize: '18px', color: 'var(--danger)' }}>{currency}{calculatedBdt}</strong>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddAdItem}
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '12px' }}
+                    >
+                      <Plus size={14} />
+                      <span>+ Add Another Product</span>
+                    </button>
                   </div>
-                )}
 
-                <div className="form-group">
-                  <label className="form-label">Notes / Campaign Details (Optional)</label>
+                  {adItems.map((item, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px',
+                        padding: '14px',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: '12px',
+                        border: '1px solid var(--border-color)',
+                        position: 'relative'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--accent-primary)' }}>
+                          Product #{index + 1}
+                        </span>
+
+                        {adItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAdItem(index)}
+                            className="btn btn-secondary btn-icon btn-sm"
+                            title="Remove Product"
+                            style={{ width: '28px', height: '28px' }}
+                          >
+                            <Trash2 size={14} color="var(--danger)" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '12px' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '12px' }}>Target Product</label>
+                          <ProductSelectSearch
+                            products={products}
+                            selectedId={item.product_id}
+                            onSelect={(id) => handleAdItemChange(index, 'product_id', id)}
+                            placeholder="Search & select product..."
+                          />
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label" style={{ fontSize: '12px' }}>Ad Spend ($ USD)</label>
+                          <div style={{ position: 'relative' }}>
+                            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: '700', color: 'var(--text-muted)' }}>$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="form-input"
+                              style={{ paddingLeft: '28px' }}
+                              required
+                              placeholder="e.g. 5.00"
+                              value={item.amount_usd}
+                              onChange={(e) => handleAdItemChange(index, 'amount_usd', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ fontSize: '12px', padding: '6px 10px' }}
+                          placeholder="Specific product campaign notes (optional)..."
+                          value={item.notes || ''}
+                          onChange={(e) => handleAdItemChange(index, 'notes', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={handleAddAdItem}
+                    className="btn btn-secondary"
+                    style={{ borderStyle: 'dashed', justifyContent: 'center', width: '100%', padding: '10px' }}
+                  >
+                    <Plus size={16} />
+                    <span>+ Add Product Ad Spend Row</span>
+                  </button>
+                </div>
+
+                {/* 3. Common Campaign Notes & Live Batch Summary Box */}
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">General Campaign Notes / Tag (Optional)</label>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. July Summer Campaign #2"
+                    placeholder="e.g. July Summer Sale Campaign #2"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                   />
                 </div>
+
+                {/* Live Currency & Batch Total Card */}
+                <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block' }}>
+                      Batch Total ({validProductsCount} Product{validProductsCount !== 1 ? 's' : ''})
+                    </span>
+                    <strong style={{ fontSize: '18px', color: 'var(--accent-primary)' }}>
+                      ${totalBatchUsd.toFixed(2)} USD
+                    </strong>
+                  </div>
+
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>
+                      Total Expense @ ৳{rateNum.toFixed(2)}/$
+                    </span>
+                    <strong style={{ fontSize: '20px', color: 'var(--danger)' }}>
+                      {currency}{totalBatchBdt}
+                    </strong>
+                  </div>
+                </div>
+
               </div>
 
               <div className="modal-footer">
@@ -333,7 +451,7 @@ export const PaidAds = () => {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-success">
-                  Save Paid Ad Expense
+                  Save All Paid Ad Expenses ({validProductsCount})
                 </button>
               </div>
             </form>
