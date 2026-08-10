@@ -481,16 +481,18 @@ exports.getBonuses = async (req, res) => {
 exports.createBonus = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const { title, employee_id, amount, bonus_date, notes } = req.body;
+    const { title, employee_id, amount, month_year, bonus_date, notes } = req.body;
 
     if (!title || !amount) {
       return res.status(400).json({ error: 'Bonus title and amount are required.' });
     }
 
+    const finalBonusDate = month_year ? `${month_year}-01` : (bonus_date || new Date().toISOString().slice(0, 10));
+
     const [result] = await db.query(
       `INSERT INTO employee_bonuses (tenant_id, employee_id, title, amount, bonus_date, notes)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [tenantId, employee_id || null, title, Number(amount), bonus_date || new Date().toISOString().slice(0, 10), notes || null]
+      [tenantId, employee_id || null, title, Number(amount), finalBonusDate, notes || null]
     );
 
     res.status(201).json({ message: 'Bonus/Allowance recorded successfully', bonusId: result.insertId });

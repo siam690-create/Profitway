@@ -152,7 +152,7 @@ export const StaffManager = () => {
   });
 
   const [showBonusModal, setShowBonusModal] = useState(false);
-  const [bonusForm, setBonusForm] = useState({ employee_id: '', title: 'Eid Festival Bonus', amount: '', bonus_date: new Date().toISOString().slice(0, 10), notes: '' });
+  const [bonusForm, setBonusForm] = useState({ employee_id: '', title: 'Eid Festival Bonus', amount: '', month_year: new Date().toISOString().slice(0, 7), notes: '' });
 
   const [showDisburseModal, setShowDisburseModal] = useState(null);
   const [disburseAccount, setDisburseAccount] = useState('');
@@ -377,12 +377,17 @@ export const StaffManager = () => {
   const handleCreateBonus = async (e) => {
     e.preventDefault();
     try {
-      const res = await authFetch('/api/staff/bonuses', { method: 'POST', body: JSON.stringify(bonusForm) });
+      const payload = {
+        ...bonusForm,
+        bonus_date: bonusForm.month_year ? `${bonusForm.month_year}-01` : new Date().toISOString().slice(0, 10)
+      };
+      const res = await authFetch('/api/staff/bonuses', { method: 'POST', body: JSON.stringify(payload) });
       const data = await res.json();
       if (res.ok) {
         setShowBonusModal(false);
         fetchBonuses();
-        alert('Bonus recorded successfully!');
+        fetchSalarySheet();
+        alert('Bonus/Allowance recorded successfully!');
       } else alert(`Error: ${data.error}`);
     } catch (err) { alert(`Error: ${err.message}`); }
   };
@@ -893,20 +898,26 @@ export const StaffManager = () => {
                   <th>Title</th>
                   <th>Target Employee</th>
                   <th>Bonus Amount</th>
-                  <th>Bonus Date</th>
+                  <th>Target Salary Month</th>
+                  <th>Issued Date</th>
                   <th>Notes</th>
                 </tr>
               </thead>
               <tbody>
                 {bonusesList.length === 0 ? (
-                  <tr><td colSpan="5" style={{ textAlign: 'center', padding: '30px' }}>No bonuses issued.</td></tr>
+                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px' }}>No bonuses issued.</td></tr>
                 ) : (
                   bonusesList.map(b => (
                     <tr key={b.id}>
                       <td><strong>{b.title}</strong></td>
                       <td>{b.employee_name}</td>
                       <td style={{ fontWeight: '700', color: '#8b5cf6' }}>+{currency}{Number(b.amount).toFixed(2)}</td>
-                      <td>{new Date(b.bonus_date).toLocaleDateString()}</td>
+                      <td>
+                        <span className="badge badge-primary" style={{ fontSize: '11px' }}>
+                          📅 {b.bonus_date ? new Date(b.bonus_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A'}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{b.bonus_date ? new Date(b.bonus_date).toLocaleDateString() : 'N/A'}</td>
                       <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{b.notes || 'Festival Allowance'}</td>
                     </tr>
                   ))
@@ -1708,6 +1719,20 @@ export const StaffManager = () => {
                 <div className="form-group">
                   <label className="form-label">Bonus Title *</label>
                   <input type="text" className="form-input" required placeholder="e.g. Eid Festival Bonus" value={bonusForm.title} onChange={(e) => setBonusForm({ ...bonusForm, title: e.target.value })} />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Applicable Salary Month (কোন মাসের বেতনের সাথে যুক্ত হবে) *</label>
+                  <input
+                    type="month"
+                    className="form-input"
+                    required
+                    value={bonusForm.month_year || new Date().toISOString().slice(0, 7)}
+                    onChange={(e) => setBonusForm({ ...bonusForm, month_year: e.target.value })}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--accent-primary)', marginTop: '2px', display: 'block' }}>
+                    * সিলেক্টকৃত মাসের সেলারি শিটের বোনাস কলামে টাকাটি স্বয়ংক্রিয়ভাবে যোগ হয়ে যাবে।
+                  </span>
                 </div>
 
                 <div className="form-group">
