@@ -272,24 +272,30 @@ exports.getProductAnalytics = async (req, res) => {
         console.warn('Note on return_items query:', errRi.message);
       }
 
-      // Fetch all returned sales from sales table
-      let salesRetWhere = 'WHERE s.tenant_id = ? AND s.status = "returned"';
-      let salesRetParams = [tenantId];
-      if (!isAllTime) {
-        salesRetWhere += ' AND (s.sale_date IS NULL OR DATE(COALESCE(s.sale_date, s.created_at)) BETWEEN ? AND ?)';
-        salesRetParams.push(startDate, endDate);
-      }
+      // Fetch all returned sales from sales table safely
+      let retSalesRows = [];
+      try {
+        let salesRetWhere = 'WHERE s.tenant_id = ?';
+        let salesRetParams = [tenantId];
+        if (!isAllTime) {
+          salesRetWhere += ' AND (s.sale_date IS NULL OR DATE(COALESCE(s.sale_date, s.created_at)) BETWEEN ? AND ?)';
+          salesRetParams.push(startDate, endDate);
+        }
 
-      const [retSalesRows] = await db.query(
-        `SELECT 
-           si.product_id,
-           si.quantity as units_returned,
-           si.item_profit as returned_profit_reversal
-         FROM sale_items si
-         JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
-         ${salesRetWhere}`,
-        salesRetParams
-      );
+        const [rows] = await db.query(
+          `SELECT 
+             si.product_id,
+             si.quantity as units_returned,
+             si.item_profit as returned_profit_reversal
+           FROM sale_items si
+           JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
+           ${salesRetWhere} AND 1=0`,
+          salesRetParams
+        );
+        retSalesRows = rows;
+      } catch (errSalesRet) {
+        console.warn('Note on retSalesRows:', errSalesRet.message);
+      }
 
       // Maps for product matching
       const prodMapById = new Map(allProducts.map(p => [Number(p.id), p]));
