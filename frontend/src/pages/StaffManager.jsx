@@ -536,6 +536,7 @@ export const StaffManager = () => {
                   <th>Code</th>
                   <th>Employee Name</th>
                   <th>Designation / Dept</th>
+                  <th>Weekly Off Day</th>
                   <th>Contact Info</th>
                   <th>Base Salary</th>
                   <th>Joining Date</th>
@@ -546,7 +547,7 @@ export const StaffManager = () => {
               <tbody>
                 {employeesList.length === 0 ? (
                   <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                       No employee profiles created yet. Click "+ Add Employee Profile" to add one.
                     </td>
                   </tr>
@@ -572,6 +573,35 @@ export const StaffManager = () => {
                       <td>
                         <div>{emp.designation}</div>
                         <span className="badge badge-secondary" style={{ fontSize: '10px' }}>{emp.department}</span>
+                      </td>
+                      <td>
+                        <select
+                          className="form-select"
+                          style={{ fontSize: '12px', padding: '4px 8px', background: 'var(--bg-secondary)', cursor: 'pointer', width: '120px' }}
+                          value={emp.weekly_off_day || 'Friday'}
+                          onChange={async (e) => {
+                            const newOff = e.target.value;
+                            try {
+                              const res = await authFetch(`/api/staff/employees/${emp.id}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ ...emp, weekly_off_day: newOff })
+                              });
+                              if (res.ok) {
+                                fetchEmployees();
+                                alert(`Updated ${emp.name}'s weekly off day to ${newOff}!`);
+                              }
+                            } catch (err) { alert(`Error: ${err.message}`); }
+                          }}
+                        >
+                          <option value="Friday">🏖️ Friday</option>
+                          <option value="Saturday">🏖️ Saturday</option>
+                          <option value="Sunday">🏖️ Sunday</option>
+                          <option value="Monday">🏖️ Monday</option>
+                          <option value="Tuesday">🏖️ Tuesday</option>
+                          <option value="Wednesday">🏖️ Wednesday</option>
+                          <option value="Thursday">🏖️ Thursday</option>
+                          <option value="None">None</option>
+                        </select>
                       </td>
                       <td style={{ fontSize: '13px' }}>
                         <div><Phone size={12} style={{ inlineSize: '12px' }} /> {emp.phone || 'N/A'}</div>
@@ -620,6 +650,8 @@ export const StaffManager = () => {
                               setEmpForm({
                                 ...emp,
                                 joining_date: emp.joining_date ? new Date(emp.joining_date).toISOString().slice(0, 10) : '',
+                                weekly_off_day: emp.weekly_off_day || 'Friday',
+                                holiday_duty_allowance: emp.holiday_duty_allowance || '',
                                 nid_number: emp.nid_number || '',
                                 photo_url: emp.photo_url || '',
                                 nid_front_url: emp.nid_front_url || '',
