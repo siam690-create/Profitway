@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { BarChart3, Calendar, TrendingUp, DollarSign, PackageCheck, Layers3, Award, ArrowUpRight, ArrowDownRight, Megaphone, Undo2, Receipt, RotateCcw, Truck, ShoppingBag, Users, AlertTriangle, Flame, ShieldAlert, Sparkles, CheckCircle2, RefreshCw, Target, Zap, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BarChart3, Calendar, TrendingUp, DollarSign, PackageCheck, Layers3, Award, ArrowUpRight, ArrowDownRight, Megaphone, Undo2, Receipt, RotateCcw, Truck, ShoppingBag, Users, AlertTriangle, Flame, ShieldAlert, Sparkles, CheckCircle2, RefreshCw, Target, Zap, AlertCircle, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 
 export const Analytics = () => {
   const { authFetch, currency } = useApp();
@@ -315,26 +315,133 @@ export const Analytics = () => {
           </div>
 
           <div id="products-table-container" className="table-wrapper" style={{ overflowX: 'auto', scrollBehavior: 'smooth' }}>
-            <table className="data-table" style={{ minWidth: '1200px' }}>
+            <table className="data-table" style={{ minWidth: '1500px' }}>
               <thead>
                 <tr>
-                  <th style={{ minWidth: '180px' }}>Product Name & SKU</th>
-                  <th style={{ minWidth: '110px' }}>Cost Price<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(কেনাদাম)</span></th>
-                  <th style={{ minWidth: '110px' }}>Selling Price<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(বিক্রিদাম)</span></th>
-                  <th style={{ textAlign: 'center', minWidth: '130px' }}>Sold & Returned<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Quantity</span></th>
-                  <th style={{ minWidth: '130px' }}>Product Gross<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Profit (+৳)</span></th>
-                  <th style={{ minWidth: '130px' }}>Delivery Profit<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Revenue (+৳)</span></th>
-                  <th style={{ minWidth: '140px' }}>Returned Product<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Profit Loss (-৳)</span></th>
-                  <th style={{ minWidth: '140px' }}>Returned Delivery<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Fee Loss (-৳)</span></th>
-                  <th style={{ minWidth: '130px' }}>Marketing Ads<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Cost (-৳)</span></th>
-                  <th style={{ minWidth: '150px' }}>Net Real Profit<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(নিট আসল লাভ)</span></th>
-                  <th style={{ minWidth: '110px' }}>Net Profit<br/><span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Margin %</span></th>
+                  <th style={{ minWidth: '180px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>PRODUCT NAME & SKU</span>
+                      <span title="প্রোডাক্টের নাম এবং ইউনিক স্টক কিপিং ইউনিট (SKU) আইডেন্টিফায়ার" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                  </th>
+
+                  <th style={{ minWidth: '110px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>COST PRICE</span>
+                      <span title="প্রোডাক্ট প্রতি কেনা দাম বা উৎপাদন খরচ (Unit Purchase / COGS Cost)" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(কেনাদাম)</span>
+                  </th>
+
+                  <th style={{ minWidth: '110px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>SELLING PRICE</span>
+                      <span title="প্রোডাক্ট প্রতি নির্ধারিত খুচরা বিক্রি দাম (Unit Retail Sale Price)" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(বিক্রিদাম)</span>
+                  </th>
+
+                  <th style={{ minWidth: '120px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <span>CUSTOMER / PARCEL</span>
+                      <span title="এই প্রোডাক্ট সম্বলিত মোট কাস্টমার বা পার্সেল অর্ডার সংখ্যা" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(পার্সেল সংখ্যা)</span>
+                  </th>
+
+                  <th style={{ minWidth: '120px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <span>PRODUCT SOLD</span>
+                      <span title="কুরিয়ারে সফলভাবে ডেলিভারি হওয়া মোট ইউনিট প্রোডাক্ট বিক্রি সংখ্যা (Delivered Sales Qty)" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(বিক্রি সংখ্যা)</span>
+                  </th>
+
+                  <th style={{ minWidth: '140px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>PRODUCT GROSS PROFIT</span>
+                      <span title="সফল প্রোডাক্ট বিক্রি থেকে অর্জিত কাঁচা লাভ = (বিক্রিদাম - কেনাদাম) × ডেলিভারি প্রোডাক্ট সংখ্যা" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(+৳ কাঁচা লাভ)</span>
+                  </th>
+
+                  <th style={{ minWidth: '120px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <span>RETURNED PRODUCT</span>
+                      <span title="কুরিয়ার থেকে ডেলিভারি আনসাকসেসফুল হয়ে রিটার্ন আসা মোট প্রোডাক্ট সংখ্যা" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(রিটার্ন সংখ্যা)</span>
+                  </th>
+
+                  <th style={{ minWidth: '150px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>RETURNED COURIER LOSS</span>
+                      <span title="প্রোডাক্ট রিটার্ন আসার কারণে কুরিয়ার কোম্পানিকে দেওয়া ড্যামেজ বা রিটার্ন বুকিং ফি লস" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(-৳ কুরিয়ার ক্ষতি)</span>
+                  </th>
+
+                  <th style={{ minWidth: '150px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>RETURN PROFIT ADJUST</span>
+                      <span title="প্রোডাক্ট রিটার্ন আসার ফলে প্রত্যাশিত গ্রস প্রফিট ও ডেলিভারি ফি বাতিল হওয়ার মোট ক্ষতি" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(-৳ প্রফিট বাতিল)</span>
+                  </th>
+
+                  <th style={{ minWidth: '150px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>DELIVERY PROFIT/LOSS</span>
+                      <span title="কাস্টমার থেকে সংগৃহীত ডেলিভারি ফি মাইনাস কুরিয়ারকে দেওয়া আসল ডেলিভারি চার্জের নিট লাভ বা ক্ষতি" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(+/-৳ ডেলিভারি ফি)</span>
+                  </th>
+
+                  <th style={{ minWidth: '130px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>MARKETING COST</span>
+                      <span title="পেইড এডস ট্র্যাকার (Paid Ads Tracker) থেকে এই প্রোডাক্টের জন্য হওয়া ফেসবুক/গুগল এড খরচ" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(-৳ এডস খরচ)</span>
+                  </th>
+
+                  <th style={{ minWidth: '160px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>NET REAL PROFIT</span>
+                      <span title="প্রোডাক্টের সর্বমোট আসল লাভ = গ্রস প্রফিট + ডেলিভারি লাভ - রিটার্ন কুরিয়ার ফি লস - রিটার্ন প্রফিট অ্যাডজাস্ট - এডস খরচ" style={{ cursor: 'pointer', color: 'var(--accent-primary)', display: 'inline-flex', alignItems: 'center' }}>
+                        <Info size={13} />
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(নিট আসল লাভ)</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {products.length === 0 ? (
                   <tr>
-                    <td colSpan="11" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                    <td colSpan="12" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                       No product sales or financial records found for the selected date range.
                     </td>
                   </tr>
@@ -343,39 +450,69 @@ export const Analytics = () => {
                     const isProfitPos = p.net_real_profit >= 0;
                     return (
                       <tr key={p.product_id}>
+                        {/* 1. PRODUCT NAME & SKU */}
                         <td>
                           <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{p.product_name}</div>
                           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>SKU: {p.sku}</div>
                         </td>
+
+                        {/* 2. COST PRICE */}
                         <td style={{ fontSize: '13px', fontWeight: '600' }}>
                           {currency}{p.cost_price.toFixed(2)}
                         </td>
+
+                        {/* 3. SELLING PRICE */}
                         <td style={{ fontSize: '13px', fontWeight: '600', color: 'var(--accent-primary)' }}>
                           {currency}{p.selling_price.toFixed(2)}
                         </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span style={{ fontWeight: '700', color: 'var(--success)' }}>{p.units_sold} Sold</span>
-                          {p.units_returned > 0 && (
-                            <span style={{ fontSize: '11px', color: 'var(--danger)', display: 'block' }}>
-                              ({p.units_returned} Returned)
-                            </span>
-                          )}
+
+                        {/* 4. CUSTOMER / PARCEL */}
+                        <td style={{ textAlign: 'center', fontWeight: '700', color: 'var(--text-primary)' }}>
+                          {p.parcels_count || 0} Orders
                         </td>
-                        <td style={{ fontSize: '13px' }}>{currency}{p.gross_profit.toFixed(2)}</td>
-                        <td style={{ color: p.product_delivery_profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+
+                        {/* 5. PRODUCT SOLD */}
+                        <td style={{ textAlign: 'center', fontWeight: '700', color: 'var(--success)' }}>
+                          {p.units_sold} Sold
+                        </td>
+
+                        {/* 6. PRODUCT GROSS PROFIT */}
+                        <td style={{ fontSize: '13px', fontWeight: '700', color: 'var(--success)' }}>
+                          +{currency}{p.gross_profit.toFixed(2)}
+                        </td>
+
+                        {/* 7. RETURNED PRODUCT */}
+                        <td style={{ textAlign: 'center', fontWeight: '700', color: p.units_returned > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          {p.units_returned} Returned
+                        </td>
+
+                        {/* 8. RETURNED COURIER FEE LOSS */}
+                        <td style={{ color: p.return_charges > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          -{currency}{(p.return_charges || 0).toFixed(2)}
+                        </td>
+
+                        {/* 9. RETURN PRODUCT PROFIT ADJUST */}
+                        <td style={{ color: (p.return_profit_adjust || 0) > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          -{currency}{(p.return_profit_adjust || 0).toFixed(2)}
+                        </td>
+
+                        {/* 10. DELIVERY FEE PROFIT/LOSS */}
+                        <td style={{ color: p.product_delivery_profit >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: '600' }}>
                           {p.product_delivery_profit >= 0 ? '+' : ''}{currency}{p.product_delivery_profit.toFixed(2)}
                         </td>
-                        <td style={{ color: 'var(--danger)' }}>-{currency}{p.returned_profit_reversal.toFixed(2)}</td>
-                        <td style={{ color: 'var(--danger)' }}>-{currency}{p.returned_deliv_profit_reversal.toFixed(2)}</td>
-                        <td style={{ color: 'var(--danger)' }}>-{currency}{p.ad_spend_bdt.toFixed(2)}</td>
+
+                        {/* 11. MARKETING COST */}
+                        <td style={{ color: p.ad_spend_bdt > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          -{currency}{p.ad_spend_bdt.toFixed(2)}
+                        </td>
+
+                        {/* 12. NET REAL PROFIT */}
                         <td>
                           <strong style={{ fontSize: '14px', color: isProfitPos ? 'var(--success)' : 'var(--danger)' }}>
                             {isProfitPos ? '+' : ''}{currency}{p.net_real_profit.toFixed(2)}
                           </strong>
-                        </td>
-                        <td>
-                          <span className={`badge ${isProfitPos ? 'badge-success' : 'badge-danger'}`}>
-                            {p.profit_margin.toFixed(1)}%
+                          <span className={`badge ${isProfitPos ? 'badge-success' : 'badge-danger'}`} style={{ display: 'block', width: 'fit-content', marginTop: '4px', fontSize: '10px' }}>
+                            {p.profit_margin.toFixed(1)}% Margin
                           </span>
                         </td>
                       </tr>

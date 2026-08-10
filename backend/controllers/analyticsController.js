@@ -228,6 +228,7 @@ exports.getProductAnalytics = async (req, res) => {
       const [rows] = await db.query(
         `SELECT 
            si.product_id,
+           COUNT(DISTINCT s.id) as customer_parcels_count,
            SUM(si.quantity) as units_sold,
            SUM(si.total_price) as gross_revenue,
            SUM(si.total_cost) as cogs,
@@ -299,8 +300,9 @@ exports.getProductAnalytics = async (req, res) => {
       const revDelivProfit = Number(r.returned_deliv_profit_reversal || 0);
       const adSpend = Number(a.ad_spend_bdt || 0);
       const returnCharge = Number(r.return_charges || 0);
+      const returnProfitAdjust = revProductProfit + revDelivProfit;
 
-      const netProfit = gProfit + delivProfit - revProductProfit - revDelivProfit - adSpend - returnCharge;
+      const netProfit = gProfit + delivProfit - returnProfitAdjust - adSpend - returnCharge;
       const cogs = Number(s.cogs || 0);
       const marginPct = cogs > 0 ? ((netProfit / cogs) * 100).toFixed(1) : '0.0';
 
@@ -317,6 +319,7 @@ exports.getProductAnalytics = async (req, res) => {
         stock_quantity: p.stock_quantity,
         cost_price: Number(p.cost_price),
         selling_price: Number(p.selling_price),
+        parcels_count: Number(s.customer_parcels_count || 0),
         units_sold: unitsSold,
         units_returned: Number(r.units_returned || 0),
         gross_revenue: grossRev,
@@ -325,6 +328,7 @@ exports.getProductAnalytics = async (req, res) => {
         product_delivery_profit: delivProfit,
         returned_profit_reversal: revProductProfit,
         returned_deliv_profit_reversal: revDelivProfit,
+        return_profit_adjust: returnProfitAdjust,
         ad_spend_bdt: adSpend,
         return_charges: returnCharge,
         net_real_profit: netProfit,
