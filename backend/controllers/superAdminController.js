@@ -137,12 +137,16 @@ exports.updateTenantSubscription = async (req, res) => {
 
       // Upsert into subscriptions table if plan_id is provided or matched
       if (plan_id) {
-        await db.query('UPDATE subscriptions SET status = "cancelled" WHERE tenant_id = ?', [tenant_id]);
-        await db.query(
-          `INSERT INTO subscriptions (tenant_id, plan_id, billing_cycle, start_date, ends_at, status)
-           VALUES (?, ?, 'monthly', NOW(), ?, 'active')`,
-          [tenant_id, Number(plan_id), expDate]
-        );
+        try {
+          await db.query('UPDATE subscriptions SET status = "cancelled" WHERE tenant_id = ?', [tenant_id]);
+          await db.query(
+            `INSERT INTO subscriptions (tenant_id, plan_id, billing_cycle, ends_at, status)
+             VALUES (?, ?, 'monthly', ?, 'active')`,
+            [tenant_id, Number(plan_id), expDate]
+          );
+        } catch (subErr) {
+          console.warn('Subscriptions table sync notice:', subErr.message);
+        }
       }
     }
 

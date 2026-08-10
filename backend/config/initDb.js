@@ -543,6 +543,7 @@ async function autoMigrate() {
     await addColumnIfNotExists('tenants', 'max_products', 'INT DEFAULT 300');
     await addColumnIfNotExists('tenants', 'max_staff', 'INT DEFAULT 5');
     await addColumnIfNotExists('tenants', 'subscription_ends_at', 'DATETIME NULL');
+    await addColumnIfNotExists('subscriptions', 'start_date', 'DATETIME NULL');
 
     // Retroactive column type expansion for liabilities & receivables status & party_type column to prevent data truncation
     try {
