@@ -13,6 +13,7 @@ import {
   Trash2,
   AlertTriangle
 } from 'lucide-react';
+import { ProductSelectSearch } from './ProductSelectSearch';
 
 export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch, products = [] }) => {
   const [file, setFile] = useState(null);
@@ -75,7 +76,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
     }
 
     if (selectedProdId) {
-      const p = products.find(prod => Number(prod.id) === Number(selectedProdId));
+      const p = products.find(prod => String(prod.id) === String(selectedProdId));
       if (p) return { id: p.id, name: p.name, isMatched: true };
     }
 
@@ -231,17 +232,17 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
     });
   };
 
-  // 5. Select product directly from dropdown to resolve unmatched code
+  // 5. Select product directly via ProductSelectSearch component
   const handleSelectProductForRow = (index, selectedVal) => {
     setParsedAds(prev => {
       const updated = [...prev];
       const row = { ...updated[index] };
 
-      if (selectedVal === 'general') {
+      if (!selectedVal) {
         row.product_id = null;
         row.product_name = 'General Shop Campaign';
         row.isMatched = true;
-      } else if (selectedVal) {
+      } else {
         const found = products.find(p => String(p.id) === String(selectedVal));
         if (found) {
           row.product_id = found.id;
@@ -294,7 +295,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
 
   return (
     <div className="modal-overlay" style={{ background: 'rgba(10, 15, 29, 0.85)', backdropFilter: 'blur(10px)', zIndex: 1100 }}>
-      <div className="modal-content" style={{ maxWidth: '1020px', background: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '20px', padding: '28px', color: '#fff' }}>
+      <div className="modal-content" style={{ maxWidth: '1080px', background: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '20px', padding: '28px', color: '#fff' }}>
         
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -304,7 +305,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
             </div>
             <div>
               <h3 style={{ fontSize: '18px', fontWeight: '800' }}>Bulk Excel / CSV Paid Ads Import</h3>
-              <p style={{ fontSize: '12px', color: '#94a3b8' }}>Smart Product Code matching, error detection & 1-click dropdown resolution</p>
+              <p style={{ fontSize: '12px', color: '#94a3b8' }}>Type-to-search product picker, error detection & 1-click SKU resolution</p>
             </div>
           </div>
 
@@ -398,20 +399,20 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
               <div style={{ padding: '10px 14px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '8px', fontSize: '12px', color: '#fbbf24', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <AlertTriangle size={16} />
                 <span>
-                  <strong>Notice:</strong> {unmatchedCount} product code(s) were not found in your inventory. Select the correct product from the dropdown in the row, edit the SKU code, or choose "General Shop Campaign".
+                  <strong>Notice:</strong> {unmatchedCount} product code(s) were not found in your inventory. Type product name or SKU in the search picker to match easily.
                 </span>
               </div>
             )}
 
-            {/* Scrollable Preview Table with Error Highlight & Dropdown Resolution */}
+            {/* Scrollable Preview Table with Easy Product Search Picker */}
             <div style={{ maxHeight: '380px', overflowY: 'auto', borderRadius: '10px', border: '1px solid #334155', marginBottom: '20px' }}>
               <table className="data-table" style={{ fontSize: '12px', width: '100%' }}>
                 <thead>
                   <tr style={{ background: '#1e293b', position: 'sticky', top: 0, zIndex: 10 }}>
                     <th style={{ width: '40px' }}>#</th>
                     <th style={{ minWidth: '115px' }}>Ad Date</th>
-                    <th style={{ minWidth: '125px' }}>Product Code</th>
-                    <th style={{ minWidth: '220px' }}>Matched Product / Resolve Dropdown</th>
+                    <th style={{ minWidth: '110px' }}>Product Code</th>
+                    <th style={{ minWidth: '260px' }}>Matched Product / Easy Search Picker</th>
                     <th style={{ minWidth: '120px' }}>Platform</th>
                     <th style={{ minWidth: '100px' }}>Ad Spend ($)</th>
                     <th style={{ minWidth: '90px' }}>Rate (৳/$)</th>
@@ -466,34 +467,19 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
                           />
                         </td>
 
-                        {/* 3. Matched Product Name & 1-Click Dropdown Resolver */}
-                        <td>
+                        {/* 3. Easy Searchable Product Picker (ProductSelectSearch) */}
+                        <td style={{ minWidth: '260px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <select
-                              className="form-select"
-                              style={{ 
-                                padding: '4px 6px', 
-                                fontSize: '11px', 
-                                borderColor: a.isMatched ? 'rgba(255, 255, 255, 0.15)' : '#ef4444',
-                                color: a.isMatched ? '#10b981' : '#f87171',
-                                fontWeight: '700',
-                                background: '#0f172a'
-                              }}
-                              value={a.product_id ? String(a.product_id) : (a.isMatched ? 'general' : '')}
-                              onChange={(e) => handleSelectProductForRow(idx, e.target.value)}
-                            >
-                              <option value="" disabled>-- ⚠️ Select Product to Resolve --</option>
-                              <option value="general">🌐 General Shop Campaign (No Product)</option>
-                              {products.map(p => (
-                                <option key={p.id} value={String(p.id)}>
-                                  {p.name} ({p.sku || p.product_code || `ID:${p.id}`})
-                                </option>
-                              ))}
-                            </select>
+                            <ProductSelectSearch
+                              products={products}
+                              selectedId={a.product_id}
+                              onSelect={(selectedId) => handleSelectProductForRow(idx, selectedId)}
+                              placeholder={!a.isMatched ? "🔍 Type product name or SKU..." : "Search & select product..."}
+                            />
 
                             {!a.isMatched && (
                               <span style={{ fontSize: '10px', color: '#f87171', fontWeight: '700' }}>
-                                ⚠️ Code "{a.product_code}" not found. Select product above to fix.
+                                ⚠️ Code "{a.product_code}" not found. Type or select product above to fix.
                               </span>
                             )}
                           </div>
@@ -571,7 +557,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                💡 Tip: Type a valid SKU or pick from the dropdown to resolve unmatched product code errors before importing.
+                💡 Tip: Type product name or SKU in the search picker to match products instantly before importing.
               </span>
 
               <div style={{ display: 'flex', gap: '12px' }}>
