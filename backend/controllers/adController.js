@@ -151,3 +151,101 @@ exports.deleteAd = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Bulk Import Paid Ads from Excel / CSV
+exports.bulkImportAds = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { ads } = req.body;
+
+    if (!Array.isArray(ads) || ads.length === 0) {
+      return res.status(400).json({ error: 'No valid paid ad records provided for bulk import.' });
+    }
+
+    await connection.beginTransaction();
+
+    let importedCount = 0;
+
+    for (const item of ads) {
+      const usdVal = Number(item.amount_usd || 0);
+      if (usdVal <= 0) continue;
+
+      const rateVal = Number(item.exchange_rate || 120.00);
+      const totalBdtCost = Number((usdVal * rateVal).toFixed(2));
+      const selectedAdDate = item.ad_date || new Date().toISOString().slice(0, 10);
+      const selectedPlatform = item.platform || 'Facebook Ads';
+      const itemNotes = item.notes || null;
+
+      let productId = item.product_id ? Number(item.product_id) : null;
+      let productName = item.product_name || 'General Shop Campaign';
+
+      // Product Matching by SKU / Code / Name if product_id is not already matched
+      if (!productId && item.product_code) {
+        const pCode = String(item.product_code).trim();
+        const [prodRows] = await connection.query(
+          'SELECT id, name FROM products WHERE tenant_id = ? AND (sku = ? OR id = ? OR name LIKE ?)',
+          [tenantId, pCode, pCode, `%${pCode}%`]
+        );
+        if (prodRows.length > 0) {
+          productId = prodRows[0].id;
+          productName = prodRows[0].name;
+        }
+      } else if (productId) {
+        const [prodRows] = await connection.query(
+          'SELECT name FROM products WHERE id = ? AND tenant_id = ?',
+          [productId, tenantId]
+        );
+        if (prodRows.length > 0) {
+          productName = prodRows[0].name;
+        }
+      }
+
+      // 1. Insert Paid Ad Record
+      const [adResult] = await connection.query(
+        `INSERT INTO paid_ads (tenant_id, product_id, product_name, platform, amount_usd, exchange_rate, total_bdt_cost, ad_date, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tenantId,
+          productId,
+          productName,
+          selectedPlatform,
+          usdVal,
+          rateVal,
+          totalBdtCost,
+          selectedAdDate,
+          itemNotes
+        ]
+      );
+
+      const ad_id = adResult.insertId;
+
+      // 2. Automatically log Operating Expense entry under "Marketing"
+      await connection.query(
+        `INSERT INTO expenses (tenant_id, title, category, amount, expense_date, notes)
+         VALUES (?, ?, 'Marketing', ?, ?, ?)`,
+        [
+          tenantId,
+          `Paid Ad (${selectedPlatform}) - ${productName}`,
+          totalBdtCost,
+          selectedAdDate,
+          `Ad Spend: $${usdVal.toFixed(2)} @ ${rateVal} BDT/$ (Ad ID: #${ad_id}) ${itemNotes ? `- ${itemNotes}` : ''}`
+        ]
+      );
+
+      importedCount++;
+    }
+
+    await connection.commit();
+
+    res.status(201).json({
+      message: `Successfully bulk imported ${importedCount} Paid Ad campaign(s) and synced operating expenses!`
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};

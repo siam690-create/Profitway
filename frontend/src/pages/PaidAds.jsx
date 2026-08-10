@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X, Layers } from 'lucide-react';
+import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X, Layers, FileSpreadsheet } from 'lucide-react';
 
 import { ProductSelectSearch } from '../components/ProductSelectSearch';
 import { DateRangeFilter } from '../components/DateRangeFilter';
+import { BulkImportAdsModal } from '../components/BulkImportAdsModal';
 
 export const PaidAds = () => {
   const { authFetch, products, currency, refreshAllData, user } = useApp();
@@ -11,6 +12,7 @@ export const PaidAds = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
   // Multi-Product Ad Items Form State
   const [adItems, setAdItems] = useState([
@@ -156,6 +158,15 @@ export const PaidAds = () => {
           >
             <Plus size={16} />
             <span>+ Log Paid Ad Expense</span>
+          </button>
+
+          <button 
+            onClick={() => setShowBulkModal(true)} 
+            className="btn btn-secondary"
+            style={{ gap: '6px', fontWeight: '700' }}
+          >
+            <FileSpreadsheet size={16} color="var(--success)" />
+            <span>Bulk Import Excel</span>
           </button>
         </div>
       </div>
@@ -458,6 +469,18 @@ export const PaidAds = () => {
           </div>
         </div>
       )}
+
+      {/* Bulk Import Paid Ads Modal */}
+      <BulkImportAdsModal
+        isOpen={showBulkModal}
+        onClose={() => setShowBulkModal(false)}
+        onImportSuccess={() => {
+          refreshAllData();
+          fetchAds();
+        }}
+        authFetch={authFetch}
+        products={products}
+      />
     </div>
   );
 };
