@@ -568,28 +568,43 @@ export const StaffManager = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingEmp(null);
-            setEmpForm({
-              name: '', designation: 'Staff', department: 'General', phone: '', email: '', joining_date: new Date().toISOString().slice(0, 10),
-              nid_number: '', blood_group: 'B+', emergency_contact_name: '', emergency_contact_phone: '',
-              photo_url: '', nid_front_url: '', nid_back_url: '', documents_url: '',
-              base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: ''
-            });
-            setShowEmpModal(true);
-          }}
-          className="btn btn-primary"
-        >
-          <UserPlus size={16} />
-          <span>+ Add Employee Profile</span>
-        </button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => {
+              setActiveTab('users');
+              setShowUserModal(true);
+            }}
+            className="btn btn-secondary"
+            style={{ color: 'var(--accent-primary)', borderColor: 'var(--accent-primary)' }}
+          >
+            <Key size={16} />
+            <span>🔑 Staff Logins & Permissions</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditingEmp(null);
+              setEmpForm({
+                name: '', designation: 'Staff', department: 'General', phone: '', email: '', joining_date: new Date().toISOString().slice(0, 10),
+                nid_number: '', blood_group: 'B+', emergency_contact_name: '', emergency_contact_phone: '',
+                photo_url: '', nid_front_url: '', nid_back_url: '', documents_url: '',
+                base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: ''
+              });
+              setShowEmpModal(true);
+            }}
+            className="btn btn-primary"
+          >
+            <UserPlus size={16} />
+            <span>+ Add Employee Profile</span>
+          </button>
+        </div>
       </div>
 
       {/* Navigation Sub-Tabs Bar */}
       <ResponsiveSubTabs
         tabs={[
           { id: 'employees', label: `Employees (${employeesList.length})`, icon: Users },
+          { id: 'users', label: `Staff Logins & Permissions (${usersList.length})`, icon: Key },
           { id: 'attendance', label: 'Attendance Log', icon: Calendar },
           { id: 'leaves', label: 'Leave Manager', icon: Clock },
           { id: 'salary-sheet', label: 'Master Salary Sheet', icon: FileText },
@@ -598,7 +613,6 @@ export const StaffManager = () => {
           { id: 'loans', label: 'Loans & Advances', icon: DollarSign },
           { id: 'pf', label: 'Provident Fund (PF)', icon: Landmark },
           { id: 'idcards', label: 'Employee Badges / Cards', icon: Printer },
-          { id: 'users', label: `System Roles (${usersList.length})`, icon: Key }
         ]}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
