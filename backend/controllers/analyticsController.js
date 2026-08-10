@@ -248,37 +248,71 @@ exports.getProductAnalytics = async (req, res) => {
     let returnsAgg = [];
     try {
       let returnsWhere = 'WHERE r.tenant_id = ?';
+      let salesRetWhere = 'WHERE s.tenant_id = ? AND s.status = "returned"';
       let returnsParams = [tenantId];
+      let fullParams = [tenantId];
+
       if (!isAllTime) {
         returnsWhere += ' AND (r.return_date IS NULL OR DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?)';
+        salesRetWhere += ' AND (s.sale_date IS NULL OR DATE(COALESCE(s.sale_date, s.created_at)) BETWEEN ? AND ?)';
         returnsParams.push(startDate, endDate);
+        fullParams.push(startDate, endDate, tenantId, startDate, endDate);
+      } else {
+        fullParams.push(tenantId);
       }
 
       const [rows] = await db.query(
         `SELECT 
-           COALESCE(p_sub.id, ri.product_id) as product_id,
-           SUM(ri.quantity) as units_returned,
-           SUM(ri.quantity * (COALESCE(p_sub.selling_price, 0) - COALESCE(p_sub.cost_price, 0))) as returned_profit_reversal,
-           SUM(COALESCE(r.return_delivery_loss, 0) * (ri.quantity / GREATEST(COALESCE(r_tot.total_qty, 1), 1))) as returned_deliv_profit_reversal,
-           SUM(COALESCE(r.courier_charge, 0) * (ri.quantity / GREATEST(COALESCE(r_tot.total_qty, 1), 1))) as return_charges
-         FROM return_items ri
-         JOIN returns r ON ri.return_id = r.id
-         LEFT JOIN products p_sub ON (
-           (ri.product_id IS NOT NULL AND p_sub.id = ri.product_id) OR
-           (p_sub.tenant_id = r.tenant_id AND (
-             LOWER(TRIM(p_sub.sku)) = LOWER(TRIM(ri.product_name)) OR 
-             LOWER(TRIM(p_sub.name)) = LOWER(TRIM(ri.product_name)) OR
-             LOWER(TRIM(ri.product_name)) LIKE CONCAT('%', LOWER(TRIM(p_sub.name)), '%')
-           ))
-         )
-         LEFT JOIN (
-           SELECT return_id, SUM(quantity) as total_qty 
-           FROM return_items 
-           GROUP BY return_id
-         ) r_tot ON r_tot.return_id = r.id
-         ${returnsWhere}
-         GROUP BY COALESCE(p_sub.id, ri.product_id)`,
-        returnsParams
+           ret_combined.product_id,
+           SUM(ret_combined.units_returned) as units_returned,
+           SUM(ret_combined.returned_profit_reversal) as returned_profit_reversal,
+           SUM(ret_combined.returned_deliv_profit_reversal) as returned_deliv_profit_reversal,
+           SUM(ret_combined.return_charges) as return_charges
+         FROM (
+           SELECT 
+             COALESCE(p_sub.id, ri.product_id) as product_id,
+             ri.quantity as units_returned,
+             (ri.quantity * (COALESCE(p_sub.selling_price, 0) - COALESCE(p_sub.cost_price, 0))) as returned_profit_reversal,
+             (COALESCE(r.return_delivery_loss, 0) * (ri.quantity / GREATEST(COALESCE(r_tot.total_qty, 1), 1))) as returned_deliv_profit_reversal,
+             (COALESCE(r.courier_charge, 0) * (ri.quantity / GREATEST(COALESCE(r_tot.total_qty, 1), 1))) as return_charges
+           FROM return_items ri
+           JOIN returns r ON ri.return_id = r.id
+           LEFT JOIN products p_sub ON (
+             (ri.product_id IS NOT NULL AND p_sub.id = ri.product_id) OR
+             (p_sub.tenant_id = r.tenant_id AND (
+               LOWER(TRIM(p_sub.sku)) = LOWER(TRIM(ri.product_name)) OR 
+               LOWER(TRIM(p_sub.name)) = LOWER(TRIM(ri.product_name)) OR
+               LOWER(TRIM(ri.product_name)) LIKE CONCAT('%', LOWER(TRIM(p_sub.name)), '%')
+             ))
+           )
+           LEFT JOIN (
+             SELECT return_id, SUM(quantity) as total_qty 
+             FROM return_items 
+             GROUP BY return_id
+           ) r_tot ON r_tot.return_id = r.id
+           ${returnsWhere}
+
+           UNION ALL
+
+           SELECT 
+             si.product_id,
+             si.quantity as units_returned,
+             si.item_profit as returned_profit_reversal,
+             0 as returned_deliv_profit_reversal,
+             0 as return_charges
+           FROM sale_items si
+           JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
+           ${salesRetWhere}
+             AND NOT EXISTS (
+               SELECT 1 FROM return_items ri2 
+               JOIN returns r2 ON ri2.return_id = r2.id 
+               WHERE r2.invoice_no = s.invoice_no 
+                 AND (ri2.product_id = si.product_id OR ri2.product_name = si.product_name)
+             )
+         ) ret_combined
+         WHERE ret_combined.product_id IS NOT NULL
+         GROUP BY ret_combined.product_id`,
+        fullParams
       );
       returnsAgg = rows;
     } catch (e) {
