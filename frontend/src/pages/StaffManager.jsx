@@ -2414,13 +2414,40 @@ export const StaffManager = () => {
       {/* MODAL: CREATE STAFF LOGIN ACCOUNT */}
       {showUserModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '480px' }}>
+          <div className="modal-content" style={{ maxWidth: '540px' }}>
             <div className="modal-header">
               <h3>Create Staff Login Credentials</h3>
               <button onClick={() => setShowUserModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
             </div>
             <form onSubmit={handleCreateUserAccount}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Select Employee (স্টাফ সিলেক্ট করুন) *</label>
+                  <select
+                    className="form-select"
+                    value={userFormData.employee_id || ''}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const selectedEmp = employeesList.find(emp => Number(emp.id) === Number(selectedId));
+                      if (selectedEmp) {
+                        setUserFormData(prev => ({
+                          ...prev,
+                          employee_id: selectedEmp.id,
+                          name: selectedEmp.name,
+                          email: selectedEmp.email || prev.email
+                        }));
+                      } else {
+                        setUserFormData(prev => ({ ...prev, employee_id: '' }));
+                      }
+                    }}
+                  >
+                    <option value="">Choose Staff Profile from Directory...</option>
+                    {employeesList.map(e => (
+                      <option key={e.id} value={e.id}>{e.name} ({e.employee_code} - {e.designation})</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="form-group">
                   <label className="form-label">Full Name *</label>
                   <input
@@ -2467,6 +2494,50 @@ export const StaffManager = () => {
                     <option value="cashier">Cashier (ক্যাশিয়ার / বিক্রয়কর্মী)</option>
                     <option value="manager">Manager (ম্যানেজার)</option>
                   </select>
+                </div>
+
+                {/* Granular Permissions Checkbox Box */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <label className="form-label" style={{ margin: 0, fontWeight: '700', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Shield size={16} />
+                    <span>Module Access & Permissions (স্টাফকে কী কী অনুমতি দেওয়া হবে)</span>
+                  </label>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {[
+                      { key: 'inventory', label: '📦 Stock & Inventory', desc: 'স্টক দেখা ও আপডেট করা' },
+                      { key: 'pos', label: '🛒 POS / Counter Sale', desc: 'কাউন্টারে কাস্টমারের বিক্রি করা' },
+                      { key: 'orders', label: '🚚 Sales & Courier Orders', desc: 'অর্ডার লিস্ট ও কুরিয়ার রিটার্ন' },
+                      { key: 'chat', label: '💬 Team Chat System', desc: 'টিম চ্যাটে কথা বলা' },
+                      { key: 'attendance', label: '⏱️ Punch In / Attendance', desc: 'নিজের অফিসে ঢোকা ও বের হওয়া' },
+                      { key: 'tasks', label: '📋 Task Manager', desc: 'অ্যাসাইনকৃত কাজ দেখা ও সম্পন্ন করা' },
+                      { key: 'finance', label: '💵 Finance & Passbook', desc: 'ব্যাংক অ্যাকাউন্ট ও খরচ দেখা' }
+                    ].map(p => {
+                      const isChecked = (userFormData.permissions || []).includes(p.key);
+                      return (
+                        <label key={p.key} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: isChecked ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-primary)', padding: '8px 10px', borderRadius: '8px', border: `1px solid ${isChecked ? 'var(--accent-primary)' : 'var(--border-color)'}`, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            style={{ marginTop: '2px' }}
+                            onChange={() => {
+                              let current = Array.isArray(userFormData.permissions) ? [...userFormData.permissions] : ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'];
+                              if (current.includes(p.key)) {
+                                current = current.filter(k => k !== p.key);
+                              } else {
+                                current.push(p.key);
+                              }
+                              setUserFormData({ ...userFormData, permissions: current });
+                            }}
+                          />
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: '700' }}>{p.label}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{p.desc}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               <div className="modal-footer">
