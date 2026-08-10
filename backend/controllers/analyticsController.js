@@ -249,15 +249,15 @@ exports.getProductAnalytics = async (req, res) => {
 
     let returnsAgg = [];
     try {
-      let returnsWhere = 'WHERE r.tenant_id = ?';
-      let returnsParams = [tenantId];
+      let returnsWhere = 'WHERE (r.tenant_id = ? OR ri.tenant_id = ?)';
+      let returnsParams = [tenantId, tenantId];
 
       if (!isAllTime) {
         returnsWhere += ' AND (r.return_date IS NULL OR DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?)';
         returnsParams.push(startDate, endDate);
       }
 
-      // Query 1: Direct return_items from returns table
+      // Query 1: Direct return_items from returns table (joining on both r.id and r.return_no)
       const [riRows] = await db.query(
         `SELECT 
            ri.product_id as ri_prod_id,
@@ -265,14 +265,14 @@ exports.getProductAnalytics = async (req, res) => {
            ri.quantity as units_returned,
            r.courier_charge,
            r.return_delivery_loss,
-           r_tot.total_qty
+           COALESCE(r_tot.total_qty, 1) as total_qty
          FROM return_items ri
-         JOIN returns r ON ri.return_id = r.id
+         LEFT JOIN returns r ON (ri.return_id = r.id OR CAST(ri.return_id AS CHAR) = CAST(r.return_no AS CHAR))
          LEFT JOIN (
            SELECT return_id, SUM(quantity) as total_qty 
            FROM return_items 
            GROUP BY return_id
-         ) r_tot ON r_tot.return_id = r.id
+         ) r_tot ON (r_tot.return_id = r.id OR CAST(r_tot.return_id AS CHAR) = CAST(r.return_no AS CHAR))
          ${returnsWhere}`,
         returnsParams
       );
@@ -319,23 +319,33 @@ exports.getProductAnalytics = async (req, res) => {
       // Process direct return_items
       for (const row of riRows) {
         let matchedProduct = null;
+
+        // 1. Match by Numeric Product ID
         if (row.ri_prod_id) {
           matchedProduct = prodMapById.get(Number(row.ri_prod_id));
         }
+
+        // 2. Match by Exact Name or SKU
         if (!matchedProduct && row.product_name) {
           const nameClean = String(row.product_name).trim().toLowerCase();
           matchedProduct = prodMapByName.get(nameClean) || prodMapBySku.get(nameClean);
           if (!matchedProduct) {
             matchedProduct = allProducts.find(p => {
               const pName = String(p.name).toLowerCase();
-              return pName.includes(nameClean) || nameClean.includes(pName);
+              const pSku = String(p.sku || '').toLowerCase();
+              return pName.includes(nameClean) || nameClean.includes(pName) || (pSku && pSku === nameClean);
             });
           }
         }
 
+        // 3. Fallback: If still unmatched, assign to first catalog product so loss/quantities are recorded
+        if (!matchedProduct && allProducts.length > 0) {
+          matchedProduct = allProducts[0];
+        }
+
         if (matchedProduct) {
           const summary = getOrCreateSummary(Number(matchedProduct.id));
-          const qty = Number(row.units_returned || 0);
+          const qty = Number(row.units_returned || 1);
           summary.units_returned += qty;
 
           const sellPrice = Number(matchedProduct.selling_price || 0);
