@@ -651,6 +651,102 @@ export const PaidAds = () => {
         </div>
       )}
 
+      {/* MODAL: AD ACCOUNTS MANAGER */}
+      {showAccountModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '540px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CreditCard size={20} color="var(--accent-primary)" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Manage Ad Accounts</h3>
+              </div>
+              <button onClick={() => setShowAccountModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Form to Add New Ad Account */}
+              <form onSubmit={handleCreateAccount} style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <strong style={{ fontSize: '13px', color: 'var(--accent-primary)' }}>+ Add New Ad Account</strong>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '10px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '11px' }}>Ad Account Name *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      required
+                      placeholder="e.g. Meta Account #1 (Trendx)"
+                      value={newAccountName}
+                      onChange={(e) => setNewAccountName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '11px' }}>Platform</label>
+                    <select
+                      className="form-select"
+                      value={newAccountPlatform}
+                      onChange={(e) => setNewAccountPlatform(e.target.value)}
+                    >
+                      <option value="Facebook Ads">Facebook / Meta</option>
+                      <option value="Google Ads">Google Ads</option>
+                      <option value="TikTok Ads">TikTok Ads</option>
+                      <option value="Others">Others</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '11px' }}>Account Code / ID (Optional)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. act_109283746"
+                    value={newAccountIdCode}
+                    onChange={(e) => setNewAccountIdCode(e.target.value)}
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary btn-sm" style={{ marginTop: '4px' }}>
+                  <Plus size={14} />
+                  <span>Save Ad Account</span>
+                </button>
+              </form>
+
+              {/* List of Existing Ad Accounts */}
+              <div>
+                <strong style={{ fontSize: '13px', display: 'block', marginBottom: '8px' }}>Created Ad Accounts ({adAccounts.length})</strong>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+                  {adAccounts.length === 0 ? (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '16px' }}>
+                      No ad accounts created yet. Add one above!
+                    </div>
+                  ) : (
+                    adAccounts.map(acc => (
+                      <div key={acc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <div>
+                          <strong style={{ fontSize: '13px' }}>💳 {acc.account_name}</strong>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {acc.platform} {acc.account_id_code ? `• Code: ${acc.account_id_code}` : ''}
+                          </div>
+                        </div>
+                        <button onClick={() => handleDeleteAccount(acc.id)} className="btn btn-secondary btn-icon btn-xs">
+                          <Trash2 size={13} color="var(--danger)" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" onClick={() => setShowAccountModal(false)} className="btn btn-secondary">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bulk Import Paid Ads Modal */}
       <BulkImportAdsModal
         isOpen={showBulkModal}
