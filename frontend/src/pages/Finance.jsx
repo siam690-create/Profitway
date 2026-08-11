@@ -611,11 +611,11 @@ export const Finance = () => {
               setShowAdjustModal(true);
             }}
             className="btn btn-secondary btn-sm"
-            style={{ background: 'var(--bg-secondary)', borderColor: 'rgba(239, 68, 68, 0.4)', color: 'var(--danger)' }}
-            title="Withdraw funds or adjust balance without recording expenses"
+            style={{ background: 'var(--bg-secondary)', borderColor: 'rgba(239, 68, 68, 0.4)', color: 'var(--danger)', fontWeight: '700' }}
+            title="Withdraw funds, pay suppliers or send money directly from financial accounts"
           >
             <ArrowDownRight size={15} />
-            <span>- Adjust / Withdraw (এডজাস্টমেন্ট)</span>
+            <span>💸 Pay / Withdraw Money (উত্তোলন / খরচ)</span>
           </button>
 
           <button onClick={() => setShowTransferModal(true)} className="btn btn-secondary btn-sm">
@@ -723,11 +723,11 @@ export const Finance = () => {
                     setShowAdjustModal(true);
                   }}
                   className="btn btn-secondary btn-sm"
-                  style={{ flex: 1, background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.2)' }}
-                  title="Withdraw / Adjust funds without expenses or dues"
+                  style={{ flex: 1, background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.2)', fontWeight: '700' }}
+                  title="Withdraw or pay funds directly from this account"
                 >
                   <ArrowDownRight size={14} />
-                  <span>- Adjust</span>
+                  <span>💸 Pay / Withdraw</span>
                 </button>
 
                 <button onClick={() => handleOpenAccountStatement(acc.id)} className="btn btn-secondary btn-sm" style={{ flex: 1 }} title="View Passbook Ledger">
