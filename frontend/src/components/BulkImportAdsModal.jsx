@@ -15,13 +15,14 @@ import {
 } from 'lucide-react';
 import { ProductSelectSearch } from './ProductSelectSearch';
 
-export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch, products = [] }) => {
+export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch, products = [], adAccounts = [] }) => {
   const [file, setFile] = useState(null);
   const [parsedAds, setParsedAds] = useState([]);
   const [invalidCount, setInvalidCount] = useState(0);
   const [step, setStep] = useState(1); // 1: Upload, 2: Preview & Edit, 3: Importing
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [globalAdAccountId, setGlobalAdAccountId] = useState('');
 
   if (!isOpen) return null;
 
@@ -30,6 +31,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
     const sampleData = [
       {
         'Ad Date (YYYY-MM-DD)': '2026-08-04',
+        'Ad Account': 'Meta FB Account #1',
         'Product Code / SKU': 'PROD-1001',
         'Ad Cost ($ USD)': 5.50,
         'Ad Platform': 'Facebook Ads',
@@ -38,6 +40,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
       },
       {
         'Ad Date (YYYY-MM-DD)': '2026-08-04',
+        'Ad Account': 'Meta FB Account #1',
         'Product Code / SKU': 'PROD-1002',
         'Ad Cost ($ USD)': 10.00,
         'Ad Platform': 'Facebook Ads',
@@ -46,6 +49,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
       },
       {
         'Ad Date (YYYY-MM-DD)': '2026-08-05',
+        'Ad Account': 'Google Ads Account',
         'Product Code / SKU': 'PROD-1003',
         'Ad Cost ($ USD)': 3.25,
         'Ad Platform': 'Google Ads',
@@ -57,6 +61,7 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
     const worksheet = XLSX.utils.json_to_sheet(sampleData);
     worksheet['!cols'] = [
       { wch: 20 }, // Ad Date
+      { wch: 22 }, // Ad Account
       { wch: 22 }, // Product Code / SKU
       { wch: 18 }, // Ad Cost USD
       { wch: 18 }, // Ad Platform
@@ -159,10 +164,19 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
           }
 
           const product_code = String(getVal(['product code', 'product_code', 'sku', 'code', 'product']) || '').trim();
+          const ad_account_name_raw = String(getVal(['ad account', 'ad_account', 'account', 'ad_account_name']) || '').trim();
           const amount_usd = Number(getVal(['ad cost', 'cost', 'amount_usd', 'usd', 'amount', 'spend']) || 0);
           const platform = String(getVal(['platform', 'ad platform', 'channel']) || 'Facebook Ads').trim();
           const exchange_rate = Number(getVal(['dollar rate', 'exchange_rate', 'rate', 'dollar']) || 122.00);
           const notes = String(getVal(['notes', 'details', 'campaign']) || '').trim();
+
+          const matchedAcc = adAccounts.find(a =>
+            a.account_name.toLowerCase().trim() === ad_account_name_raw.toLowerCase() ||
+            String(a.id) === ad_account_name_raw
+          );
+
+          const ad_account_id = matchedAcc ? matchedAcc.id : null;
+          const ad_account_name = matchedAcc ? matchedAcc.account_name : (ad_account_name_raw || null);
 
           const match = findProductMatch(product_code);
           const total_bdt_cost = (amount_usd * exchange_rate).toFixed(2);
@@ -172,6 +186,8 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
           return {
             row_num: idx + 2,
             ad_date,
+            ad_account_id,
+            ad_account_name,
             product_code,
             product_id: match.id,
             product_name: match.name,
@@ -394,6 +410,34 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
               </button>
             </div>
 
+            {/* Global Ad Account Selector Bar */}
+            <div style={{ padding: '10px 14px', background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: '8px', fontSize: '12px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontWeight: '700', color: '#818cf8' }}>💳 Apply Ad Account to All Excel Rows:</span>
+                <select
+                  className="form-select"
+                  style={{ padding: '4px 8px', fontSize: '12px', background: '#1e293b', border: '1px solid #334155', color: '#fff' }}
+                  value={globalAdAccountId}
+                  onChange={(e) => {
+                    const accId = e.target.value;
+                    setGlobalAdAccountId(accId);
+                    const matched = adAccounts.find(a => String(a.id) === String(accId));
+                    setParsedAds(prev => prev.map(item => ({
+                      ...item,
+                      ad_account_id: matched ? matched.id : null,
+                      ad_account_name: matched ? matched.account_name : null
+                    })));
+                  }}
+                >
+                  <option value="">Choose Ad Account for all rows...</option>
+                  {adAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>💳 {acc.account_name} ({acc.platform})</option>
+                  ))}
+                </select>
+              </div>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>* Option to select account per row in table below</span>
+            </div>
+
             {/* Unmatched Code Resolution Banner */}
             {unmatchedCount > 0 && (
               <div style={{ padding: '10px 14px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '8px', fontSize: '12px', color: '#fbbf24', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -411,8 +455,9 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
                   <tr style={{ background: '#1e293b', position: 'sticky', top: 0, zIndex: 10 }}>
                     <th style={{ width: '40px' }}>#</th>
                     <th style={{ minWidth: '115px' }}>Ad Date</th>
+                    <th style={{ minWidth: '150px' }}>Ad Account</th>
                     <th style={{ minWidth: '110px' }}>Product Code</th>
-                    <th style={{ minWidth: '260px' }}>Matched Product / Easy Search Picker</th>
+                    <th style={{ minWidth: '240px' }}>Matched Product / Easy Search Picker</th>
                     <th style={{ minWidth: '120px' }}>Platform</th>
                     <th style={{ minWidth: '100px' }}>Ad Spend ($)</th>
                     <th style={{ minWidth: '90px' }}>Rate (৳/$)</th>
@@ -447,6 +492,33 @@ export const BulkImportAdsModal = ({ isOpen, onClose, onImportSuccess, authFetch
                             value={a.ad_date}
                             onChange={(e) => handleUpdateRow(idx, 'ad_date', e.target.value)}
                           />
+                        </td>
+
+                        {/* 1.5. Select Ad Account */}
+                        <td>
+                          <select
+                            className="form-select"
+                            style={{ padding: '4px 6px', fontSize: '11px', background: '#1e293b', border: '1px solid #334155', color: '#fff' }}
+                            value={a.ad_account_id || ''}
+                            onChange={(e) => {
+                              const selectedAccId = e.target.value;
+                              const matched = adAccounts.find(acc => String(acc.id) === String(selectedAccId));
+                              setParsedAds(prev => {
+                                const updated = [...prev];
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  ad_account_id: matched ? matched.id : null,
+                                  ad_account_name: matched ? matched.account_name : null
+                                };
+                                return updated;
+                              });
+                            }}
+                          >
+                            <option value="">Choose Account...</option>
+                            {adAccounts.map(acc => (
+                              <option key={acc.id} value={acc.id}>💳 {acc.account_name}</option>
+                            ))}
+                          </select>
                         </td>
 
                         {/* 2. Editable Product Code (Red Highlight if Unmatched) */}
