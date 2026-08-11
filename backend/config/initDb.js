@@ -220,12 +220,28 @@ async function autoMigrate() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // 12. Paid Ads Table
+    // 12. Paid Ads & Multi Ad Accounts Tables
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS ad_accounts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        account_name VARCHAR(255) NOT NULL,
+        platform VARCHAR(100) DEFAULT 'Facebook Ads',
+        account_id_code VARCHAR(100) DEFAULT NULL,
+        is_active TINYINT(1) DEFAULT 1,
+        notes TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ada_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS paid_ads (
         id INT AUTO_INCREMENT PRIMARY KEY,
         tenant_id INT NOT NULL,
         product_id INT DEFAULT NULL,
+        ad_account_id INT DEFAULT NULL,
+        ad_account_name VARCHAR(255) DEFAULT NULL,
         platform VARCHAR(100) NOT NULL DEFAULT 'Facebook Ads',
         amount_usd DECIMAL(10,2) NOT NULL,
         exchange_rate DECIMAL(10,2) NOT NULL DEFAULT 120.00,
@@ -234,9 +250,13 @@ async function autoMigrate() {
         notes TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_pa_tenant (tenant_id),
-        INDEX idx_pa_prod (product_id)
+        INDEX idx_pa_prod (product_id),
+        INDEX idx_pa_account (ad_account_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    await addColumnIfNotExists('paid_ads', 'ad_account_id', 'INT NULL');
+    await addColumnIfNotExists('paid_ads', 'ad_account_name', 'VARCHAR(255) NULL');
 
     // 13. Payroll Table
     await db.query(`

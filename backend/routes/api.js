@@ -160,6 +160,9 @@ router.get('/returns/:id', returnController.getReturnById);
 router.put('/returns/:id', checkActiveSubscription, returnController.updateReturn);
 
 // Paid Ads & Marketing Cost Tracker APIs
+router.get('/ads/accounts', adController.getAdAccounts);
+router.post('/ads/accounts', checkActiveSubscription, adController.createAdAccount);
+router.delete('/ads/accounts/:id', checkActiveSubscription, adController.deleteAdAccount);
 router.post('/ads', checkActiveSubscription, adController.createAd);
 router.post('/ads/bulk-import', checkActiveSubscription, adController.bulkImportAds);
 router.get('/ads', adController.getAds);

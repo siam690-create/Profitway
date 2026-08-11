@@ -1,18 +1,68 @@
 const db = require('../config/db');
 
+// 0. Ad Accounts Management
+exports.getAdAccounts = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const [rows] = await db.query(
+      'SELECT * FROM ad_accounts WHERE tenant_id = ? ORDER BY id DESC',
+      [tenantId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.createAdAccount = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { account_name, platform, account_id_code, notes } = req.body;
+
+    if (!account_name) {
+      return res.status(400).json({ error: 'Ad Account Name is required.' });
+    }
+
+    const [result] = await db.query(
+      'INSERT INTO ad_accounts (tenant_id, account_name, platform, account_id_code, notes) VALUES (?, ?, ?, ?, ?)',
+      [tenantId, account_name.trim(), platform || 'Facebook Ads', account_id_code || null, notes || null]
+    );
+
+    res.status(201).json({
+      message: 'Ad Account created successfully',
+      id: result.insertId,
+      account_name: account_name.trim(),
+      platform: platform || 'Facebook Ads'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.deleteAdAccount = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+    await db.query('DELETE FROM ad_accounts WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    res.json({ message: 'Ad Account deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Record new Paid Ad Expense (Single or Multi-Product Batch in USD & BDT)
 exports.createAd = async (req, res) => {
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { items, product_id, platform, amount_usd, exchange_rate, ad_date, notes } = req.body;
+    const { items, product_id, platform, amount_usd, exchange_rate, ad_date, notes, ad_account_id, ad_account_name } = req.body;
 
     // Standardize to array of items
     let itemList = [];
     if (Array.isArray(items) && items.length > 0) {
       itemList = items;
     } else if (amount_usd && Number(amount_usd) > 0) {
-      itemList = [{ product_id, amount_usd, notes }];
+      itemList = [{ product_id, amount_usd, notes, ad_account_id, ad_account_name }];
     }
 
     if (itemList.length === 0) {
@@ -22,6 +72,8 @@ exports.createAd = async (req, res) => {
     const rateVal = Number(exchange_rate || 120.00);
     const selectedAdDate = ad_date || new Date().toISOString().slice(0, 10);
     const selectedPlatform = platform || 'Facebook Ads';
+    const batchAdAccountId = ad_account_id ? Number(ad_account_id) : null;
+    const batchAdAccountName = ad_account_name || null;
 
     await connection.beginTransaction();
 
@@ -33,6 +85,9 @@ exports.createAd = async (req, res) => {
 
       const totalBdtCost = Number((usdVal * rateVal).toFixed(2));
       const pId = item.product_id ? Number(item.product_id) : null;
+      const itemAdAccountId = item.ad_account_id ? Number(item.ad_account_id) : batchAdAccountId;
+      const itemAdAccountName = item.ad_account_name || batchAdAccountName;
+
       let productName = 'General Shop Campaign';
 
       if (pId) {
@@ -49,12 +104,14 @@ exports.createAd = async (req, res) => {
 
       // 1. Insert Paid Ad Log Record
       const [adResult] = await connection.query(
-        `INSERT INTO paid_ads (tenant_id, product_id, product_name, platform, amount_usd, exchange_rate, total_bdt_cost, ad_date, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO paid_ads (tenant_id, product_id, product_name, ad_account_id, ad_account_name, platform, amount_usd, exchange_rate, total_bdt_cost, ad_date, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tenantId,
           pId,
           productName,
+          itemAdAccountId,
+          itemAdAccountName,
           selectedPlatform,
           usdVal,
           rateVal,
@@ -75,7 +132,7 @@ exports.createAd = async (req, res) => {
           `Paid Ad (${selectedPlatform}) - ${productName}`,
           totalBdtCost,
           selectedAdDate,
-          `Ad Spend: $${usdVal.toFixed(2)} @ ${rateVal} BDT/$ (Ad ID: #${ad_id}) ${itemNotes ? `- ${itemNotes}` : ''}`
+          `Ad Spend: $${usdVal.toFixed(2)} @ ${rateVal} BDT/$ (Ad ID: #${ad_id}) ${itemAdAccountName ? `[Account: ${itemAdAccountName}]` : ''} ${itemNotes ? `- ${itemNotes}` : ''}`
         ]
       );
 
@@ -83,6 +140,8 @@ exports.createAd = async (req, res) => {
         id: ad_id,
         product_id: pId,
         product_name: productName,
+        ad_account_id: itemAdAccountId,
+        ad_account_name: itemAdAccountName,
         platform: selectedPlatform,
         amount_usd: usdVal,
         exchange_rate: rateVal,
@@ -111,10 +170,18 @@ exports.createAd = async (req, res) => {
 exports.getAds = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const [ads] = await db.query(
-      'SELECT * FROM paid_ads WHERE tenant_id = ? ORDER BY ad_date DESC, id DESC LIMIT 100',
-      [tenantId]
-    );
+    const { ad_account_id } = req.query;
+
+    let query = 'SELECT * FROM paid_ads WHERE tenant_id = ?';
+    let params = [tenantId];
+
+    if (ad_account_id && ad_account_id !== 'all') {
+      query += ' AND ad_account_id = ?';
+      params.push(Number(ad_account_id));
+    }
+
+    query += ' ORDER BY ad_date DESC, id DESC LIMIT 500';
+    const [ads] = await db.query(query, params);
     res.json(ads);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -201,14 +268,19 @@ exports.bulkImportAds = async (req, res) => {
         }
       }
 
+      const itemAdAccountId = item.ad_account_id ? Number(item.ad_account_id) : null;
+      const itemAdAccountName = item.ad_account_name || null;
+
       // 1. Insert Paid Ad Record
       const [adResult] = await connection.query(
-        `INSERT INTO paid_ads (tenant_id, product_id, product_name, platform, amount_usd, exchange_rate, total_bdt_cost, ad_date, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO paid_ads (tenant_id, product_id, product_name, ad_account_id, ad_account_name, platform, amount_usd, exchange_rate, total_bdt_cost, ad_date, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tenantId,
           productId,
           productName,
+          itemAdAccountId,
+          itemAdAccountName,
           selectedPlatform,
           usdVal,
           rateVal,
@@ -229,7 +301,7 @@ exports.bulkImportAds = async (req, res) => {
           `Paid Ad (${selectedPlatform}) - ${productName}`,
           totalBdtCost,
           selectedAdDate,
-          `Ad Spend: $${usdVal.toFixed(2)} @ ${rateVal} BDT/$ (Ad ID: #${ad_id}) ${itemNotes ? `- ${itemNotes}` : ''}`
+          `Ad Spend: $${usdVal.toFixed(2)} @ ${rateVal} BDT/$ (Ad ID: #${ad_id}) ${itemAdAccountName ? `[Account: ${itemAdAccountName}]` : ''} ${itemNotes ? `- ${itemNotes}` : ''}`
         ]
       );
 

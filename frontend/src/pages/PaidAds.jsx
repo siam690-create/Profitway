@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X, Layers, FileSpreadsheet } from 'lucide-react';
+import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X, Layers, FileSpreadsheet, CreditCard, Settings, Filter } from 'lucide-react';
 
 import { ProductSelectSearch } from '../components/ProductSelectSearch';
 import { DateRangeFilter } from '../components/DateRangeFilter';
@@ -9,10 +9,19 @@ import { BulkImportAdsModal } from '../components/BulkImportAdsModal';
 export const PaidAds = () => {
   const { authFetch, products, currency, refreshAllData, user } = useApp();
   const [adsList, setAdsList] = useState([]);
+  const [adAccounts, setAdAccounts] = useState([]);
+  const [selectedAccountFilter, setSelectedAccountFilter] = useState('all');
+  const [selectedAdAccount, setSelectedAdAccount] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+
+  // Ad Account Create Form
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountPlatform, setNewAccountPlatform] = useState('Facebook Ads');
+  const [newAccountIdCode, setNewAccountIdCode] = useState('');
 
   // Multi-Product Ad Items Form State
   const [adItems, setAdItems] = useState([
@@ -33,9 +42,58 @@ export const PaidAds = () => {
     }
   };
 
+  const fetchAdAccounts = async () => {
+    try {
+      const res = await authFetch('/api/ads/accounts');
+      const data = await res.json();
+      if (res.ok) setAdAccounts(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchAds();
+    fetchAdAccounts();
   }, []);
+
+  const handleCreateAccount = async (e) => {
+    e.preventDefault();
+    if (!newAccountName.trim()) return alert('Please enter Ad Account Name');
+    try {
+      const res = await authFetch('/api/ads/accounts', {
+        method: 'POST',
+        body: JSON.stringify({
+          account_name: newAccountName.trim(),
+          platform: newAccountPlatform,
+          account_id_code: newAccountIdCode.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setNewAccountName('');
+        setNewAccountIdCode('');
+        fetchAdAccounts();
+        alert('Ad Account created successfully!');
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  const handleDeleteAccount = async (id) => {
+    if (!window.confirm('Delete this ad account?')) return;
+    try {
+      const res = await authFetch(`/api/ads/accounts/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchAdAccounts();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleAddAdItem = () => {
     setAdItems(prev => [...prev, { product_id: '', amount_usd: '', notes: '' }]);
@@ -62,6 +120,8 @@ export const PaidAds = () => {
       return alert('Please enter at least one product with a valid USD ad spend amount ($).');
     }
 
+    const matchedAccount = adAccounts.find(a => Number(a.id) === Number(selectedAdAccount));
+
     try {
       const res = await authFetch('/api/ads', {
         method: 'POST',
@@ -71,6 +131,8 @@ export const PaidAds = () => {
             amount_usd: Number(item.amount_usd),
             notes: item.notes
           })),
+          ad_account_id: matchedAccount ? matchedAccount.id : null,
+          ad_account_name: matchedAccount ? matchedAccount.account_name : null,
           platform,
           exchange_rate: Number(exchangeRate || 120),
           ad_date: adDate,
@@ -102,6 +164,7 @@ export const PaidAds = () => {
       if (res.ok) {
         refreshAllData();
         fetchAds();
+        alert('Paid Ad record deleted successfully.');
       } else {
         alert(`Error: ${data.error}`);
       }
@@ -110,8 +173,11 @@ export const PaidAds = () => {
     }
   };
 
-  // Metrics Filtered by Date
+  // Metrics Filtered by Date & Ad Account
   const filteredAdsList = adsList.filter(ad => {
+    if (selectedAccountFilter !== 'all' && Number(ad.ad_account_id) !== Number(selectedAccountFilter)) {
+      return false;
+    }
     if (!startDate || !endDate) return true;
     const d = new Date(ad.ad_date).toISOString().slice(0, 10);
     return d >= startDate && d <= endDate;
@@ -127,6 +193,18 @@ export const PaidAds = () => {
   const totalBatchBdt = (totalBatchUsd * rateNum).toFixed(2);
   const validProductsCount = adItems.filter(i => Number(i.amount_usd) > 0).length;
 
+  // Account Breakdown Summaries
+  const accountSummaries = adAccounts.map(acc => {
+    const accAds = filteredAdsList.filter(a => Number(a.ad_account_id) === Number(acc.id));
+    const totalUsd = accAds.reduce((sum, a) => sum + Number(a.amount_usd || 0), 0);
+    const totalBdt = accAds.reduce((sum, a) => sum + Number(a.total_bdt_cost || 0), 0);
+    return { ...acc, totalUsd, totalBdt, count: accAds.length };
+  });
+
+  const unassignedAds = filteredAdsList.filter(a => !a.ad_account_id);
+  const unassignedUsd = unassignedAds.reduce((sum, a) => sum + Number(a.amount_usd || 0), 0);
+  const unassignedBdt = unassignedAds.reduce((sum, a) => sum + Number(a.total_bdt_cost || 0), 0);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header Banner */}
@@ -137,11 +215,37 @@ export const PaidAds = () => {
             <h2 style={{ fontSize: '20px', fontWeight: '800' }}>Paid Ads & Marketing Tracker</h2>
           </div>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Log product-wise Facebook/Google ad costs in USD ($) with custom exchange rate (৳/$) and multi-product batch entries
+            Log product-wise Facebook/Google ad costs in USD ($) with custom exchange rate (৳/$) and multi-ad account tracking
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Ad Account Selector Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-secondary)', padding: '4px 10px', borderRadius: '10px', border: '1px solid var(--accent-primary)' }}>
+            <CreditCard size={15} color="var(--accent-primary)" />
+            <select
+              className="form-select"
+              value={selectedAccountFilter}
+              onChange={(e) => setSelectedAccountFilter(e.target.value)}
+              style={{ border: 'none', background: 'transparent', fontWeight: '700', fontSize: '13px', color: 'var(--accent-primary)', padding: '4px 6px', cursor: 'pointer' }}
+            >
+              <option value="all">💳 All Ad Accounts (সব একাউন্ট)</option>
+              {adAccounts.map(acc => (
+                <option key={acc.id} value={acc.id}>💳 {acc.account_name} ({acc.platform})</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => setShowAccountModal(true)}
+            className="btn btn-secondary"
+            style={{ gap: '6px', fontWeight: '700', borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }}
+            title="Create & Manage Ad Accounts"
+          >
+            <Settings size={15} />
+            <span>Ad Accounts</span>
+          </button>
+
           <DateRangeFilter
             onFilterChange={({ startDate: s, endDate: e }) => {
               setStartDate(s);
@@ -185,9 +289,72 @@ export const PaidAds = () => {
 
         <div className="glass-card" style={{ padding: '20px' }}>
           <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Total Campaigns Logged</span>
-          <strong style={{ fontSize: '24px' }}>{adsList.length}</strong>
+          <strong style={{ fontSize: '24px' }}>{filteredAdsList.length}</strong>
         </div>
       </div>
+
+      {/* Ad Account Spend Breakdown Cards */}
+      {adAccounts.length > 0 && (
+        <div className="glass-card" style={{ padding: '18px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CreditCard size={16} color="var(--accent-primary)" />
+              <span>Ad Account Monthly Spend Breakdown (একাউন্টভিত্তিক ডলার খরচ)</span>
+            </h3>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Filter: {selectedAccountFilter === 'all' ? 'All Accounts' : 'Selected Account'}</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
+            {accountSummaries.map(acc => (
+              <div
+                key={acc.id}
+                onClick={() => setSelectedAccountFilter(String(acc.id))}
+                style={{
+                  background: selectedAccountFilter === String(acc.id) ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-secondary)',
+                  border: `1px solid ${selectedAccountFilter === String(acc.id) ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  💳 {acc.account_name}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  {acc.platform} • {acc.count} campaigns
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ fontSize: '15px', color: 'var(--accent-primary)' }}>${acc.totalUsd.toFixed(2)}</strong>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--danger)' }}>{currency}{acc.totalBdt.toFixed(2)}</span>
+                </div>
+              </div>
+            ))}
+
+            {unassignedAds.length > 0 && (
+              <div
+                style={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px dashed var(--border-color)',
+                  padding: '12px 14px',
+                  borderRadius: '10px'
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  Unassigned Campaigns
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  General • {unassignedAds.length} campaigns
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ fontSize: '15px', color: 'var(--accent-primary)' }}>${unassignedUsd.toFixed(2)}</strong>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--danger)' }}>{currency}{unassignedBdt.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Paid Ads Table Log */}
       <div className="glass-card" style={{ padding: '24px' }}>
@@ -274,7 +441,21 @@ export const PaidAds = () => {
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 
                 {/* 1. Shared Campaign Settings Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', background: 'var(--bg-primary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '10px', background: 'var(--bg-primary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ color: 'var(--accent-primary)', fontWeight: '700' }}>Ad Account (অ্যাড একাউন্ট)</label>
+                    <select
+                      className="form-select"
+                      value={selectedAdAccount}
+                      onChange={(e) => setSelectedAdAccount(e.target.value)}
+                    >
+                      <option value="">Choose Ad Account...</option>
+                      {adAccounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>💳 {acc.account_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Ad Campaign Date</label>
                     <input
@@ -302,14 +483,14 @@ export const PaidAds = () => {
                   </div>
 
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Dollar Rate (৳ BDT per $1)</label>
+                    <label className="form-label">Dollar Rate (৳/$)</label>
                     <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: '700', color: 'var(--text-muted)' }}>৳</span>
+                      <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontWeight: '700', color: 'var(--text-muted)' }}>৳</span>
                       <input
                         type="number"
                         step="0.01"
                         className="form-input"
-                        style={{ paddingLeft: '28px' }}
+                        style={{ paddingLeft: '24px' }}
                         required
                         placeholder="122.00"
                         value={exchangeRate}
@@ -480,6 +661,7 @@ export const PaidAds = () => {
         }}
         authFetch={authFetch}
         products={products}
+        adAccounts={adAccounts}
       />
     </div>
   );
