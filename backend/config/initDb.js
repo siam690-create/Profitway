@@ -65,6 +65,10 @@ async function autoMigrate() {
     await addColumnIfNotExists('wholesale_sales', 'delivery_profit', 'DECIMAL(10,2) DEFAULT 0');
     await addColumnIfNotExists('wholesale_sales', 'sale_date', 'DATETIME NULL');
 
+    // Expenses account linking columns
+    await addColumnIfNotExists('expenses', 'account_id', 'INT NULL');
+    await addColumnIfNotExists('expenses', 'account_name', 'VARCHAR(255) NULL');
+
     // 6. Multi-Store API Keys table
     await db.query(`
       CREATE TABLE IF NOT EXISTS store_api_keys (
