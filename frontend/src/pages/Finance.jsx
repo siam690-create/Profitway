@@ -57,10 +57,19 @@ export const Finance = () => {
   const [investmentData, setInvestmentData] = useState({ summary: {}, investments: [], transactions: [] });
   const [loading, setLoading] = useState(false);
 
-  // Passbook Date Filter States
+  // Passbook Date & Category Filter States
   const [passbookDateFilter, setPassbookDateFilter] = useState('all');
+  const [passbookCategoryFilter, setPassbookCategoryFilter] = useState('all');
   const [passbookStartDate, setPassbookStartDate] = useState('');
   const [passbookEndDate, setPassbookEndDate] = useState('');
+  const [customCategories, setCustomCategories] = useState(() => {
+    try {
+      const saved = localStorage.getItem('profitway_finance_categories');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Modals
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -282,15 +291,32 @@ export const Finance = () => {
   const handleAdjustSubmit = async (e) => {
     e.preventDefault();
     if (!adjustForm.account_id || !adjustForm.amount) return;
+
+    let finalReasonTitle = adjustForm.reason_title;
+    if (adjustForm.reason_title === 'CUSTOM') {
+      if (!adjustForm.custom_category || !adjustForm.custom_category.trim()) {
+        return alert('Please enter a custom category name.');
+      }
+      finalReasonTitle = adjustForm.custom_category.trim();
+      if (!customCategories.includes(finalReasonTitle)) {
+        const updated = [...customCategories, finalReasonTitle];
+        setCustomCategories(updated);
+        try { localStorage.setItem('profitway_finance_categories', JSON.stringify(updated)); } catch (e) {}
+      }
+    }
+
     try {
       const res = await authFetch('/api/finance/adjust', {
         method: 'POST',
-        body: JSON.stringify(adjustForm)
+        body: JSON.stringify({
+          ...adjustForm,
+          reason_title: finalReasonTitle
+        })
       });
       const data = await res.json();
       if (res.ok) {
         setShowAdjustModal(false);
-        setAdjustForm({ account_id: '', adjustment_type: 'debit', amount: '', reason_title: 'Owner Personal Withdrawal', notes: '' });
+        setAdjustForm({ account_id: '', adjustment_type: 'debit', amount: '', reason_title: 'Owner Personal Cash Draw / Withdrawal', custom_category: '', notes: '' });
         fetchFinance();
         alert(data.message || 'Account balance adjusted successfully!');
       } else {
@@ -1743,10 +1769,16 @@ export const Finance = () => {
       {/* 3. Account Passbook / Ledger Statement Modal */}
       {accountStatementData && (() => {
         const rawTxList = accountStatementData.transactions || [];
+        const availableCategories = Array.from(new Set(rawTxList.map(t => t.type))).filter(Boolean);
 
-        // Apply Date Range Filter
+        // Apply Date Range & Category Filter
         const now = new Date();
         const filteredTx = rawTxList.filter(tx => {
+          // Category Filter
+          if (passbookCategoryFilter !== 'all' && tx.type !== passbookCategoryFilter) {
+            return false;
+          }
+
           if (!tx.date) return true;
           const d = new Date(tx.date);
           if (isNaN(d.getTime())) return true;
@@ -1810,9 +1842,9 @@ export const Finance = () => {
                   <div>Current Balance: <strong style={{ display: 'block', fontSize: '16px', color: 'var(--success)' }}>{currency}{Number(accountStatementData.account.balance).toFixed(2)}</strong></div>
                 </div>
 
-                {/* Date Filter Bar (Matching 2nd Image) */}
+                {/* Date & Category Filter Bar */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', background: 'var(--bg-secondary)', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {[
                       { key: 'today', label: 'Today' },
                       { key: 'week', label: 'This Week' },
@@ -1837,6 +1869,21 @@ export const Finance = () => {
                         {btn.label}
                       </button>
                     ))}
+
+                    {/* Category / Purpose Filter Dropdown */}
+                    <div style={{ marginLeft: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <select
+                        className="form-select"
+                        style={{ padding: '4px 8px', fontSize: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '8px', fontWeight: '600' }}
+                        value={passbookCategoryFilter}
+                        onChange={(e) => setPassbookCategoryFilter(e.target.value)}
+                      >
+                        <option value="all">🔍 All Categories / Purpose (সকল খাত)</option>
+                        {availableCategories.map((cat, i) => (
+                          <option key={i} value={cat}>📁 {cat}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   {passbookDateFilter === 'custom' && (
@@ -2193,18 +2240,35 @@ export const Finance = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Adjustment Category / Purpose *</label>
+                  <label className="form-label">Category / Purpose *</label>
                   <select
                     className="form-select"
                     value={adjustForm.reason_title}
                     onChange={(e) => setAdjustForm({ ...adjustForm, reason_title: e.target.value })}
                   >
-                    <option value="Owner Personal Withdrawal">Owner Personal Cash Draw / Withdrawal</option>
-                    <option value="Direct Money Send">Direct Money Send (Non-Expense)</option>
-                    <option value="Balance Adjustment / Correction">Balance Adjustment / Correction</option>
-                    <option value="Bank Fee / Non-Operating Cash Adjustment">Bank Fee / Non-Operating Cash Adjustment</option>
-                    <option value="Other Fund Adjustment">Other Fund Adjustment</option>
+                    <option value="Owner Personal Cash Draw / Withdrawal">💸 Owner Personal Cash Draw / Withdrawal (মালিকের ব্যক্তিগত উত্তোলন)</option>
+                    <option value="Supplier Payment / Debt Repayment">💳 Supplier Payment / Debt Repayment (সাপ্লায়ারকে টাকা প্রদান)</option>
+                    <option value="Direct Shop Operating Expense">⚡ Direct Shop Operating Expense (দোকানের সরাসরি খরচ)</option>
+                    <option value="Account Balance Correction / Adjustment">🔁 Account Balance Correction / Adjustment (হিসাব মেলানো)</option>
+                    <option value="Bank Fee / Charges">🏦 Bank Fee / Charges (ব্যাংক চার্জ)</option>
+                    {customCategories.map((c, i) => (
+                      <option key={i} value={c}>📁 {c}</option>
+                    ))}
+                    <option value="CUSTOM">➕ + Create New Category (নতুন খাত যুক্ত করুন)...</option>
                   </select>
+
+                  {adjustForm.reason_title === 'CUSTOM' && (
+                    <div style={{ marginTop: '8px' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required
+                        placeholder="Enter custom category name (e.g. Office Rent, Electricity, Partner Payment)..."
+                        value={adjustForm.custom_category || ''}
+                        onChange={(e) => setAdjustForm({ ...adjustForm, custom_category: e.target.value })}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group">
