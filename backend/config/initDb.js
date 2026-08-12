@@ -69,6 +69,11 @@ async function autoMigrate() {
     await addColumnIfNotExists('expenses', 'account_id', 'INT NULL');
     await addColumnIfNotExists('expenses', 'account_name', 'VARCHAR(255) NULL');
 
+    // Employees termination columns
+    await addColumnIfNotExists('employees', 'status', "VARCHAR(50) DEFAULT 'active'");
+    await addColumnIfNotExists('employees', 'termination_date', 'DATE NULL');
+    await addColumnIfNotExists('employees', 'termination_reason', 'TEXT NULL');
+
     // 6. Multi-Store API Keys table
     await db.query(`
       CREATE TABLE IF NOT EXISTS store_api_keys (

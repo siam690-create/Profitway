@@ -214,10 +214,12 @@ exports.updateEmployee = async (req, res) => {
       nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
       photo_url, nid_front_url, nid_back_url, documents_url,
       base_salary, hourly_rate, overtime_rate, payment_method, account_number, is_active,
-      weekly_off_day, holiday_duty_allowance
+      weekly_off_day, holiday_duty_allowance, status, termination_date, termination_reason
     } = req.body;
 
     const formattedJoiningDate = joining_date ? new Date(joining_date).toISOString().slice(0, 10) : null;
+    const formattedTermDate = termination_date ? new Date(termination_date).toISOString().slice(0, 10) : null;
+    const finalStatus = status || (is_active ? 'active' : 'inactive');
 
     await db.query(
       `UPDATE employees SET
@@ -225,7 +227,7 @@ exports.updateEmployee = async (req, res) => {
         joining_date = ?, nid_number = ?, blood_group = ?, emergency_contact_name = ?, emergency_contact_phone = ?,
         photo_url = ?, nid_front_url = ?, nid_back_url = ?, documents_url = ?,
         base_salary = ?, hourly_rate = ?, overtime_rate = ?, payment_method = ?, account_number = ?, is_active = ?,
-        weekly_off_day = ?, holiday_duty_allowance = ?
+        weekly_off_day = ?, holiday_duty_allowance = ?, status = ?, termination_date = ?, termination_reason = ?
       WHERE id = ? AND tenant_id = ?`,
       [
         name, designation, department, phone, email,
@@ -233,11 +235,49 @@ exports.updateEmployee = async (req, res) => {
         photo_url, nid_front_url, nid_back_url, documents_url,
         Number(base_salary || 0), Number(hourly_rate || 0), Number(overtime_rate || 0), payment_method, account_number, is_active ? 1 : 0,
         weekly_off_day || 'Friday', Number(holiday_duty_allowance || 0),
+        finalStatus, formattedTermDate, termination_reason || null,
         id, tenantId
       ]
     );
 
     res.json({ message: 'Employee profile updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.terminateEmployee = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+    const { status, termination_date, termination_reason, deactivate_login } = req.body;
+
+    const [empRows] = await db.query('SELECT id, email, name FROM employees WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (empRows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found.' });
+    }
+    const emp = empRows[0];
+
+    const finalStatus = status || 'terminated';
+    const termDate = termination_date ? new Date(termination_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+
+    // 1. Update Employee record to terminated/resigned & inactive
+    await db.query(
+      `UPDATE employees SET status = ?, is_active = 0, termination_date = ?, termination_reason = ? WHERE id = ? AND tenant_id = ?`,
+      [finalStatus, termDate, termination_reason || null, id, tenantId]
+    );
+
+    // 2. Deactivate login credentials if requested
+    if (deactivate_login && emp.email) {
+      await db.query(
+        'UPDATE users SET is_active = 0 WHERE email = ? AND tenant_id = ? AND role != "owner"',
+        [emp.email, tenantId]
+      );
+    }
+
+    res.json({
+      message: `Employee "${emp.name}" marked as ${finalStatus === 'resigned' ? 'Resigned' : 'Terminated'} & deactivated successfully.`
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

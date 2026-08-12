@@ -198,6 +198,7 @@ router.delete('/staff/:id', checkActiveSubscription, staffController.deleteStaff
 router.get('/staff/employees', staffController.getEmployees);
 router.post('/staff/employees', checkActiveSubscription, staffController.createEmployee);
 router.put('/staff/employees/:id', checkActiveSubscription, staffController.updateEmployee);
+router.post('/staff/employees/:id/terminate', checkActiveSubscription, staffController.terminateEmployee);
 router.delete('/staff/employees/:id', checkActiveSubscription, staffController.deleteEmployee);
 
 router.get('/staff/attendance', staffController.getAttendance);

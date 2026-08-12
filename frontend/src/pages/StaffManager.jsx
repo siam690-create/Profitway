@@ -5,7 +5,7 @@ import {
   Users, UserPlus, Shield, Trash2, Key, CheckCircle, X, Edit3, Lock, 
   Calendar, Clock, CreditCard, DollarSign, Gift, FileText, Printer, 
   Award, Briefcase, Phone, Mail, QrCode, Plus, Search, Building2, Check, AlertCircle, FileCheck,
-  Upload, Image, Eye, ExternalLink, File, Landmark
+  Upload, Image, Eye, ExternalLink, File, Landmark, UserX, UserMinus
 } from 'lucide-react';
 
 const MODULE_LIST = [
@@ -37,15 +37,23 @@ export const StaffManager = () => {
   const [usersList, setUsersList] = useState([]);
   const [salarySheet, setSalarySheet] = useState([]);
 
-  // Filter States
+  // Filter & Termination States
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // '2026-08'
   const [selectedEmpForCard, setSelectedEmpForCard] = useState(null);
   const [selectedEmpForPayslip, setSelectedEmpForPayslip] = useState(null);
   const [selectedEmpForDocs, setSelectedEmpForDocs] = useState(null);
+  const [employeeFilter, setEmployeeFilter] = useState('active'); // 'active', 'all', 'terminated'
 
   // Modals & Forms
   const [showEmpModal, setShowEmpModal] = useState(false);
+  const [showTerminateModal, setShowTerminateModal] = useState(null);
+  const [terminateForm, setTerminateForm] = useState({
+    status: 'terminated',
+    termination_date: new Date().toISOString().slice(0, 10),
+    termination_reason: '',
+    deactivate_login: true
+  });
   const [editingEmp, setEditingEmp] = useState(null);
   const [empForm, setEmpForm] = useState({
     name: '', designation: 'Staff', department: 'General', phone: '', email: '', joining_date: new Date().toISOString().slice(0, 10),
@@ -268,6 +276,15 @@ export const StaffManager = () => {
     if (activeTab === 'salary-sheet' || activeTab === 'payroll') fetchSalarySheet();
   }, [activeTab, attendanceDate, selectedMonth]);
 
+  const activeEmpCount = employeesList.filter(e => e.is_active && e.status !== 'terminated' && e.status !== 'resigned').length;
+  const terminatedEmpCount = employeesList.filter(e => e.status === 'terminated' || e.status === 'resigned' || (!e.is_active && e.status !== 'active')).length;
+
+  const displayedEmployees = employeesList.filter(e => {
+    if (employeeFilter === 'active') return e.is_active && e.status !== 'terminated' && e.status !== 'resigned';
+    if (employeeFilter === 'terminated') return e.status === 'terminated' || e.status === 'resigned' || !e.is_active;
+    return true; // 'all'
+  });
+
   const handleTogglePFStatus = async (item) => {
     const newStatus = item.status === 'active' ? 'inactive' : 'active';
     try {
@@ -327,6 +344,26 @@ export const StaffManager = () => {
         fetchEmployees();
         alert(data.message || 'Employee profile saved successfully!');
       } else alert(`Error: ${data.error}`);
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const handleTerminateSubmit = async (e) => {
+    e.preventDefault();
+    if (!showTerminateModal) return;
+    try {
+      const res = await authFetch(`/api/staff/employees/${showTerminateModal.id}/terminate`, {
+        method: 'POST',
+        body: JSON.stringify(terminateForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowTerminateModal(null);
+        fetchEmployees();
+        fetchUsers();
+        alert(data.message || 'Employee termination processed successfully.');
+      } else {
+        alert(`Error: ${data.error}`);
+      }
     } catch (err) { alert(`Error: ${err.message}`); }
   };
 
@@ -636,112 +673,172 @@ export const StaffManager = () => {
       {/* 1. EMPLOYEE DIRECTORY & PROFILES TAB */}
       {activeTab === 'employees' && (
         <div className="glass-card" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Staff Employee Directory</h3>
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Employee Name</th>
-                  <th>Designation / Dept</th>
-                  <th>Weekly Off Day</th>
-                  <th>Contact Info</th>
-                  <th>Base Salary</th>
-                  <th>Joining Date</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employeesList.length === 0 ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Staff Employee Directory</h3>
+
+              {/* Status Filter Buttons */}
+              <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-secondary)', padding: '4px 6px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                <button
+                  onClick={() => setEmployeeFilter('active')}
+                  className={`btn btn-sm ${employeeFilter === 'active' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '8px' }}
+                >
+                  🟢 Active ({activeEmpCount})
+                </button>
+                <button
+                  onClick={() => setEmployeeFilter('all')}
+                  className={`btn btn-sm ${employeeFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '8px' }}
+                >
+                  👥 All Employees ({employeesList.length})
+                </button>
+                <button
+                  onClick={() => setEmployeeFilter('terminated')}
+                  className={`btn btn-sm ${employeeFilter === 'terminated' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '8px', color: employeeFilter === 'terminated' ? '#fff' : '#f87171' }}
+                >
+                  🚫 Terminated / Left ({terminatedEmpCount})
+                </button>
+              </div>
+            </div>
+
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                      No employee profiles created yet. Click "+ Add Employee Profile" to add one.
-                    </td>
+                    <th>Code</th>
+                    <th>Employee Name</th>
+                    <th>Designation / Dept</th>
+                    <th>Weekly Off Day</th>
+                    <th>Contact Info</th>
+                    <th>Base Salary</th>
+                    <th>Joining Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ) : (
-                  employeesList.map(emp => (
-                    <tr key={emp.id}>
-                      <td><strong style={{ color: 'var(--accent-primary)' }}>{emp.employee_code}</strong></td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          {emp.photo_url ? (
-                            <img src={emp.photo_url} alt={emp.name} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
-                          ) : (
-                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                              {emp.name.charAt(0).toUpperCase()}
+                </thead>
+                <tbody>
+                  {displayedEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        No employee profiles found in this category filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedEmployees.map(emp => (
+                      <tr key={emp.id} style={{ opacity: (!emp.is_active || emp.status === 'terminated' || emp.status === 'resigned') ? 0.7 : 1 }}>
+                        <td><strong style={{ color: 'var(--accent-primary)' }}>{emp.employee_code}</strong></td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            {emp.photo_url ? (
+                              <img src={emp.photo_url} alt={emp.name} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                            ) : (
+                              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                                {emp.name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <strong>{emp.name}</strong>
+                              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>NID: {emp.nid_number || 'N/A'}</div>
                             </div>
-                          )}
-                          <div>
-                            <strong>{emp.name}</strong>
-                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>NID: {emp.nid_number || 'N/A'}</div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div>{emp.designation}</div>
-                        <span className="badge badge-secondary" style={{ fontSize: '10px' }}>{emp.department}</span>
-                      </td>
-                      <td>
-                        <select
-                          className="form-select"
-                          style={{ fontSize: '12px', padding: '4px 8px', background: 'var(--bg-secondary)', cursor: 'pointer', width: '120px' }}
-                          value={emp.weekly_off_day || 'Friday'}
-                          onChange={async (e) => {
-                            const newOff = e.target.value;
-                            try {
-                              const res = await authFetch(`/api/staff/employees/${emp.id}`, {
-                                method: 'PUT',
-                                body: JSON.stringify({ ...emp, weekly_off_day: newOff })
-                              });
-                              if (res.ok) {
-                                fetchEmployees();
-                                alert(`Updated ${emp.name}'s weekly off day to ${newOff}!`);
-                              }
-                            } catch (err) { alert(`Error: ${err.message}`); }
-                          }}
-                        >
-                          <option value="Friday">🏖️ Friday</option>
-                          <option value="Saturday">🏖️ Saturday</option>
-                          <option value="Sunday">🏖️ Sunday</option>
-                          <option value="Monday">🏖️ Monday</option>
-                          <option value="Tuesday">🏖️ Tuesday</option>
-                          <option value="Wednesday">🏖️ Wednesday</option>
-                          <option value="Thursday">🏖️ Thursday</option>
-                          <option value="None">None</option>
-                        </select>
-                      </td>
-                      <td style={{ fontSize: '13px' }}>
-                        <div><Phone size={12} style={{ inlineSize: '12px' }} /> {emp.phone || 'N/A'}</div>
-                        <div style={{ color: 'var(--text-muted)' }}>{emp.email || ''}</div>
-                      </td>
-                      <td style={{ fontWeight: '700', color: 'var(--success)' }}>{currency}{Number(emp.base_salary).toFixed(2)}</td>
-                      <td style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{emp.joining_date ? new Date(emp.joining_date).toLocaleDateString() : 'N/A'}</td>
-                      <td>
-                        <span className={`badge ${emp.is_active ? 'badge-success' : 'badge-danger'}`}>
-                          {emp.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button
-                            onClick={() => setSelectedEmpForDocs(emp)}
-                            className="btn btn-secondary btn-icon btn-sm"
-                            title="View NID Cards & Documents"
-                            style={{ color: '#6366f1' }}
-                          >
-                            <Eye size={14} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedEmpForCard(emp);
-                              setActiveTab('idcards');
+                        </td>
+                        <td>
+                          <div>{emp.designation}</div>
+                          <span className="badge badge-secondary" style={{ fontSize: '10px' }}>{emp.department}</span>
+                        </td>
+                        <td>
+                          <select
+                            className="form-select"
+                            style={{ fontSize: '12px', padding: '4px 8px', background: 'var(--bg-secondary)', cursor: 'pointer', width: '120px' }}
+                            value={emp.weekly_off_day || 'Friday'}
+                            onChange={async (e) => {
+                              const newOff = e.target.value;
+                              try {
+                                const res = await authFetch(`/api/staff/employees/${emp.id}`, {
+                                  method: 'PUT',
+                                  body: JSON.stringify({ ...emp, weekly_off_day: newOff })
+                                });
+                                if (res.ok) {
+                                  fetchEmployees();
+                                  alert(`Updated ${emp.name}'s weekly off day to ${newOff}!`);
+                                }
+                              } catch (err) { alert(`Error: ${err.message}`); }
                             }}
-                            className="btn btn-secondary btn-icon btn-sm"
-                            title="Generate ID Card Badge"
                           >
-                            <QrCode size={14} />
-                          </button>
+                            <option value="Friday">🏖️ Friday</option>
+                            <option value="Saturday">🏖️ Saturday</option>
+                            <option value="Sunday">🏖️ Sunday</option>
+                            <option value="Monday">🏖️ Monday</option>
+                            <option value="Tuesday">🏖️ Tuesday</option>
+                            <option value="Wednesday">🏖️ Wednesday</option>
+                            <option value="Thursday">🏖️ Thursday</option>
+                            <option value="None">None</option>
+                          </select>
+                        </td>
+                        <td style={{ fontSize: '13px' }}>
+                          <div><Phone size={12} style={{ inlineSize: '12px' }} /> {emp.phone || 'N/A'}</div>
+                          <div style={{ color: 'var(--text-muted)' }}>{emp.email || ''}</div>
+                        </td>
+                        <td style={{ fontWeight: '700', color: 'var(--success)' }}>{currency}{Number(emp.base_salary).toFixed(2)}</td>
+                        <td style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{emp.joining_date ? new Date(emp.joining_date).toLocaleDateString() : 'N/A'}</td>
+                        <td>
+                          {emp.status === 'terminated' ? (
+                            <span className="badge badge-danger" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444' }} title={emp.termination_reason ? `Reason: ${emp.termination_reason}` : 'Terminated'}>
+                              🚫 Terminated
+                            </span>
+                          ) : emp.status === 'resigned' ? (
+                            <span className="badge badge-warning" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', border: '1px solid #f59e0b' }} title={emp.termination_reason ? `Reason: ${emp.termination_reason}` : 'Resigned'}>
+                              🚪 Resigned
+                            </span>
+                          ) : emp.is_active ? (
+                            <span className="badge badge-success">
+                              🟢 Active
+                            </span>
+                          ) : (
+                            <span className="badge badge-danger">
+                              🔴 Inactive
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              onClick={() => setSelectedEmpForDocs(emp)}
+                              className="btn btn-secondary btn-icon btn-sm"
+                              title="View NID Cards & Documents"
+                              style={{ color: '#6366f1' }}
+                            >
+                              <Eye size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedEmpForCard(emp);
+                                setActiveTab('idcards');
+                              }}
+                              className="btn btn-secondary btn-icon btn-sm"
+                              title="Generate ID Card Badge"
+                            >
+                              <QrCode size={14} />
+                            </button>
+
+                            {/* Mark Terminated / Resigned Button */}
+                            <button
+                              onClick={() => {
+                                setShowTerminateModal(emp);
+                                setTerminateForm({
+                                  status: emp.status === 'resigned' ? 'resigned' : 'terminated',
+                                  termination_date: emp.termination_date ? new Date(emp.termination_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+                                  termination_reason: emp.termination_reason || '',
+                                  deactivate_login: true
+                                });
+                              }}
+                              className="btn btn-secondary btn-icon btn-sm"
+                              title="Mark as Terminated / Resigned (চাকরিচ্যুত/ইস্তফা)"
+                              style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                            >
+                              <UserX size={14} />
+                            </button>
                           <button
                             onClick={() => {
                               let docsList = [];
@@ -2568,6 +2665,102 @@ export const StaffManager = () => {
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowUserModal(false)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" className="btn btn-primary">Create Staff Account</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: MARK EMPLOYEE TERMINATED / RESIGNED */}
+      {showTerminateModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <UserX size={20} color="#ef4444" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f87171' }}>
+                  Mark Employee Terminated / Resigned
+                </h3>
+              </div>
+              <button onClick={() => setShowTerminateModal(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleTerminateSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Employee Header Info */}
+                <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '12px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#ef4444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '16px' }}>
+                    {showTerminateModal.name ? showTerminateModal.name.charAt(0).toUpperCase() : 'E'}
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '15px' }}>{showTerminateModal.name}</strong>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Code: {showTerminateModal.employee_code} • {showTerminateModal.designation} ({showTerminateModal.department})
+                    </div>
+                  </div>
+                </div>
+
+                {/* Release Type Status */}
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: '700' }}>Employee Release Status (অবস্থা) *</label>
+                  <select
+                    className="form-select"
+                    required
+                    value={terminateForm.status}
+                    onChange={(e) => setTerminateForm({ ...terminateForm, status: e.target.value })}
+                  >
+                    <option value="terminated">🚫 Terminated / Fired (চাকরিচ্যুত)</option>
+                    <option value="resigned">🚪 Resigned / Left Job (পদত্যাগ / চাকরি ইস্তফা)</option>
+                    <option value="inactive">🔴 Inactive / Suspended (সাময়িক বরখাস্ত)</option>
+                  </select>
+                </div>
+
+                {/* Termination / Release Date */}
+                <div className="form-group">
+                  <label className="form-label">Release / Termination Date (চাকরি ছাড়ার তারিখ) *</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    required
+                    value={terminateForm.termination_date}
+                    onChange={(e) => setTerminateForm({ ...terminateForm, termination_date: e.target.value })}
+                  />
+                </div>
+
+                {/* Reason / Remarks */}
+                <div className="form-group">
+                  <label className="form-label">Reason / Notes (চাকরিচ্যুত বা ইস্তফার কারণ)</label>
+                  <textarea
+                    className="form-textarea"
+                    rows="3"
+                    placeholder="Enter official reason, e.g. Resigned due to personal reasons, Performance policy, Contract end..."
+                    value={terminateForm.termination_reason}
+                    onChange={(e) => setTerminateForm({ ...terminateForm, termination_reason: e.target.value })}
+                  />
+                </div>
+
+                {/* Deactivate Login Checkbox */}
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-secondary)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={terminateForm.deactivate_login}
+                    onChange={(e) => setTerminateForm({ ...terminateForm, deactivate_login: e.target.checked })}
+                  />
+                  <div style={{ fontSize: '12px' }}>
+                    <strong>Disable Staff Login Account Immediately</strong>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Revokes access to Staff Portal, POS, Inventory & Team Chat.</div>
+                  </div>
+                </label>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowTerminateModal(null)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-danger" style={{ background: '#ef4444', color: '#fff' }}>
+                  <UserX size={15} />
+                  <span>Confirm Termination / Release</span>
+                </button>
               </div>
             </form>
           </div>
