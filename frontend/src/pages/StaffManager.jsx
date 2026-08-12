@@ -2028,9 +2028,14 @@ export const StaffManager = () => {
                         <FileText size={14} /> Open NID PDF
                       </a>
                     ) : (
-                      <a href={selectedEmpForDocs.nid_front_url} target="_blank" rel="noreferrer">
-                        <img src={selectedEmpForDocs.nid_front_url} alt="NID Front" style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', borderRadius: '6px' }} />
-                      </a>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <a href={selectedEmpForDocs.nid_front_url} target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none' }}>
+                          <img src={selectedEmpForDocs.nid_front_url} alt="NID Front" style={{ width: '100%', maxHeight: '180px', objectFit: 'contain', background: '#000', borderRadius: '6px', border: '1px solid var(--border-color)' }} />
+                        </a>
+                        <a href={selectedEmpForDocs.nid_front_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                          <ExternalLink size={12} /> Open Full Resolution Image
+                        </a>
+                      </div>
                     )
                   ) : (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No NID Front image uploaded.</div>
@@ -2046,9 +2051,14 @@ export const StaffManager = () => {
                         <FileText size={14} /> Open NID PDF
                       </a>
                     ) : (
-                      <a href={selectedEmpForDocs.nid_back_url} target="_blank" rel="noreferrer">
-                        <img src={selectedEmpForDocs.nid_back_url} alt="NID Back" style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', borderRadius: '6px' }} />
-                      </a>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <a href={selectedEmpForDocs.nid_back_url} target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none' }}>
+                          <img src={selectedEmpForDocs.nid_back_url} alt="NID Back" style={{ width: '100%', maxHeight: '180px', objectFit: 'contain', background: '#000', borderRadius: '6px', border: '1px solid var(--border-color)' }} />
+                        </a>
+                        <a href={selectedEmpForDocs.nid_back_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                          <ExternalLink size={12} /> Open Full Resolution Image
+                        </a>
+                      </div>
                     )
                   ) : (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No NID Back image uploaded.</div>
