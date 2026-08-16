@@ -1,4 +1,4 @@
-require('dotenv').config({ path: require('path').resolve(__dirname, '../backend/.env') });
+require('../backend/node_modules/dotenv').config({ path: require('path').resolve(__dirname, '../backend/.env') });
 const db = require('../backend/config/db');
 
 async function checkCollations() {
