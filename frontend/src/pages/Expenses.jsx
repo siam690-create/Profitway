@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, Receipt, Trash2, Calendar, DollarSign, CreditCard } from 'lucide-react';
+import { Plus, Receipt, Trash2, Calendar, DollarSign, CreditCard, Search, Filter, RefreshCw, X, FileSpreadsheet } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Expenses = () => {
   const { expenses, currency, addExpense, deleteExpense, authFetch, refreshAllData } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [accounts, setAccounts] = useState([]);
+
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedAccount, setSelectedAccount] = useState('all');
+  const [dateRange, setDateRange] = useState({ range: 'all', startDate: '', endDate: '' });
 
   const [formData, setFormData] = useState({
     title: '',
@@ -16,7 +23,13 @@ export const Expenses = () => {
     notes: ''
   });
 
-  const categories = ['Rent', 'Utilities', 'Salaries', 'Transport', 'Marketing', 'Maintenance', 'Miscellaneous'];
+  const categories = ['Rent', 'Utilities', 'Salaries & Wages', 'Payroll', 'Transport', 'Marketing', 'Maintenance', 'Miscellaneous'];
+
+  const categoriesList = useMemo(() => {
+    const predefined = ['Rent', 'Utilities', 'Salaries & Wages', 'Payroll', 'Transport', 'Marketing', 'Maintenance', 'Miscellaneous'];
+    const existing = (expenses || []).map(e => e.category).filter(Boolean);
+    return Array.from(new Set([...predefined, ...existing]));
+  }, [expenses]);
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -62,23 +75,186 @@ export const Expenses = () => {
     }
   };
 
-  const totalExpenses = expenses.reduce((sum, item) => sum + Number(item.amount), 0);
+  // Filtered Expenses Computation
+  const filteredExpenses = useMemo(() => {
+    return (expenses || []).filter(exp => {
+      // 1. Search term filter
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const matchTitle = (exp.title || '').toLowerCase().includes(term);
+        const matchNotes = (exp.notes || '').toLowerCase().includes(term);
+        const matchCategory = (exp.category || '').toLowerCase().includes(term);
+        if (!matchTitle && !matchNotes && !matchCategory) return false;
+      }
+
+      // 2. Category filter
+      if (selectedCategory !== 'all' && exp.category !== selectedCategory) {
+        return false;
+      }
+
+      // 3. Account filter
+      if (selectedAccount !== 'all') {
+        if (selectedAccount === 'unassigned') {
+          if (exp.account_id || exp.account_name) return false;
+        } else if (String(exp.account_id) !== String(selectedAccount)) {
+          return false;
+        }
+      }
+
+      // 4. Date range filter
+      if (exp.expense_date) {
+        const expDateStr = new Date(exp.expense_date).toISOString().slice(0, 10);
+        if (dateRange.startDate && expDateStr < dateRange.startDate) return false;
+        if (dateRange.endDate && expDateStr > dateRange.endDate) return false;
+      }
+
+      return true;
+    });
+  }, [expenses, searchTerm, selectedCategory, selectedAccount, dateRange]);
+
+  const totalAllExpenses = (expenses || []).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const totalFilteredExpenses = filteredExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const isFilterActive = Boolean(searchTerm || selectedCategory !== 'all' || selectedAccount !== 'all' || (dateRange && dateRange.range !== 'all'));
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('all');
+    setSelectedAccount('all');
+    setDateRange({ range: 'all', startDate: '', endDate: '' });
+  };
+
+  const exportExpensesToCSV = () => {
+    const headers = ["Date", "Expense Title", "Category", "Paid Via Account", "Amount (BDT)", "Notes"];
+    const rows = filteredExpenses.map(exp => [
+      `"${new Date(exp.expense_date).toLocaleDateString()}"`,
+      `"${(exp.title || '').replace(/"/g, '""')}"`,
+      `"${(exp.category || '').replace(/"/g, '""')}"`,
+      `"${(exp.account_name || 'Cash Box / Direct').replace(/"/g, '""')}"`,
+      Number(exp.amount || 0).toFixed(2),
+      `"${(exp.notes || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Operating_Expenses_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Top Header Card */}
-      <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Total Logged Expenses</span>
-          <h2 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--danger)' }}>
-            {currency}{totalExpenses.toLocaleString()}
-          </h2>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            {isFilterActive ? `Filtered Operating Expenses (${filteredExpenses.length} of ${expenses.length} entries)` : 'Total Logged Operating Expenses'}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginTop: '4px' }}>
+            <h2 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--danger)' }}>
+              {currency}{totalFilteredExpenses.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h2>
+            {isFilterActive && (
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                (Total Expenses: {currency}{totalAllExpenses.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+              </span>
+            )}
+          </div>
         </div>
 
         <button onClick={() => setShowModal(true)} className="btn btn-primary">
           <Plus size={16} />
           <span>+ Log New Expense</span>
         </button>
+      </div>
+
+      {/* Filter Control Bar */}
+      <div className="glass-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          
+          {/* Search Box */}
+          <div style={{ position: 'relative', flex: '1', minWidth: '220px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              className="form-input"
+              style={{ paddingLeft: '36px', height: '38px', fontSize: '13px' }}
+              placeholder="Search expense title or notes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter Dropdown */}
+          <div style={{ minWidth: '170px' }}>
+            <select
+              className="form-select"
+              style={{ height: '38px', fontSize: '13px', fontWeight: '600' }}
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+            >
+              <option value="all">🔍 All Categories (সকল খাত)</option>
+              {categoriesList.map(cat => (
+                <option key={cat} value={cat}>📁 {cat}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Account Filter Dropdown */}
+          <div style={{ minWidth: '180px' }}>
+            <select
+              className="form-select"
+              style={{ height: '38px', fontSize: '13px', fontWeight: '600' }}
+              value={selectedAccount}
+              onChange={(e) => setSelectedAccount(e.target.value)}
+            >
+              <option value="all">💳 All Payment Accounts</option>
+              {accounts.map(acc => (
+                <option key={acc.id} value={acc.id}>💳 {acc.name}</option>
+              ))}
+              <option value="unassigned">Cash Box / Direct</option>
+            </select>
+          </div>
+
+          {/* Export & Reset Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {isFilterActive && (
+              <button onClick={handleResetFilters} className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.4)' }}>
+                <RefreshCw size={14} />
+                <span>Reset Filters</span>
+              </button>
+            )}
+            <button onClick={exportExpensesToCSV} className="btn btn-success btn-sm" title="Export Filtered Expenses to Excel CSV">
+              <FileSpreadsheet size={15} />
+              <span>Export CSV</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Date Range Filter Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '12px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Calendar size={15} color="var(--accent-primary)" />
+            <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>Date Filter Range:</span>
+          </div>
+
+          <DateRangeFilter
+            initialRange={dateRange.range}
+            onFilterChange={(dates) => setDateRange(dates)}
+          />
+        </div>
       </div>
 
       {/* Expense List Table */}
@@ -97,16 +273,26 @@ export const Expenses = () => {
               </tr>
             </thead>
             <tbody>
-              {expenses.length === 0 ? (
+              {filteredExpenses.length === 0 ? (
                 <tr>
                   <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    No operational expenses recorded yet.
+                    {isFilterActive ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                        <span>No operational expenses found matching the selected filter criteria.</span>
+                        <button onClick={handleResetFilters} className="btn btn-secondary btn-sm">
+                          <RefreshCw size={14} />
+                          <span>Reset Filters</span>
+                        </button>
+                      </div>
+                    ) : (
+                      'No operational expenses recorded yet.'
+                    )}
                   </td>
                 </tr>
               ) : (
-                expenses.map(exp => (
+                filteredExpenses.map(exp => (
                   <tr key={exp.id}>
-                    <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    <td style={{ fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                       {new Date(exp.expense_date).toLocaleDateString()}
                     </td>
                     <td>
@@ -124,12 +310,12 @@ export const Expenses = () => {
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>-</span>
                       )}
                     </td>
-                    <td style={{ fontSize: '14px', fontWeight: '700', color: 'var(--danger)' }}>
+                    <td style={{ fontSize: '14px', fontWeight: '700', color: 'var(--danger)', whiteSpace: 'nowrap' }}>
                       -{currency}{Number(exp.amount).toFixed(2)}
                     </td>
                     <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{exp.notes || '-'}</td>
                     <td>
-                      <button onClick={() => handleDelete(exp.id, exp.title)} className="btn btn-danger btn-icon">
+                      <button onClick={() => handleDelete(exp.id, exp.title)} className="btn btn-danger btn-icon" title="Delete Expense">
                         <Trash2 size={14} />
                       </button>
                     </td>
