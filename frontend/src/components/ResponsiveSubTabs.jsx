@@ -179,39 +179,42 @@ export const ResponsiveSubTabs = ({ tabs = [], activeTab, onSelectTab, extraActi
           )}
         </div>
       ) : (
-        /* 💻 DESKTOP & TABLET VIEW: Visible Tabs + Three-Tier Overflow Menu */
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap', flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          {visibleTabs.map(tab => {
-            const isActive = activeTab === tab.id;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => onSelectTab(tab.id)}
-                className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'}`}
-                style={{
-                  whiteSpace: 'nowrap',
-                  fontSize: 'clamp(11px, 1.1vw, 13.5px)',
-                  padding: '8px 14px',
-                  fontWeight: isActive ? '700' : '600',
-                  flexShrink: 0
-                }}
-              >
-                {Icon && <Icon size={15} />}
-                <span>{tab.label}</span>
-                {tab.badge && (
-                  <span className={`badge ${tab.badgeType === 'warning' ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        /* 💻 DESKTOP & TABLET VIEW: Visible Tabs + Overflow Menu */
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', width: '100%', position: 'relative' }}>
+          {/* Visible Tabs Row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap', flex: 1, minWidth: 0, overflowX: 'hidden' }}>
+            {visibleTabs.map(tab => {
+              const isActive = activeTab === tab.id;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => onSelectTab(tab.id)}
+                  className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{
+                    whiteSpace: 'nowrap',
+                    fontSize: 'clamp(11px, 1.1vw, 13.5px)',
+                    padding: '8px 14px',
+                    fontWeight: isActive ? '700' : '600',
+                    flexShrink: 0
+                  }}
+                >
+                  {Icon && <Icon size={15} />}
+                  <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span className={`badge ${tab.badgeType === 'warning' ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-          {/* Overflow Dropdown Button (☰ More) */}
+          {/* Overflow Dropdown Button (☰ More) - Placed outside overflow container */}
           {hiddenTabs.length > 0 && (
-            <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{ position: 'relative', flexShrink: 0, zIndex: 1100 }}>
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -225,6 +228,7 @@ export const ResponsiveSubTabs = ({ tabs = [], activeTab, onSelectTab, extraActi
                   alignItems: 'center',
                   gap: '6px',
                   flexShrink: 0,
+                  cursor: 'pointer',
                   background: activeInHidden ? 'var(--accent-gradient)' : 'var(--bg-secondary)'
                 }}
               >
@@ -239,12 +243,12 @@ export const ResponsiveSubTabs = ({ tabs = [], activeTab, onSelectTab, extraActi
                     position: 'absolute',
                     top: 'calc(100% + 6px)',
                     right: 0,
-                    minWidth: '220px',
+                    minWidth: '240px',
                     backgroundColor: 'var(--bg-secondary)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '12px',
-                    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4)',
-                    zIndex: 1000,
+                    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.5)',
+                    zIndex: 9999,
                     overflow: 'hidden',
                     padding: '8px',
                     animation: 'slideUp 0.2s ease'
