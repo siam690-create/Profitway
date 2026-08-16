@@ -5,7 +5,7 @@ import {
   Users, UserPlus, Shield, Trash2, Key, CheckCircle, X, Edit3, Lock, 
   Calendar, Clock, CreditCard, DollarSign, Gift, FileText, Printer, 
   Award, Briefcase, Phone, Mail, QrCode, Plus, Search, Building2, Check, AlertCircle, FileCheck,
-  Upload, Image, Eye, ExternalLink, File, Landmark, UserX, UserMinus
+  Upload, Image, Eye, ExternalLink, File, Landmark, UserX, UserMinus, Home, MapPin
 } from 'lucide-react';
 
 const MODULE_LIST = [
@@ -78,6 +78,7 @@ export const StaffManager = () => {
   const [empForm, setEmpForm] = useState({
     name: '', designation: 'Staff', department: 'General', phone: '', email: '', joining_date: new Date().toISOString().slice(0, 10),
     nid_number: '', blood_group: 'B+', emergency_contact_name: '', emergency_contact_phone: '',
+    present_address: '', permanent_address: '', same_as_present: false,
     photo_url: '', nid_front_url: '', nid_back_url: '', documents_url: '',
     documents_list: [{ title: '', url: '' }],
     base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: '',
@@ -659,8 +660,11 @@ export const StaffManager = () => {
               setEmpForm({
                 name: '', designation: 'Staff', department: 'General', phone: '', email: '', joining_date: new Date().toISOString().slice(0, 10),
                 nid_number: '', blood_group: 'B+', emergency_contact_name: '', emergency_contact_phone: '',
+                present_address: '', permanent_address: '', same_as_present: false,
                 photo_url: '', nid_front_url: '', nid_back_url: '', documents_url: '',
-                base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: ''
+                documents_list: [{ title: '', url: '' }],
+                base_salary: '', hourly_rate: '', overtime_rate: '', payment_method: 'Cash', account_number: '',
+                weekly_off_day: 'Friday', holiday_duty_allowance: ''
               });
               setShowEmpModal(true);
             }}
@@ -878,6 +882,9 @@ export const StaffManager = () => {
                                 weekly_off_day: emp.weekly_off_day || 'Friday',
                                 holiday_duty_allowance: emp.holiday_duty_allowance || '',
                                 nid_number: emp.nid_number || '',
+                                present_address: emp.present_address || '',
+                                permanent_address: emp.permanent_address || '',
+                                same_as_present: Boolean(emp.present_address && emp.present_address === emp.permanent_address),
                                 photo_url: emp.photo_url || '',
                                 nid_front_url: emp.nid_front_url || '',
                                 nid_back_url: emp.nid_back_url || '',
@@ -1907,6 +1914,67 @@ export const StaffManager = () => {
                   <input type="date" className="form-input" value={empForm.joining_date} onChange={(e) => setEmpForm({ ...empForm, joining_date: e.target.value })} />
                 </div>
 
+                {/* Present & Permanent Address Section */}
+                <div style={{ gridColumn: 'span 2', background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Home size={16} />
+                    <span>Address Information (ঠিকানা সংক্রান্ত তথ্য) - Optional</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    {/* Present Address */}
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '12px' }}>Present Address (বর্তমান ঠিকানা)</label>
+                      <textarea
+                        className="form-textarea"
+                        rows="2"
+                        style={{ fontSize: '12px' }}
+                        placeholder="House/Road, Thana, District..."
+                        value={empForm.present_address || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEmpForm(prev => ({
+                            ...prev,
+                            present_address: val,
+                            permanent_address: prev.same_as_present ? val : prev.permanent_address
+                          }));
+                        }}
+                      />
+                    </div>
+
+                    {/* Permanent Address */}
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label className="form-label" style={{ fontSize: '12px', margin: 0 }}>Permanent Address (স্থায়ী ঠিকানা)</label>
+                        <label style={{ fontSize: '11px', color: 'var(--accent-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(empForm.same_as_present)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setEmpForm(prev => ({
+                                ...prev,
+                                same_as_present: checked,
+                                permanent_address: checked ? prev.present_address : prev.permanent_address
+                              }));
+                            }}
+                          />
+                          <span>Same as Present</span>
+                        </label>
+                      </div>
+                      <textarea
+                        className="form-textarea"
+                        rows="2"
+                        style={{ fontSize: '12px' }}
+                        disabled={Boolean(empForm.same_as_present)}
+                        placeholder="Village/Road, Upazila, District..."
+                        value={empForm.permanent_address || ''}
+                        onChange={(e) => setEmpForm(prev => ({ ...prev, permanent_address: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Identity & Document Upload Section */}
                 <div style={{ gridColumn: 'span 2', padding: '16px', background: 'var(--bg-primary)', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <h4 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -2029,6 +2097,20 @@ export const StaffManager = () => {
                   <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>NID Number: <strong>{selectedEmpForDocs.nid_number || 'N/A'}</strong></div>
                 </div>
               </div>
+
+              {/* Address Details */}
+              {(selectedEmpForDocs.present_address || selectedEmpForDocs.permanent_address) && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-primary)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--accent-primary)' }}>🏠 Present Address (বর্তমান ঠিকানা):</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-primary)', marginTop: '2px' }}>{selectedEmpForDocs.present_address || 'Not provided'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--accent-primary)' }}>📍 Permanent Address (স্থায়ী ঠিকানা):</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-primary)', marginTop: '2px' }}>{selectedEmpForDocs.permanent_address || 'Not provided'}</div>
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 {/* NID Front */}

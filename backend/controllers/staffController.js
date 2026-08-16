@@ -161,6 +161,7 @@ exports.createEmployee = async (req, res) => {
     const {
       name, designation, department, phone, email, joining_date,
       nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
+      present_address, permanent_address,
       photo_url, nid_front_url, nid_back_url, documents_url,
       base_salary, hourly_rate, overtime_rate, payment_method, account_number,
       weekly_off_day, holiday_duty_allowance
@@ -179,13 +180,15 @@ exports.createEmployee = async (req, res) => {
       `INSERT INTO employees (
         tenant_id, employee_code, name, designation, department, phone, email,
         joining_date, nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
+        present_address, permanent_address,
         photo_url, nid_front_url, nid_back_url, documents_url,
         base_salary, hourly_rate, overtime_rate, payment_method, account_number,
         weekly_off_day, holiday_duty_allowance
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tenantId, empCode, name, designation || 'Staff', department || 'General', phone || null, email || null,
         formattedJoiningDate, nid_number || null, blood_group || null, emergency_contact_name || null, emergency_contact_phone || null,
+        present_address || null, permanent_address || null,
         photo_url || null, nid_front_url || null, nid_back_url || null, documents_url || null,
         Number(base_salary || 0), Number(hourly_rate || 0), Number(overtime_rate || 0),
         payment_method || 'Cash', account_number || null,
@@ -212,6 +215,7 @@ exports.updateEmployee = async (req, res) => {
     const {
       name, designation, department, phone, email, joining_date,
       nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
+      present_address, permanent_address,
       photo_url, nid_front_url, nid_back_url, documents_url,
       base_salary, hourly_rate, overtime_rate, payment_method, account_number, is_active,
       weekly_off_day, holiday_duty_allowance, status, termination_date, termination_reason
@@ -225,6 +229,7 @@ exports.updateEmployee = async (req, res) => {
       `UPDATE employees SET
         name = ?, designation = ?, department = ?, phone = ?, email = ?,
         joining_date = ?, nid_number = ?, blood_group = ?, emergency_contact_name = ?, emergency_contact_phone = ?,
+        present_address = ?, permanent_address = ?,
         photo_url = ?, nid_front_url = ?, nid_back_url = ?, documents_url = ?,
         base_salary = ?, hourly_rate = ?, overtime_rate = ?, payment_method = ?, account_number = ?, is_active = ?,
         weekly_off_day = ?, holiday_duty_allowance = ?, status = ?, termination_date = ?, termination_reason = ?
@@ -232,6 +237,7 @@ exports.updateEmployee = async (req, res) => {
       [
         name, designation, department, phone, email,
         formattedJoiningDate, nid_number, blood_group, emergency_contact_name, emergency_contact_phone,
+        present_address || null, permanent_address || null,
         photo_url, nid_front_url, nid_back_url, documents_url,
         Number(base_salary || 0), Number(hourly_rate || 0), Number(overtime_rate || 0), payment_method, account_number, is_active ? 1 : 0,
         weekly_off_day || 'Friday', Number(holiday_duty_allowance || 0),
