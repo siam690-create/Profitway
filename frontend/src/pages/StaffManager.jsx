@@ -23,6 +23,26 @@ const MODULE_LIST = [
   { id: 'staff', name: 'Staff & Users Management' }
 ];
 
+const ALL_MODULE_PERMISSIONS = [
+  { key: 'inventory', label: '📦 Stock & Inventory', shortLabel: '📦 Stock', desc: 'স্টক দেখা ও নতুন প্রোডাক্ট এডিট/আপডেট করা' },
+  { key: 'pos', label: '🛒 POS / Counter Sale', shortLabel: '🛒 POS', desc: 'কাউন্টারে কাস্টমারের বিক্রি করা' },
+  { key: 'orders', label: '🚚 Sales & Orders', shortLabel: '🚚 Orders', desc: 'অনলাইন অর্ডার লিস্ট দেখা ও কুরিয়ার বুকিং' },
+  { key: 'wholesale', label: '🏬 Wholesale B2B Sales', shortLabel: '🏬 Wholesale', desc: 'পাইকারি বিক্রি ও বিটুবি ক্রেতার হিসাব' },
+  { key: 'returns', label: '🔄 Courier Returns', shortLabel: '🔄 Returns', desc: 'কুরিয়ার রিটার্ন ট্র্যাকিং ও এন্ট্রি' },
+  { key: 'purchases', label: '🏭 Purchases & Suppliers', shortLabel: '🏭 Purchases', desc: 'সাপ্লায়ারের কাছ থেকে পণ্য ক্রয় ও রিস্টক' },
+  { key: 'ads', label: '📢 Paid Ads Tracker', shortLabel: '📢 Ads', desc: 'ফেসবুক ও গুগল এড খরচ ট্র্যাকিং' },
+  { key: 'expenses', label: '💸 Operating Expenses', shortLabel: '💸 Expenses', desc: 'দোকানের দৈনন্দিন খরচ এন্ট্রি' },
+  { key: 'reports', label: '📊 Profit & Loss Reports', shortLabel: '📊 Reports', desc: 'দোকানের মোট লাভ-ক্ষতি ও হিসাব' },
+  { key: 'finance', label: '💵 Finance & Passbook', shortLabel: '💵 Finance', desc: 'ব্যাংক অ্যাকাউন্ট, দেনা-পাওনা ও পাসবই' },
+  { key: 'analytics', label: '📈 Analytics Breakdown', shortLabel: '📈 Analytics', desc: 'বিক্রয় ও প্রোডাক্ট অ্যানালিটিক্স' },
+  { key: 'reseller-parcels', label: '🤝 Reseller Parcels', shortLabel: '🤝 Resellers', desc: 'রিসেলিং পার্সেল ও রিসেলার কমিশন' },
+  { key: 'staff', label: '👥 Staff & HR OS', shortLabel: '👥 Staff OS', desc: 'স্টাফ ডিরেক্টরি, স্যালারি শিট ও বেতন' },
+  { key: 'chat', label: '💬 Internal Team Chat', shortLabel: '💬 Chat', desc: 'টিম চ্যাট সিস্টেমে কথা বলা' },
+  { key: 'attendance', label: '⏱️ Staff Punch In', shortLabel: '⏱️ Punch In', desc: 'অফিস সময় ও টাইম পাঞ্চ' },
+  { key: 'tasks', label: '📋 Task Manager', shortLabel: '📋 Tasks', desc: 'অ্যাসাইনকৃত কাজ দেখা ও সম্পন্ন করা' },
+  { key: 'support', label: '🎧 Support & Help Desk', shortLabel: '🎧 Support', desc: 'কাস্টমার সাপোর্ট টিকেট এক্সেস' }
+];
+
 export const StaffManager = () => {
   const { authFetch, currency, user, shopSettings } = useApp();
   const [activeTab, setActiveTab] = useState('employees'); // employees, attendance, leaves, payroll, salary-sheet, bonuses, loans, pf, idcards, users
@@ -1761,24 +1781,16 @@ export const StaffManager = () => {
                           <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: '700' }}>👑 Full Admin Access (All Permissions Granted)</span>
                         ) : (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '11px' }}>
-                            {[
-                              { key: 'inventory', label: '📦 Stock' },
-                              { key: 'pos', label: '🛒 POS' },
-                              { key: 'orders', label: '🚚 Orders' },
-                              { key: 'chat', label: '💬 Team Chat' },
-                              { key: 'attendance', label: '⏱️ Punch In' },
-                              { key: 'tasks', label: '📋 Tasks' },
-                              { key: 'finance', label: '💵 Passbook' }
-                            ].map(p => {
+                            {ALL_MODULE_PERMISSIONS.map(p => {
                               const checked = uPerms.includes(p.key);
                               return (
-                                <label key={p.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: checked ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '6px', border: `1px solid ${checked ? 'var(--accent-primary)' : 'var(--border-color)'}`, cursor: 'pointer' }}>
+                                <label key={p.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: checked ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-secondary)', padding: '3px 8px', borderRadius: '6px', border: `1px solid ${checked ? 'var(--accent-primary)' : 'var(--border-color)'}`, cursor: 'pointer' }}>
                                   <input
                                     type="checkbox"
                                     checked={checked}
                                     onChange={() => handleToggleUserPermission(u, p.key)}
                                   />
-                                  <span>{p.label}</span>
+                                  <span>{p.shortLabel || p.label}</span>
                                 </label>
                               );
                             })}
@@ -2630,21 +2642,34 @@ export const StaffManager = () => {
 
                 {/* Granular Permissions Checkbox Box */}
                 <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <label className="form-label" style={{ margin: 0, fontWeight: '700', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Shield size={16} />
-                    <span>Module Access & Permissions (স্টাফকে কী কী অনুমতি দেওয়া হবে)</span>
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                    <label className="form-label" style={{ margin: 0, fontWeight: '700', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Shield size={16} />
+                      <span>Module Access & Permissions (স্টাফকে কী কী অনুমতি দেওয়া হবে)</span>
+                    </label>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    {[
-                      { key: 'inventory', label: '📦 Stock & Inventory', desc: 'স্টক দেখা ও আপডেট করা' },
-                      { key: 'pos', label: '🛒 POS / Counter Sale', desc: 'কাউন্টারে কাস্টমারের বিক্রি করা' },
-                      { key: 'orders', label: '🚚 Sales & Courier Orders', desc: 'অর্ডার লিস্ট ও কুরিয়ার রিটার্ন' },
-                      { key: 'chat', label: '💬 Team Chat System', desc: 'টিম চ্যাটে কথা বলা' },
-                      { key: 'attendance', label: '⏱️ Punch In / Attendance', desc: 'নিজের অফিসে ঢোকা ও বের হওয়া' },
-                      { key: 'tasks', label: '📋 Task Manager', desc: 'অ্যাসাইনকৃত কাজ দেখা ও সম্পন্ন করা' },
-                      { key: 'finance', label: '💵 Finance & Passbook', desc: 'ব্যাংক অ্যাকাউন্ট ও খরচ দেখা' }
-                    ].map(p => {
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setUserFormData({ ...userFormData, permissions: ALL_MODULE_PERMISSIONS.map(p => p.key) })}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '11px', padding: '2px 8px' }}
+                      >
+                        ✓ Select All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUserFormData({ ...userFormData, permissions: [] })}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '11px', padding: '2px 8px', color: 'var(--danger)' }}
+                      >
+                        ✕ Clear All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }}>
+                    {ALL_MODULE_PERMISSIONS.map(p => {
                       const isChecked = (userFormData.permissions || []).includes(p.key);
                       return (
                         <label key={p.key} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: isChecked ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-primary)', padding: '8px 10px', borderRadius: '8px', border: `1px solid ${isChecked ? 'var(--accent-primary)' : 'var(--border-color)'}`, cursor: 'pointer' }}>
@@ -2653,7 +2678,7 @@ export const StaffManager = () => {
                             checked={isChecked}
                             style={{ marginTop: '2px' }}
                             onChange={() => {
-                              let current = Array.isArray(userFormData.permissions) ? [...userFormData.permissions] : ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'];
+                              let current = Array.isArray(userFormData.permissions) ? [...userFormData.permissions] : [];
                               if (current.includes(p.key)) {
                                 current = current.filter(k => k !== p.key);
                               } else {
@@ -2663,7 +2688,7 @@ export const StaffManager = () => {
                             }}
                           />
                           <div>
-                            <div style={{ fontSize: '12px', fontWeight: '700' }}>{p.label}</div>
+                            <div style={{ fontSize: '12px', fontWeight: '700', color: isChecked ? 'var(--accent-primary)' : 'var(--text-primary)' }}>{p.label}</div>
                             <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{p.desc}</div>
                           </div>
                         </label>
