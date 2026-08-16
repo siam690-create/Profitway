@@ -59,7 +59,7 @@ export const Sidebar = () => {
 
   const visibleNavItems = navItems.filter(item => {
     if (isOwnerOrAdmin || !userPermissions || !Array.isArray(userPermissions)) return true;
-    if (item.id === 'dashboard' || item.id === 'staff-portal') return true;
+    if (item.id === 'staff-portal') return true;
     if (item.id === 'team-chat') return userPermissions.includes('chat') || userPermissions.includes('team-chat');
     return userPermissions.includes(item.id);
   });

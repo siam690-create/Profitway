@@ -24,6 +24,7 @@ const MODULE_LIST = [
 ];
 
 const ALL_MODULE_PERMISSIONS = [
+  { key: 'dashboard', label: '📊 Business Dashboard', shortLabel: '📊 Dashboard', desc: 'দোকানের মোট বিক্রি, লাভ-ক্ষতি ও ড্যাশবোর্ড ওভারভিউ' },
   { key: 'inventory', label: '📦 Stock & Inventory', shortLabel: '📦 Stock', desc: 'স্টক দেখা ও নতুন প্রোডাক্ট এডিট/আপডেট করা' },
   { key: 'pos', label: '🛒 POS / Counter Sale', shortLabel: '🛒 POS', desc: 'কাউন্টারে কাস্টমারের বিক্রি করা' },
   { key: 'orders', label: '🚚 Sales & Orders', shortLabel: '🚚 Orders', desc: 'অনলাইন অর্ডার লিস্ট দেখা ও কুরিয়ার বুকিং' },
@@ -208,7 +209,7 @@ export const StaffManager = () => {
   // User Accounts State
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [userFormData, setUserFormData] = useState({ name: '', email: '', password: '', role: 'employee', permissions: ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'] });
+  const [userFormData, setUserFormData] = useState({ name: '', email: '', password: '', role: 'employee', permissions: ['dashboard', 'inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'] });
 
   // Fetch HR & System Data
   const fetchEmployees = async () => {

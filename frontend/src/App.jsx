@@ -70,7 +70,31 @@ function MainApp() {
     return <SuperAdminDashboard />;
   }
 
+  const userPermissions = user?.permissions;
+  const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'superadmin';
+
+  const hasModulePermission = (tabId) => {
+    if (isOwnerOrAdmin || !userPermissions || !Array.isArray(userPermissions)) return true;
+    if (tabId === 'staff-portal' || tabId === 'settings' || tabId === 'subscription' || tabId === 'support') return true;
+    if (tabId === 'team-chat') return userPermissions.includes('chat') || userPermissions.includes('team-chat');
+    return userPermissions.includes(tabId);
+  };
+
   const renderActivePage = () => {
+    if (!hasModulePermission(activeTab)) {
+      return (
+        <div className="glass-card" style={{ padding: '60px 20px', textAlign: 'center', margin: '40px auto', maxWidth: '560px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: '32px' }}>🔒</span>
+          </div>
+          <h3 style={{ fontSize: '20px', fontWeight: '800', color: '#ef4444' }}>Access Restricted (মডিউল অনুমতি নেই)</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.6', margin: 0 }}>
+            আপনার স্টাফ অ্যাকাউন্টে <strong>{activeTab.toUpperCase()}</strong> মডিউল বা ড্যাশবোর্ড দেখার অনুমতি দেওয়া হয়নি। প্রয়োজনে শপ ওনারের সাথে যোগাযোগ করুন।
+          </p>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'dashboard': return <Dashboard />;
       case 'staff-portal': return <StaffPortal />;
