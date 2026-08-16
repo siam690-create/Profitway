@@ -97,15 +97,16 @@ exports.createAccount = async (req, res) => {
 
 // Manually Add / Deposit Funds to Account (Non-Sales Deposit)
 exports.depositFund = async (req, res) => {
+  const { account_id, amount, source_title, notes } = req.body;
+
+  const depAmount = Number(amount);
+  if (!account_id || isNaN(depAmount) || depAmount <= 0 || !source_title) {
+    return res.status(400).json({ error: 'Valid account, deposit amount, and source description are required.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { account_id, amount, source_title, notes } = req.body;
-
-    const depAmount = Number(amount);
-    if (!account_id || isNaN(depAmount) || depAmount <= 0 || !source_title) {
-      return res.status(400).json({ error: 'Valid account, deposit amount, and source description are required.' });
-    }
 
     await connection.beginTransaction();
 
@@ -146,19 +147,20 @@ exports.depositFund = async (req, res) => {
 
 // Transfer Funds Between Accounts
 exports.transferFunds = async (req, res) => {
+  const { from_account_id, to_account_id, amount } = req.body;
+
+  const transferAmount = Number(amount);
+  if (!from_account_id || !to_account_id || isNaN(transferAmount) || transferAmount <= 0) {
+    return res.status(400).json({ error: 'Valid source account, destination account, and amount are required.' });
+  }
+
+  if (String(from_account_id) === String(to_account_id)) {
+    return res.status(400).json({ error: 'Source and destination accounts must be different.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { from_account_id, to_account_id, amount } = req.body;
-
-    const transferAmount = Number(amount);
-    if (!from_account_id || !to_account_id || isNaN(transferAmount) || transferAmount <= 0) {
-      return res.status(400).json({ error: 'Valid source account, destination account, and amount are required.' });
-    }
-
-    if (String(from_account_id) === String(to_account_id)) {
-      return res.status(400).json({ error: 'Source and destination accounts must be different.' });
-    }
 
     await connection.beginTransaction();
 
@@ -197,16 +199,16 @@ exports.transferFunds = async (req, res) => {
 
 // Adjust Account Balance / Manual Fund Withdrawal / Send Money (Non-Expense)
 exports.adjustAccountBalance = async (req, res) => {
+  const { account_id, adjustment_type, amount, reason_title, notes } = req.body;
+
+  const adjAmount = Number(amount);
+  if (!account_id || isNaN(adjAmount) || adjAmount <= 0) {
+    return res.status(400).json({ error: 'Valid Account ID and Amount are required.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { account_id, adjustment_type, amount, reason_title, notes } = req.body;
-
-    const adjAmount = Number(amount);
-    if (!account_id || isNaN(adjAmount) || adjAmount <= 0) {
-      return res.status(400).json({ error: 'Valid Account ID and Amount are required.' });
-    }
-
     const type = adjustment_type || 'debit'; // 'debit' (withdraw/reduce) or 'credit' (add/increase)
 
     await connection.beginTransaction();
@@ -312,16 +314,17 @@ exports.createLiability = async (req, res) => {
 
 // Pay Dena (Liability Repayment)
 exports.payLiability = async (req, res) => {
+  const { id } = req.params;
+  const { payment_amount, account_id, notes, party_name } = req.body;
+
+  let payAmt = Number(payment_amount);
+  if (isNaN(payAmt) || payAmt <= 0) {
+    return res.status(400).json({ error: 'Valid payment amount is required.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { id } = req.params;
-    const { payment_amount, account_id, notes, party_name } = req.body;
-
-    let payAmt = Number(payment_amount);
-    if (isNaN(payAmt) || payAmt <= 0) {
-      return res.status(400).json({ error: 'Valid payment amount is required.' });
-    }
 
     await connection.beginTransaction();
 
@@ -444,16 +447,17 @@ exports.createReceivable = async (req, res) => {
 
 // Collect Pawna (Receivable Collection) by ID or Party Name
 exports.collectReceivable = async (req, res) => {
+  const { id } = req.params;
+  const { collection_amount, account_id, notes, party_name } = req.body;
+
+  let collectAmt = Number(collection_amount);
+  if (isNaN(collectAmt) || collectAmt <= 0) {
+    return res.status(400).json({ error: 'Valid collection amount is required.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { id } = req.params;
-    const { collection_amount, account_id, notes, party_name } = req.body;
-
-    let collectAmt = Number(collection_amount);
-    if (isNaN(collectAmt) || collectAmt <= 0) {
-      return res.status(400).json({ error: 'Valid collection amount is required.' });
-    }
 
     await connection.beginTransaction();
 

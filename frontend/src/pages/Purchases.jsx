@@ -133,8 +133,11 @@ export const Purchases = () => {
 
   const { paid: computedPaid, due: computedDue } = calculatePaidAndDue();
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmitPurchase = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     let finalItems = [...purchaseItems];
     if (finalItems.length === 0 && selectedProductId && unitBuyPrice) {
@@ -152,6 +155,7 @@ export const Purchases = () => {
 
     if (finalItems.length === 0) return alert('Please add at least one product to purchase order.');
 
+    setIsSubmitting(true);
     try {
       const res = await authFetch('/api/purchases', {
         method: 'POST',
@@ -185,6 +189,8 @@ export const Purchases = () => {
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -709,8 +715,8 @@ export const Purchases = () => {
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-success" disabled={totalPurchaseCost <= 0}>
-                  Confirm Purchase Order
+                <button type="submit" className="btn btn-success" disabled={totalPurchaseCost <= 0 || isSubmitting}>
+                  {isSubmitting ? 'Recording Purchase...' : 'Confirm Purchase Order'}
                 </button>
               </div>
             </form>

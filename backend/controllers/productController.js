@@ -82,17 +82,15 @@ const ensureComboTables = async (conn) => {
 
 // Create a new Product or Combo Bundle
 exports.createProduct = async (req, res) => {
+  const { name, sku, category_id, cost_price, selling_price, stock_quantity, min_stock_alert, low_stock_threshold, unit, location, is_combo, combo_items } = req.body;
+
+  if (!name || !selling_price) {
+    return res.status(400).json({ error: 'Product name and selling price are required.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { name, sku, category_id, cost_price, selling_price, stock_quantity, min_stock_alert, low_stock_threshold, unit, location, is_combo, combo_items } = req.body;
-
-    await ensureComboTables(connection);
-
-    if (!name || !selling_price) {
-      return res.status(400).json({ error: 'Product name and selling price are required.' });
-    }
-
     await connection.beginTransaction();
 
     let computedCostPrice = Number(cost_price || 0);

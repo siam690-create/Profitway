@@ -112,8 +112,11 @@ export const PaidAds = () => {
     });
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmitAd = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     const validItems = adItems.filter(item => Number(item.amount_usd) > 0);
     if (validItems.length === 0) {
@@ -122,6 +125,7 @@ export const PaidAds = () => {
 
     const matchedAccount = adAccounts.find(a => Number(a.id) === Number(selectedAdAccount));
 
+    setIsSubmitting(true);
     try {
       const res = await authFetch('/api/ads', {
         method: 'POST',
@@ -153,6 +157,8 @@ export const PaidAds = () => {
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -642,8 +648,8 @@ export const PaidAds = () => {
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-success">
-                  Save All Paid Ad Expenses ({validProductsCount})
+                <button type="submit" className="btn btn-success" disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving Paid Ad Expense...' : `Save All Paid Ad Expenses (${validProductsCount})`}
                 </button>
               </div>
             </form>

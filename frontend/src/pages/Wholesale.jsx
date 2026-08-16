@@ -173,8 +173,12 @@ export const Wholesale = () => {
     computedDue = Math.max(0, totalSaleAmount - computedPaid);
   }
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmitSale = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (saleItems.length === 0) return alert('Add at least one product to the wholesale order.');
     if (!customerName) return alert('Specify Wholesale Buyer / Party Name.');
 
@@ -182,6 +186,7 @@ export const Wholesale = () => {
       return alert('Please select a target Cash or Bank Account for collected funds.');
     }
 
+    setIsSubmitting(true);
     try {
       const res = await authFetch('/api/wholesale/sales', {
         method: 'POST',
@@ -220,6 +225,8 @@ export const Wholesale = () => {
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -892,8 +899,8 @@ export const Wholesale = () => {
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-success" disabled={totalSaleAmount <= 0}>
-                  Confirm Wholesale Order
+                <button type="submit" className="btn btn-success" disabled={totalSaleAmount <= 0 || isSubmitting}>
+                  {isSubmitting ? 'Creating Order...' : 'Confirm Wholesale Order'}
                 </button>
               </div>
             </form>

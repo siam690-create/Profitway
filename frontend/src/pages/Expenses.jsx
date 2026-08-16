@@ -33,15 +33,25 @@ export const Expenses = () => {
     fetchAccounts();
   }, []);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const res = await addExpense(formData);
-    if (res.success) {
-      setShowModal(false);
-      setFormData({ title: '', category: 'Utilities', amount: '', account_id: '', expense_date: new Date().toISOString().slice(0, 10), notes: '' });
-      refreshAllData();
-    } else {
-      alert(`Error: ${res.error}`);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const res = await addExpense(formData);
+      if (res.success) {
+        setShowModal(false);
+        setFormData({ title: '', category: 'Utilities', amount: '', account_id: '', expense_date: new Date().toISOString().slice(0, 10), notes: '' });
+        refreshAllData();
+      } else {
+        alert(`Error: ${res.error}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -232,8 +242,8 @@ export const Expenses = () => {
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Record Expense
+                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving Expense...' : 'Record Expense'}
                 </button>
               </div>
             </form>

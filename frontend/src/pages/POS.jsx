@@ -51,15 +51,19 @@ export const POS = () => {
   const deliveryProfit = delivFeeNum - courierCostNum;
 
   const handleCheckout = async () => {
-    if (cart.length === 0) return alert('Cart is empty! Add products to checkout.');
+    if (cart.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
-    const result = await checkoutSale(customerName, paymentMethod, notes, customerDeliveryFee, courierFee, saleDate);
-    setIsSubmitting(false);
-
-    if (result.success) {
-      setCompletedSale(result.sale);
-    } else {
-      alert(`Checkout failed: ${result.error}`);
+    try {
+      const result = await checkoutSale(customerName, paymentMethod, notes, customerDeliveryFee, courierFee, saleDate);
+      if (result.success) {
+        setCompletedSale(result.sale);
+      } else {
+        alert(`Checkout failed: ${result.error}`);
+      }
+    } catch (err) {
+      alert(`Checkout error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

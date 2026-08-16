@@ -21,16 +21,15 @@ const ensureSalesColumns = async (conn) => {
 };
 
 exports.createSale = async (req, res) => {
+  const { items, customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date } = req.body;
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Cart must contain at least one product.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { items, customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date } = req.body;
-
-    await ensureSalesColumns(connection);
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Cart must contain at least one product.' });
-    }
 
     await connection.beginTransaction();
 

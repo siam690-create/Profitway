@@ -101,16 +101,15 @@ const ensureWholesaleSalesColumns = async (conn) => {
 
 // Create Wholesale Sales Order
 exports.createWholesaleSale = async (req, res) => {
+  const { items, customer_id, customer_name, notes, payment_status, paid_amount, due_amount, account_id, sale_date } = req.body;
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Wholesale order must contain at least one product.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { items, customer_id, customer_name, notes, payment_status, paid_amount, due_amount, account_id, sale_date } = req.body;
-
-    await ensureWholesaleSalesColumns(connection);
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Wholesale order must contain at least one product.' });
-    }
 
     await connection.beginTransaction();
 

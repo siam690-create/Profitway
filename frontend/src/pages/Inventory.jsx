@@ -239,8 +239,11 @@ export const Inventory = () => {
     }
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     const payload = {
       name,
@@ -259,6 +262,7 @@ export const Inventory = () => {
       })) : []
     };
 
+    setIsSubmitting(true);
     try {
       let res;
       if (editingProduct) {
@@ -283,6 +287,8 @@ export const Inventory = () => {
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -886,8 +892,8 @@ export const Inventory = () => {
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingProduct ? 'Save Product Changes' : 'Save New Product'}
+                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving Product...' : (editingProduct ? 'Save Product Changes' : 'Save New Product')}
                 </button>
               </div>
             </form>

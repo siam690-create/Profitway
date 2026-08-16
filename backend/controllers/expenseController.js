@@ -27,19 +27,20 @@ exports.getExpenses = async (req, res) => {
 };
 
 exports.createExpense = async (req, res) => {
+  const { title, category, amount, expense_date, notes, account_id } = req.body;
+
+  if (!title || !category || amount === undefined) {
+    return res.status(400).json({ error: 'Title, category, and amount are required.' });
+  }
+
+  const expAmount = Number(amount);
+  if (isNaN(expAmount) || expAmount <= 0) {
+    return res.status(400).json({ error: 'Valid expense amount is required.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { title, category, amount, expense_date, notes, account_id } = req.body;
-
-    if (!title || !category || amount === undefined) {
-      return res.status(400).json({ error: 'Title, category, and amount are required.' });
-    }
-
-    const expAmount = Number(amount);
-    if (isNaN(expAmount) || expAmount <= 0) {
-      return res.status(400).json({ error: 'Valid expense amount is required.' });
-    }
 
     await connection.beginTransaction();
 

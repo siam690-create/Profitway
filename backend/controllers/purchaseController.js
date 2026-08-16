@@ -2,14 +2,15 @@ const db = require('../config/db');
 
 // Record a new Product Purchase / Stock Restock with Payment & Dena Link
 exports.createPurchase = async (req, res) => {
+  const { items, supplier_id, supplier_name, notes, payment_status, paid_amount, due_amount, account_id } = req.body;
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Purchase order must contain at least one product.' });
+  }
+
   const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
-    const { items, supplier_id, supplier_name, notes, payment_status, paid_amount, due_amount, account_id } = req.body;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Purchase order must contain at least one product.' });
-    }
 
     await connection.beginTransaction();
 
