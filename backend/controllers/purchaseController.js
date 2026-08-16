@@ -2,7 +2,7 @@ const db = require('../config/db');
 
 // Record a new Product Purchase / Stock Restock with Payment & Dena Link
 exports.createPurchase = async (req, res) => {
-  const { items, supplier_id, supplier_name, notes, payment_status, paid_amount, due_amount, account_id } = req.body;
+  const { items, supplier_id, supplier_name, notes, payment_status, paid_amount, due_amount, account_id, purchase_date, date } = req.body;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Purchase order must contain at least one product.' });
@@ -72,10 +72,32 @@ exports.createPurchase = async (req, res) => {
     // 1. Insert Purchase Header
     const purchaseNo = `PUR-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(100 + Math.random() * 900)}`;
 
+    const rawDate = purchase_date || date;
+    let formattedDate = null;
+    if (rawDate) {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        const timePart = new Date().toTimeString().slice(0, 8);
+        formattedDate = `${d.toISOString().slice(0, 10)} ${timePart}`;
+      }
+    }
+
     const [purchaseResult] = await connection.query(
       `INSERT INTO purchases (tenant_id, purchase_no, supplier_id, supplier_name, total_amount, payment_status, paid_amount, due_amount, account_id, notes, purchase_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${formattedDate ? '?' : 'NOW()'})`,
+      formattedDate ? [
+        tenantId,
+        purchaseNo,
+        supplier_id || null,
+        supplier_name || 'General Supplier',
+        total_amount,
+        status,
+        paidAmt,
+        dueAmt,
+        account_id || null,
+        notes || null,
+        formattedDate
+      ] : [
         tenantId,
         purchaseNo,
         supplier_id || null,
@@ -105,6 +127,13 @@ exports.createPurchase = async (req, res) => {
       await connection.query(
         'UPDATE finance_accounts SET balance = GREATEST(0, balance - ?) WHERE id = ? AND tenant_id = ?',
         [paidAmt, account_id, tenantId]
+      );
+
+      const transDate = formattedDate || new Date();
+      await connection.query(
+        `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+         VALUES (?, ?, 'Stock Purchase', ?, 0.00, ?, ?, ?)`,
+        [tenantId, account_id, paidAmt, purchaseNo, `Payment for Purchase #${purchaseNo}`, transDate]
       );
     }
 

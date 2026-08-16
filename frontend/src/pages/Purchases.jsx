@@ -21,6 +21,7 @@ export const Purchases = () => {
   // Form State for Purchase Order
   const [supplierId, setSupplierId] = useState('');
   const [supplierName, setSupplierName] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('paid'); // 'paid', 'partial', 'due'
   const [paidAmount, setPaidAmount] = useState('0');
@@ -162,6 +163,7 @@ export const Purchases = () => {
         body: JSON.stringify({
           supplier_id: supplierId || null,
           supplier_name: supplierName || 'General Supplier',
+          purchase_date: purchaseDate,
           notes,
           payment_status: paymentStatus,
           paid_amount: computedPaid,
@@ -178,6 +180,7 @@ export const Purchases = () => {
         setSelectedProductId('');
         setSupplierId('');
         setSupplierName('');
+        setPurchaseDate(new Date().toISOString().slice(0, 10));
         setNotes('');
         setPaidAmount('0');
         setPaymentStatus('paid');
@@ -509,7 +512,7 @@ export const Purchases = () => {
 
             <form onSubmit={handleSubmitPurchase}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
                     <label className="form-label">Select Supplier</label>
                     <select
@@ -526,6 +529,17 @@ export const Purchases = () => {
                         <option key={s.id} value={s.id}>{s.name} ({s.company_name || 'Individual'})</option>
                       ))}
                     </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Purchase Date (ক্রয় করার তারিখ) *</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      required
+                      value={purchaseDate}
+                      onChange={(e) => setPurchaseDate(e.target.value)}
+                    />
                   </div>
 
                   <div className="form-group">
