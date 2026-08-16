@@ -130,6 +130,13 @@ exports.depositFund = async (req, res) => {
       [tenantId, account_id, depAmount, source_title, notes || null]
     );
 
+    // 3. Log into account_transactions so it immediately logs in Passbook Ledger
+    await connection.query(
+      `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+       VALUES (?, ?, 'Manual Cash Deposit', 0.00, ?, ?, ?, NOW())`,
+      [tenantId, account_id, depAmount, `DEP-${depRes.insertId}`, `${source_title}${notes ? ` - ${notes}` : ''}`]
+    );
+
     await connection.commit();
 
     res.status(201).json({
@@ -779,7 +786,7 @@ exports.getAccountStatement = async (req, res) => {
     let purchases = [];
     try {
       const [rows] = await db.query(
-        `SELECT 'Stock Purchase' as type, paid_amount as debit, 0 as credit, CONCAT('Purchase Order #', purchase_no, ' (Supplier: ', supplier_name, ')') as notes, purchase_date as date
+        `SELECT id, 'Stock Purchase' as type, paid_amount as debit, 0 as credit, CONCAT('Purchase Order #', purchase_no, ' (Supplier: ', supplier_name, ')') as notes, purchase_date as date
          FROM purchases WHERE account_id = ? AND tenant_id = ? AND paid_amount > 0`,
         [id, tenantId]
       );
@@ -789,7 +796,7 @@ exports.getAccountStatement = async (req, res) => {
     let posSales = [];
     try {
       const [rows] = await db.query(
-        `SELECT 'POS Retail Sale' as type, 0 as debit, total_amount as credit, CONCAT('POS Checkout #', invoice_no, ' (Customer: ', customer_name, ')') as notes, created_at as date
+        `SELECT id, 'POS Retail Sale' as type, 0 as debit, total_amount as credit, CONCAT('POS Checkout #', invoice_no, ' (Customer: ', customer_name, ')') as notes, created_at as date
          FROM sales WHERE tenant_id = ? AND total_amount > 0 AND (
            LOWER(payment_method) LIKE CONCAT('%', ?, '%') OR 
            (? = 'cash' AND (LOWER(payment_method) LIKE '%cash%' OR payment_method IS NULL)) OR
@@ -803,7 +810,7 @@ exports.getAccountStatement = async (req, res) => {
     let wholesaleSales = [];
     try {
       const [rows] = await db.query(
-        `SELECT 'Wholesale Sale' as type, 0 as debit, paid_amount as credit, CONCAT('Wholesale Order #', invoice_no, ' (Buyer: ', customer_name, ')') as notes, sale_date as date
+        `SELECT id, 'Wholesale Sale' as type, 0 as debit, paid_amount as credit, CONCAT('Wholesale Order #', invoice_no, ' (Buyer: ', customer_name, ')') as notes, sale_date as date
          FROM wholesale_sales WHERE account_id = ? AND tenant_id = ? AND paid_amount > 0`,
         [id, tenantId]
       );
@@ -813,7 +820,7 @@ exports.getAccountStatement = async (req, res) => {
     let denaPayments = [];
     try {
       const [rows] = await db.query(
-        `SELECT 'Dena Repayment' as type, lp.amount as debit, 0 as credit, CONCAT('Dena Repayment to ', l.party_name, ' (', l.title, ')') as notes, lp.payment_date as date
+        `SELECT lp.id, 'Dena Repayment' as type, lp.amount as debit, 0 as credit, CONCAT('Dena Repayment to ', l.party_name, ' (', l.title, ')') as notes, lp.payment_date as date
          FROM liability_payments lp
          JOIN liabilities l ON l.id = lp.liability_id
          WHERE lp.account_id = ? AND lp.tenant_id = ?`,
@@ -825,7 +832,7 @@ exports.getAccountStatement = async (req, res) => {
     let pawnaCollections = [];
     try {
       const [rows] = await db.query(
-        `SELECT 'Pawna Collection' as type, 0 as debit, rc.amount as credit, CONCAT('Pawna Collection from ', r.party_name, ' (', r.title, ')') as notes, rc.collection_date as date
+        `SELECT rc.id, 'Pawna Collection' as type, 0 as debit, rc.amount as credit, CONCAT('Pawna Collection from ', r.party_name, ' (', r.title, ')') as notes, rc.collection_date as date
          FROM receivable_collections rc
          JOIN receivables r ON r.id = rc.receivable_id
          WHERE rc.account_id = ? AND rc.tenant_id = ?`,
@@ -837,7 +844,7 @@ exports.getAccountStatement = async (req, res) => {
     let salaries = [];
     try {
       const [rows] = await db.query(
-        `SELECT 'Staff Salary' as type, net_salary_paid as debit, 0 as credit, CONCAT('Salary Disbursal to ', staff_name, ' (', month_year, ')') as notes, payment_date as date
+        `SELECT id, 'Staff Salary' as type, net_salary_paid as debit, 0 as credit, CONCAT('Salary Disbursal to ', staff_name, ' (', month_year, ')') as notes, payment_date as date
          FROM payroll WHERE account_id = ? AND tenant_id = ?`,
         [id, tenantId]
       );
@@ -847,7 +854,7 @@ exports.getAccountStatement = async (req, res) => {
     let investments = [];
     try {
       const [rows] = await db.query(
-        `SELECT CASE WHEN type = 'deposit' THEN 'Investor Capital Deposit' ELSE 'Investment Capital Return' END as type,
+        `SELECT it.id, CASE WHEN type = 'deposit' THEN 'Investor Capital Deposit' ELSE 'Investment Capital Return' END as type,
                 CASE WHEN type = 'repayment' THEN amount ELSE 0 END as debit,
                 CASE WHEN type = 'deposit' THEN amount ELSE 0 END as credit,
                 CONCAT(CASE WHEN type = 'deposit' THEN 'Capital Raised from ' ELSE 'Capital Returned to ' END, i.investor_name) as notes,
@@ -863,7 +870,7 @@ exports.getAccountStatement = async (req, res) => {
     let manualDeposits = [];
     try {
       const [rows] = await db.query(
-        `SELECT 'Manual Cash Deposit' as type, 0 as debit, amount as credit, CONCAT('Direct Fund Deposit: ', source_title, IF(notes IS NOT NULL AND notes != '', CONCAT(' - ', notes), '')) as notes, deposit_date as date
+        `SELECT id, 'Manual Cash Deposit' as type, 0 as debit, amount as credit, CONCAT('Direct Fund Deposit: ', source_title, IF(notes IS NOT NULL AND notes != '', CONCAT(' - ', notes), '')) as notes, deposit_date as date
          FROM manual_deposits WHERE account_id = ? AND tenant_id = ?`,
         [id, tenantId]
       );
@@ -873,28 +880,49 @@ exports.getAccountStatement = async (req, res) => {
     let accountTx = [];
     try {
       const [rows] = await db.query(
-        `SELECT type, debit, credit, notes, transaction_date as date
+        `SELECT id, type, debit, credit, notes, transaction_date as date
          FROM account_transactions WHERE account_id = ? AND tenant_id = ?`,
         [id, tenantId]
       );
       accountTx = rows;
     } catch (e) { console.error('Statement accountTx error:', e.message); }
 
-    const allTransactions = [
+    const rawAll = [
+      ...accountTx,
+      ...manualDeposits,
       ...purchases,
       ...posSales,
       ...wholesaleSales,
       ...denaPayments,
       ...pawnaCollections,
       ...salaries,
-      ...investments,
-      ...manualDeposits,
-      ...accountTx
-    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+      ...investments
+    ];
+
+    const seen = new Set();
+    const deduplicated = [];
+
+    for (const tx of rawAll) {
+      const dStr = tx.date ? new Date(tx.date).toISOString().slice(0, 19) : '';
+      const key = `${tx.type}_${Number(tx.debit || 0).toFixed(2)}_${Number(tx.credit || 0).toFixed(2)}_${dStr.slice(0, 10)}_${(tx.notes || '').slice(0, 20)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduplicated.push(tx);
+      }
+    }
+
+    deduplicated.sort((a, b) => {
+      const timeA = a.date ? new Date(a.date).getTime() : 0;
+      const timeB = b.date ? new Date(b.date).getTime() : 0;
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+      return (Number(b.id) || 0) - (Number(a.id) || 0);
+    });
 
     res.json({
       account,
-      transactions: allTransactions
+      transactions: deduplicated
     });
 
   } catch (error) {
