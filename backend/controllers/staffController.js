@@ -31,8 +31,9 @@ exports.createStaff = async (req, res) => {
       return res.status(400).json({ error: 'Name, Email, Password, and Role are required.' });
     }
 
-    if (!['manager', 'cashier'].includes(role)) {
-      return res.status(400).json({ error: 'Role must be either Manager or Cashier.' });
+    const allowedRoles = ['employee', 'staff', 'cashier', 'manager', 'executive', 'accountant', 'supervisor', 'delivery'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ error: `Role must be one of: ${allowedRoles.join(', ')}` });
     }
 
     // Check if tenant reached max staff limit for their plan

@@ -43,6 +43,16 @@ const ALL_MODULE_PERMISSIONS = [
   { key: 'support', label: '🎧 Support & Help Desk', shortLabel: '🎧 Support', desc: 'কাস্টমার সাপোর্ট টিকেট এক্সেস' }
 ];
 
+const STAFF_ROLE_OPTIONS = [
+  { value: 'employee', label: '👨‍💼 General Employee / Staff (সাধারণ কর্মী / কর্মকর্তা)' },
+  { value: 'cashier', label: '🛒 Cashier (ক্যাশিয়ার / বিক্রয়কর্মী)' },
+  { value: 'manager', label: '👔 Manager (ম্যানেজার / বিভাগীয় প্রধান)' },
+  { value: 'executive', label: '💼 Sales & Operations Executive (সেলস এক্সিকিউটিভ)' },
+  { value: 'accountant', label: '💵 Accountant / Finance Officer (হিসাবরক্ষক)' },
+  { value: 'supervisor', label: '📋 Store Supervisor (স্টোর সুপারভাইজার)' },
+  { value: 'delivery', label: '🚚 Delivery & Dispatch Agent (ডেলিভারি রাইডার / ম্যান)' }
+];
+
 export const StaffManager = () => {
   const { authFetch, currency, user, shopSettings } = useApp();
   const [activeTab, setActiveTab] = useState('employees'); // employees, attendance, leaves, payroll, salary-sheet, bonuses, loans, pf, idcards, users
@@ -198,7 +208,7 @@ export const StaffManager = () => {
   // User Accounts State
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [userFormData, setUserFormData] = useState({ name: '', email: '', password: '', role: 'cashier', permissions: ['inventory', 'pos', 'orders'] });
+  const [userFormData, setUserFormData] = useState({ name: '', email: '', password: '', role: 'employee', permissions: ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'] });
 
   // Fetch HR & System Data
   const fetchEmployees = async () => {
@@ -1779,9 +1789,20 @@ export const StaffManager = () => {
                       <td><strong>{u.name}</strong></td>
                       <td>{u.email}</td>
                       <td>
-                        <span className={`badge ${isOwner ? 'badge-primary' : 'badge-secondary'}`}>
-                          {u.role.toUpperCase()}
-                        </span>
+                        {isOwner ? (
+                          <span className="badge badge-primary">👑 {u.role.toUpperCase()}</span>
+                        ) : (
+                          <select
+                            className="form-select"
+                            style={{ fontSize: '11px', padding: '3px 8px', width: 'auto', fontWeight: '700', borderRadius: '6px' }}
+                            value={u.role || 'employee'}
+                            onChange={(e) => handleUpdateUserRole(u, e.target.value)}
+                          >
+                            {STAFF_ROLE_OPTIONS.map(r => (
+                              <option key={r.value} value={r.value}>{r.label.split('(')[0]}</option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                       <td>
                         {isOwner ? (
@@ -2711,14 +2732,15 @@ export const StaffManager = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Role *</label>
+                  <label className="form-label">Role (দায়িত্ব / ভূমিকা) *</label>
                   <select
                     className="form-select"
-                    value={userFormData.role}
+                    value={userFormData.role || 'employee'}
                     onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value })}
                   >
-                    <option value="cashier">Cashier (ক্যাশিয়ার / বিক্রয়কর্মী)</option>
-                    <option value="manager">Manager (ম্যানেজার)</option>
+                    {STAFF_ROLE_OPTIONS.map(r => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
                   </select>
                 </div>
 
