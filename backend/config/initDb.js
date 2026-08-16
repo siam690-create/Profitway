@@ -76,6 +76,9 @@ async function autoMigrate() {
     await addColumnIfNotExists('employees', 'present_address', 'TEXT NULL');
     await addColumnIfNotExists('employees', 'permanent_address', 'TEXT NULL');
 
+    // Users table permissions column
+    await addColumnIfNotExists('users', 'permissions', 'TEXT NULL');
+
     // Normalize collations to utf8mb4_unicode_ci to prevent collation mismatch errors
     try {
       await db.query(`ALTER TABLE plans CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);

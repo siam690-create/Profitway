@@ -3,7 +3,13 @@ const db = require('../backend/config/db');
 
 async function checkCollations() {
   try {
-    console.log('Fixing collations...');
+    console.log('Fixing collations & adding permissions column...');
+    try {
+      await db.query("ALTER TABLE users ADD COLUMN permissions TEXT NULL");
+      console.log('Added permissions column to users table.');
+    } catch (e) {
+      console.log('Note on permissions column:', e.message);
+    }
     await db.query("ALTER TABLE plans MODIFY code VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL");
     await db.query("ALTER TABLE tenants MODIFY subscription_status VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     await db.query("ALTER TABLE employees MODIFY email VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
