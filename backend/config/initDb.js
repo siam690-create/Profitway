@@ -76,6 +76,16 @@ async function autoMigrate() {
     await addColumnIfNotExists('employees', 'present_address', 'TEXT NULL');
     await addColumnIfNotExists('employees', 'permanent_address', 'TEXT NULL');
 
+    // Normalize collations to utf8mb4_unicode_ci to prevent collation mismatch errors
+    try {
+      await db.query(`ALTER TABLE plans CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+      await db.query(`ALTER TABLE employees CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+      await db.query(`ALTER TABLE tenants CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+      await db.query(`ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+    } catch (collationErr) {
+      console.warn('Collation normalization note:', collationErr.message);
+    }
+
     // 6. Multi-Store API Keys table
     await db.query(`
       CREATE TABLE IF NOT EXISTS store_api_keys (

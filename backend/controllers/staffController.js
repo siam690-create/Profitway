@@ -40,7 +40,7 @@ exports.createStaff = async (req, res) => {
     const [tenantRows] = await db.query(
       `SELECT t.*, p.max_staff 
        FROM tenants t
-       LEFT JOIN plans p ON p.code = t.subscription_status
+       LEFT JOIN plans p ON p.code = t.subscription_status COLLATE utf8mb4_unicode_ci
        WHERE t.id = ?`,
       [tenantId]
     );
