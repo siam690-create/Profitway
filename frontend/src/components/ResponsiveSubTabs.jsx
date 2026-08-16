@@ -31,7 +31,7 @@ export const ResponsiveSubTabs = ({ tabs = [], activeTab, onSelectTab, extraActi
       setIsMobile(width < 768);
 
       if (width < 768) {
-        setVisibleCount(0); // All items go into Three-Tier Menu on mobile
+        setVisibleCount(0); // All items go into More Menu on mobile
         return;
       }
 
@@ -39,9 +39,10 @@ export const ResponsiveSubTabs = ({ tabs = [], activeTab, onSelectTab, extraActi
       if (containerRef.current) {
         const containerWidth = containerRef.current.offsetWidth;
 
-        // Estimate average tab width (~140px)
-        const avgTabWidth = 140;
-        const availableSpace = containerWidth - 140; // 140px reserved for "More Menu" & gap
+        // Reserve space for "More" button (~130px) and use realistic tab width (~165px) so 1-2 extra tabs go into More menu
+        const avgTabWidth = 165;
+        const reservedSpace = 130;
+        const availableSpace = containerWidth - reservedSpace;
         const maxVisible = Math.max(1, Math.floor(availableSpace / avgTabWidth));
 
         if (maxVisible >= tabs.length) {
@@ -106,7 +107,7 @@ export const ResponsiveSubTabs = ({ tabs = [], activeTab, onSelectTab, extraActi
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Menu size={18} />
-              <span>Three-Tier Menu: {activeTabObj ? activeTabObj.label : 'Select View'}</span>
+              <span>More: {activeTabObj ? activeTabObj.label : 'Select View'}</span>
             </div>
             <ChevronDown size={16} style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
           </button>
@@ -179,7 +180,7 @@ export const ResponsiveSubTabs = ({ tabs = [], activeTab, onSelectTab, extraActi
         </div>
       ) : (
         /* 💻 DESKTOP & TABLET VIEW: Visible Tabs + Three-Tier Overflow Menu */
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap', flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap', flex: 1, minWidth: 0, overflow: 'hidden' }}>
           {visibleTabs.map(tab => {
             const isActive = activeTab === tab.id;
             const Icon = tab.icon;
@@ -208,9 +209,9 @@ export const ResponsiveSubTabs = ({ tabs = [], activeTab, onSelectTab, extraActi
             );
           })}
 
-          {/* Three-Tier Overflow Dropdown Button (☰ More) */}
+          {/* Overflow Dropdown Button (☰ More) */}
           {hiddenTabs.length > 0 && (
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -228,7 +229,7 @@ export const ResponsiveSubTabs = ({ tabs = [], activeTab, onSelectTab, extraActi
                 }}
               >
                 <Menu size={16} />
-                <span>Three-Tier Menu ({hiddenTabs.length})</span>
+                <span>More ({hiddenTabs.length})</span>
                 <ChevronDown size={14} style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
               </button>
 
