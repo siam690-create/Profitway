@@ -595,21 +595,40 @@ export const StaffManager = () => {
     } catch (err) { alert(`Error: ${err.message}`); }
   };
 
-  const handleCreateUserAccount = async (e) => {
+  const handleSaveUserAccount = async (e) => {
     e.preventDefault();
     try {
-      const res = await authFetch('/api/staff', {
-        method: 'POST',
+      const url = editingUser ? `/api/staff/${editingUser.id}` : '/api/staff';
+      const method = editingUser ? 'PATCH' : 'POST';
+      const res = await authFetch(url, {
+        method,
         body: JSON.stringify(userFormData)
       });
       const data = await res.json();
       if (res.ok) {
         setShowUserModal(false);
-        setUserFormData({ name: '', email: '', password: '', role: 'cashier', permissions: ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'] });
+        setEditingUser(null);
+        setUserFormData({ name: '', email: '', password: '', role: 'employee', permissions: ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'] });
         fetchUsers();
-        alert('Staff login account created successfully!');
+        alert(editingUser ? 'Staff login credentials updated successfully!' : 'Staff login account created successfully!');
       } else alert(`Error: ${data.error}`);
     } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const handleDeleteUserAccount = async (userObj) => {
+    if (!window.confirm(`Are you sure you want to delete login credentials for "${userObj.name}" (${userObj.email})?`)) return;
+    try {
+      const res = await authFetch(`/api/staff/${userObj.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        fetchUsers();
+        alert(data.message || 'Staff login account deleted successfully!');
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    }
   };
 
   const handleToggleUserPermission = async (userObj, permKey) => {
@@ -1762,7 +1781,14 @@ export const StaffManager = () => {
               <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Shop Admin & Staff Login Accounts</h3>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Manage logins and toggle individual feature access permissions per staff member.</p>
             </div>
-            <button onClick={() => setShowUserModal(true)} className="btn btn-primary">
+            <button
+              onClick={() => {
+                setEditingUser(null);
+                setUserFormData({ name: '', email: '', password: '', role: 'employee', permissions: ['inventory', 'pos', 'orders', 'chat', 'attendance', 'tasks'] });
+                setShowUserModal(true);
+              }}
+              className="btn btn-primary"
+            >
               <UserPlus size={15} />
               <span>+ Create Staff Login Account</span>
             </button>
@@ -1777,6 +1803,7 @@ export const StaffManager = () => {
                   <th>Role</th>
                   <th>Granular Module Permissions</th>
                   <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1827,6 +1854,38 @@ export const StaffManager = () => {
                       </td>
                       <td>
                         <span className="badge badge-success">Active</span>
+                      </td>
+                      <td>
+                        {!isOwner && (
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              onClick={() => {
+                                setEditingUser(u);
+                                setUserFormData({
+                                  name: u.name || '',
+                                  email: u.email || '',
+                                  password: '',
+                                  role: u.role || 'employee',
+                                  permissions: Array.isArray(u.permissions) ? u.permissions : []
+                                });
+                                setShowUserModal(true);
+                              }}
+                              className="btn btn-secondary btn-icon btn-sm"
+                              title="Edit Credentials & Change Password"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteUserAccount(u)}
+                              className="btn btn-secondary btn-icon btn-sm"
+                              title="Delete Login Account"
+                              style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -2658,42 +2717,49 @@ export const StaffManager = () => {
         </div>
       )}
 
-      {/* MODAL: CREATE STAFF LOGIN ACCOUNT */}
+      {/* MODAL: CREATE / EDIT STAFF LOGIN ACCOUNT & PASSWORD */}
       {showUserModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '540px' }}>
             <div className="modal-header">
-              <h3>Create Staff Login Credentials</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <KeyRound size={20} color="var(--accent-primary)" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>
+                  {editingUser ? 'Edit Staff Credentials & Password' : 'Create Staff Login Credentials'}
+                </h3>
+              </div>
               <button onClick={() => setShowUserModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
             </div>
-            <form onSubmit={handleCreateUserAccount}>
+            <form onSubmit={handleSaveUserAccount}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">Select Employee (স্টাফ সিলেক্ট করুন) *</label>
-                  <select
-                    className="form-select"
-                    value={userFormData.employee_id || ''}
-                    onChange={(e) => {
-                      const selectedId = e.target.value;
-                      const selectedEmp = employeesList.find(emp => Number(emp.id) === Number(selectedId));
-                      if (selectedEmp) {
-                        setUserFormData(prev => ({
-                          ...prev,
-                          employee_id: selectedEmp.id,
-                          name: selectedEmp.name,
-                          email: selectedEmp.email || prev.email
-                        }));
-                      } else {
-                        setUserFormData(prev => ({ ...prev, employee_id: '' }));
-                      }
-                    }}
-                  >
-                    <option value="">Choose Staff Profile from Directory...</option>
-                    {employeesList.map(e => (
-                      <option key={e.id} value={e.id}>{e.name} ({e.employee_code} - {e.designation})</option>
-                    ))}
-                  </select>
-                </div>
+                {!editingUser && (
+                  <div className="form-group">
+                    <label className="form-label">Select Employee (স্টাফ সিলেক্ট করুন)</label>
+                    <select
+                      className="form-select"
+                      value={userFormData.employee_id || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        const selectedEmp = employeesList.find(emp => Number(emp.id) === Number(selectedId));
+                        if (selectedEmp) {
+                          setUserFormData(prev => ({
+                            ...prev,
+                            employee_id: selectedEmp.id,
+                            name: selectedEmp.name,
+                            email: selectedEmp.email || prev.email
+                          }));
+                        } else {
+                          setUserFormData(prev => ({ ...prev, employee_id: '' }));
+                        }
+                      }}
+                    >
+                      <option value="">Choose Staff Profile from Directory...</option>
+                      {employeesList.map(e => (
+                        <option key={e.id} value={e.id}>{e.name} ({e.employee_code} - {e.designation})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label className="form-label">Full Name *</label>
@@ -2720,12 +2786,14 @@ export const StaffManager = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Password *</label>
+                  <label className="form-label">
+                    {editingUser ? 'New Password (নতুন পাসওয়ার্ড - অপরিবর্তিত রাখতে খালি রাখুন)' : 'Password *'}
+                  </label>
                   <input
                     type="password"
                     className="form-input"
-                    required
-                    placeholder="At least 6 characters"
+                    required={!editingUser}
+                    placeholder={editingUser ? 'Leave blank to keep current password' : 'At least 6 characters'}
                     value={userFormData.password}
                     onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
                   />
@@ -2803,7 +2871,9 @@ export const StaffManager = () => {
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowUserModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">Create Staff Account</button>
+                <button type="submit" className="btn btn-primary">
+                  {editingUser ? 'Save & Update Credentials' : 'Create Staff Account'}
+                </button>
               </div>
             </form>
           </div>

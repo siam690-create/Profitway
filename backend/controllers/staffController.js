@@ -85,32 +85,63 @@ exports.updateStaff = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
-    const { role, is_active, permissions } = req.body;
+    const { name, email, password, role, is_active, permissions } = req.body;
 
-    const [existing] = await db.query('SELECT id, role FROM users WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    const [existing] = await db.query('SELECT id, role, email FROM users WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (existing.length === 0) {
       return res.status(404).json({ error: 'Staff account not found.' });
     }
 
-    if (existing[0].role === 'owner') {
-      return res.status(400).json({ error: 'Shop owner account cannot be edited or deactivated.' });
+    if (existing[0].role === 'owner' && req.user.userId !== existing[0].id) {
+      return res.status(400).json({ error: 'Shop owner account cannot be edited here.' });
     }
 
-    const permString = (permissions && Array.isArray(permissions)) ? JSON.stringify(permissions) : undefined;
-
-    if (permissions !== undefined && role) {
-      await db.query(
-        'UPDATE users SET role = ?, permissions = ?, is_active = ? WHERE id = ? AND tenant_id = ?',
-        [role, permString, is_active !== undefined ? (is_active ? 1 : 0) : 1, id, tenantId]
-      );
-    } else if (is_active !== undefined) {
-      await db.query(
-        'UPDATE users SET is_active = ? WHERE id = ? AND tenant_id = ?',
-        [is_active ? 1 : 0, id, tenantId]
-      );
+    // Check email uniqueness if email changed
+    if (email && email !== existing[0].email) {
+      const [emailCheck] = await db.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]);
+      if (emailCheck.length > 0) {
+        return res.status(400).json({ error: 'An account with this email address already exists.' });
+      }
     }
 
-    res.json({ message: 'Staff status updated successfully' });
+    let updates = [];
+    let params = [];
+
+    if (name) {
+      updates.push('name = ?');
+      params.push(name);
+    }
+    if (email) {
+      updates.push('email = ?');
+      params.push(email);
+    }
+    if (password && password.trim().length >= 6) {
+      const hashedPassword = await hashPassword(password);
+      updates.push('password_hash = ?');
+      params.push(hashedPassword);
+    }
+    if (role && existing[0].role !== 'owner') {
+      updates.push('role = ?');
+      params.push(role);
+    }
+    if (permissions !== undefined) {
+      const permString = Array.isArray(permissions) ? JSON.stringify(permissions) : null;
+      updates.push('permissions = ?');
+      params.push(permString);
+    }
+    if (is_active !== undefined && existing[0].role !== 'owner') {
+      updates.push('is_active = ?');
+      params.push(is_active ? 1 : 0);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields provided for update.' });
+    }
+
+    params.push(id, tenantId);
+    await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ?`, params);
+
+    res.json({ message: 'Staff login account updated successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
