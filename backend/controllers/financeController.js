@@ -335,17 +335,24 @@ exports.payLiability = async (req, res) => {
 
     await connection.beginTransaction();
 
-    // Fetch pending liabilities for party or by ID
-    let pendingLiabilities = [];
-    if (party_name) {
-      const [rows] = await connection.query(
-        `SELECT * FROM liabilities WHERE tenant_id = ? AND party_name = ? AND status != 'paid' ORDER BY created_at ASC FOR UPDATE`,
-        [tenantId, party_name]
+    // Fetch all pending/partially paid liabilities for party or by ID
+    let targetPartyName = party_name;
+    if (!targetPartyName && id) {
+      const [pRows] = await connection.query(
+        'SELECT party_name FROM liabilities WHERE id = ? AND tenant_id = ?',
+        [id, tenantId]
       );
-      pendingLiabilities = rows;
+      if (pRows.length > 0) targetPartyName = pRows[0].party_name;
     }
 
-    if (pendingLiabilities.length === 0 && id) {
+    let pendingLiabilities = [];
+    if (targetPartyName) {
+      const [rows] = await connection.query(
+        `SELECT * FROM liabilities WHERE tenant_id = ? AND party_name = ? AND status != 'paid' ORDER BY created_at ASC FOR UPDATE`,
+        [tenantId, targetPartyName]
+      );
+      pendingLiabilities = rows;
+    } else if (id) {
       const [rows] = await connection.query(
         'SELECT * FROM liabilities WHERE id = ? AND tenant_id = ? FOR UPDATE',
         [id, tenantId]
@@ -353,9 +360,19 @@ exports.payLiability = async (req, res) => {
       pendingLiabilities = rows;
     }
 
-    if (pendingLiabilities.length === 0) throw new Error('No pending Dena liability record found.');
+    if (pendingLiabilities.length === 0) throw new Error('No pending Dena liability record found for this supplier.');
 
-    // 1. Deduct Amount from Selected Account
+    const party = targetPartyName || pendingLiabilities[0].party_name;
+
+    // Calculate Previous Total Due for this Party across all liabilities
+    const [allLiabRows] = await connection.query(
+      `SELECT SUM(total_amount - amount_paid) as total_due FROM liabilities WHERE tenant_id = ? AND party_name = ?`,
+      [tenantId, party]
+    );
+    const previousTotalDue = Number(allLiabRows[0]?.total_due || 0);
+
+    // 1. Deduct Amount from Selected Account if account_id is provided
+    let accountName = 'Cash / Default';
     if (account_id) {
       const [accRows] = await connection.query(
         'SELECT balance, name FROM finance_accounts WHERE id = ? AND tenant_id = ? FOR UPDATE',
@@ -366,11 +383,15 @@ exports.payLiability = async (req, res) => {
         throw new Error(`Insufficient funds in "${accRows[0].name}". Available: ৳${accRows[0].balance}, Paying: ৳${payAmt}`);
       }
 
+      accountName = accRows[0].name;
+
       await connection.query(
         'UPDATE finance_accounts SET balance = balance - ? WHERE id = ? AND tenant_id = ?',
         [payAmt, account_id, tenantId]
       );
     }
+
+    const voucherNo = `DENA-PAY-${Date.now()}`;
 
     // 2. Distribute payment across pending liabilities
     let remainingToPay = payAmt;
@@ -400,10 +421,31 @@ exports.payLiability = async (req, res) => {
       remainingToPay -= allocation;
     }
 
+    // 3. Log into account_transactions for passbook ledger
+    if (account_id) {
+      await connection.query(
+        `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+         VALUES (?, ?, 'Dena Repayment', ?, 0.00, ?, ?, NOW())`,
+        [tenantId, account_id, payAmt, voucherNo, `Dena Repayment to ${party}${notes ? ` - ${notes}` : ''}`]
+      );
+    }
+
     await connection.commit();
 
+    const remainingTotalDue = Math.max(0, previousTotalDue - payAmt);
+
     res.json({
-      message: `Dena payment of ৳${payAmt.toFixed(2)} processed successfully!`
+      message: `Dena payment of ৳${payAmt.toFixed(2)} processed successfully!`,
+      receipt: {
+        voucher_no: voucherNo,
+        party_name: party,
+        payment_amount: payAmt,
+        previous_due: Number(previousTotalDue.toFixed(2)),
+        remaining_due: Number(remainingTotalDue.toFixed(2)),
+        account_name: accountName,
+        payment_date: new Date().toISOString(),
+        notes: notes || null
+      }
     });
 
   } catch (error) {

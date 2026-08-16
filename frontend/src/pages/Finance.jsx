@@ -90,6 +90,7 @@ export const Finance = () => {
   const [pawnaAuditData, setPawnaAuditData] = useState(null);
   const [accountStatementData, setAccountStatementData] = useState(null);
   const [investAuditData, setInvestAuditData] = useState(null);
+  const [denaReceiptModalData, setDenaReceiptModalData] = useState(null);
 
   // Form States
   const [accForm, setAccForm] = useState({ name: '', account_type: 'bank', account_number: '', initial_balance: '' });
@@ -407,7 +408,11 @@ export const Finance = () => {
         setPayDenaAmt('');
         setPayDenaAccId('');
         fetchFinance();
-        alert(data.message || 'Dena payment recorded & account balance updated!');
+        if (data.receipt) {
+          setDenaReceiptModalData(data.receipt);
+        } else {
+          alert(data.message || 'Dena payment recorded & account balance updated!');
+        }
       } else {
         alert(`Error: ${data.error}`);
       }
@@ -2039,6 +2044,83 @@ export const Finance = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Dena Payment Voucher & Receipt Modal */}
+      {denaReceiptModalData && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '540px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle size={20} color="var(--success)" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Dena Payment Receipt (দেনা পেমেন্ট ইনভয়েস)</h3>
+              </div>
+              <button onClick={() => setDenaReceiptModalData(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="glass-card" style={{ padding: '20px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
+                <div style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: '800', color: 'var(--accent-primary)', letterSpacing: '1px' }}>
+                  {tenant?.name || 'Profitway Business POS'}
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '800', marginTop: '4px' }}>Dena Payment Voucher</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Voucher #: {denaReceiptModalData.voucher_no}</div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '14px 0' }} />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>Supplier / Party Name:</span>
+                    <strong>{denaReceiptModalData.party_name}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>Payment Date & Time:</span>
+                    <strong>{formatDateTimeBD(denaReceiptModalData.payment_date)}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>Paid From Account:</span>
+                    <strong>{denaReceiptModalData.account_name}</strong>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '16px', background: 'var(--bg-primary)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Previous Total Dena (পূর্বের দেনা):</span>
+                    <strong style={{ color: 'var(--danger)' }}>{currency}{Number(denaReceiptModalData.previous_due).toFixed(2)}</strong>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', background: 'rgba(16, 185, 129, 0.1)', padding: '8px 10px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                    <span style={{ fontWeight: '700', color: 'var(--success)' }}>Payment Paid (আজকে পরিশোধ):</span>
+                    <strong style={{ fontWeight: '800', color: 'var(--success)' }}>-{currency}{Number(denaReceiptModalData.payment_amount).toFixed(2)}</strong>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', paddingTop: '6px' }}>
+                    <span style={{ fontWeight: '800' }}>Remaining Total Dena (বর্তমান অবশিষ্ট দেনা):</span>
+                    <strong style={{ fontWeight: '800', color: Number(denaReceiptModalData.remaining_due) > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                      {currency}{Number(denaReceiptModalData.remaining_due).toFixed(2)}
+                    </strong>
+                  </div>
+                </div>
+
+                {denaReceiptModalData.notes && (
+                  <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    Notes: {denaReceiptModalData.notes}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <button onClick={() => window.print()} className="btn btn-secondary">
+                <Printer size={16} />
+                <span>Print Receipt</span>
+              </button>
+              <button onClick={() => setDenaReceiptModalData(null)} className="btn btn-primary">
+                Done / Close
+              </button>
             </div>
           </div>
         </div>

@@ -741,17 +741,34 @@ export const Purchases = () => {
       {/* Purchase Details Modal */}
       {selectedPurchaseDetails && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '620px' }}>
+          <div className="modal-content" style={{ maxWidth: '640px' }}>
             <div className="modal-header">
-              <h3>Purchase Order #{selectedPurchaseDetails.purchase_no}</h3>
-              <button onClick={() => setSelectedPurchaseDetails(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Truck size={20} color="var(--accent-primary)" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Purchase Order #{selectedPurchaseDetails.purchase_no}</h3>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => window.print()} className="btn btn-secondary btn-sm">
+                  <Printer size={15} />
+                  <span>Print Invoice</span>
+                </button>
+                <button onClick={() => setSelectedPurchaseDetails(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+              </div>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px', fontSize: '13px' }}>
                 <div>Supplier: <strong>{selectedPurchaseDetails.supplier_name}</strong></div>
-                <div>Total Cost: <strong style={{ color: 'var(--danger)' }}>{currency}{Number(selectedPurchaseDetails.total_amount).toFixed(2)}</strong></div>
-                <div>Paid: <strong style={{ color: 'var(--success)' }}>{currency}{Number(selectedPurchaseDetails.paid_amount || selectedPurchaseDetails.total_amount).toFixed(2)}</strong></div>
-                <div>Due Dena: <strong style={{ color: 'var(--danger)' }}>{currency}{Number(selectedPurchaseDetails.due_amount || 0).toFixed(2)}</strong></div>
+                <div>Purchase Date: <strong>{new Date(selectedPurchaseDetails.purchase_date || selectedPurchaseDetails.created_at).toLocaleDateString()}</strong></div>
+                <div>Purchase Cost: <strong style={{ color: 'var(--danger)' }}>{currency}{Number(selectedPurchaseDetails.total_amount).toFixed(2)}</strong></div>
+                <div>Cash Paid: <strong style={{ color: 'var(--success)' }}>{currency}{Number(selectedPurchaseDetails.paid_amount || 0).toFixed(2)}</strong></div>
+                <div>Order Due: <strong style={{ color: 'var(--danger)' }}>{currency}{Number(selectedPurchaseDetails.due_amount || 0).toFixed(2)}</strong></div>
+                <div>Previous Supplier Dena (পূর্বের দেনা): <strong style={{ color: 'var(--danger)' }}>{currency}{Number(selectedPurchaseDetails.previous_due || 0).toFixed(2)}</strong></div>
+                <div style={{ gridColumn: 'span 2', background: 'var(--bg-primary)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '4px' }}>
+                  <span style={{ fontWeight: '700' }}>Total Cumulative Supplier Dena (সর্বমোট বকেয়া দেনা):</span>
+                  <strong style={{ float: 'right', fontSize: '16px', color: Number(selectedPurchaseDetails.total_cumulative_due || selectedPurchaseDetails.due_amount) > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                    {currency}{Number(selectedPurchaseDetails.total_cumulative_due !== undefined ? selectedPurchaseDetails.total_cumulative_due : selectedPurchaseDetails.due_amount).toFixed(2)}
+                  </strong>
+                </div>
               </div>
 
               <table className="data-table">

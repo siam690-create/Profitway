@@ -200,14 +200,28 @@ exports.getPurchaseById = async (req, res) => {
 
     if (purchases.length === 0) return res.status(404).json({ error: 'Purchase order not found.' });
 
+    const purchase = purchases[0];
+
     const [items] = await db.query(
       `SELECT * FROM purchase_items WHERE purchase_id = ?`,
       [id]
     );
 
+    // Calculate cumulative supplier due metrics
+    const [liabRows] = await db.query(
+      `SELECT SUM(total_amount - amount_paid) as total_due FROM liabilities WHERE tenant_id = ? AND party_name = ?`,
+      [tenantId, purchase.supplier_name]
+    );
+
+    const totalNetDue = Number(liabRows[0]?.total_due || 0);
+    const currentPurchaseDue = Number(purchase.due_amount || 0);
+    const previousDue = Math.max(0, totalNetDue - currentPurchaseDue);
+
     res.json({
-      ...purchases[0],
-      items
+      ...purchase,
+      items,
+      previous_due: Number(previousDue.toFixed(2)),
+      total_cumulative_due: Number(totalNetDue.toFixed(2))
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
