@@ -206,8 +206,9 @@ exports.getProductAnalytics = async (req, res) => {
 
     const resellerGrossProfit = Number(wholesaleSummary[0].wholesale_profit || 0);
 
+    const netDelivProfitHarmonized = grossDeliveryProfit - returnChargesCost;
     // NET REAL PROFIT = Realized Retail Product Profit + Net Delivery Profit + Reseller Profit - Paid Ads - Return Courier Charges - General Expenses
-    const netRealProfit = netRealizedGrossProfit + (grossDeliveryProfit - returnedDeliveryProfitReversal) + resellerGrossProfit - paidAdsCost - returnChargesCost - otherExpensesCost;
+    const netRealProfit = netRealizedGrossProfit + netDelivProfitHarmonized + resellerGrossProfit - paidAdsCost - returnChargesCost - otherExpensesCost;
 
     // 8. Itemized Product-wise Breakdown
     let salesAggParams = [tenantId];
