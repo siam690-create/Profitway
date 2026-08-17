@@ -527,35 +527,43 @@ export const PaidAds = () => {
                       {new Date(ad.ad_date).toLocaleDateString()}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {!ad.product_id || ad.product_name?.includes('General') ? (
-                          <button
-                            onClick={() => {
-                              setLinkingAdRecord(ad);
-                              setLinkingProductId(ad.product_id ? String(ad.product_id) : '');
-                            }}
-                            className="btn btn-secondary btn-xs"
-                            style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: '1px solid rgba(234, 179, 8, 0.4)', fontWeight: '700', gap: '4px' }}
-                            title="Manually link this ad spend to a specific inventory product"
-                          >
-                            <Link2 size={12} />
-                            <span>🔗 Link Product ({ad.product_name || 'Unassigned'})</span>
-                          </button>
-                        ) : (
-                          <>
-                            <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{ad.product_name}</strong>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {!ad.product_id || ad.product_name?.includes('General') ? (
                             <button
                               onClick={() => {
                                 setLinkingAdRecord(ad);
-                                setLinkingProductId(String(ad.product_id));
+                                setLinkingProductId(ad.product_id ? String(ad.product_id) : '');
                               }}
-                              className="btn btn-secondary btn-icon btn-xs"
-                              title="Change / re-map linked product"
-                              style={{ padding: '2px 4px' }}
+                              className="btn btn-secondary btn-xs"
+                              style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: '1px solid rgba(234, 179, 8, 0.4)', fontWeight: '700', gap: '4px' }}
+                              title="Manually link this ad spend to a specific inventory product"
                             >
-                              <Link2 size={12} color="var(--accent-primary)" />
+                              <Link2 size={12} />
+                              <span>🔗 Link Product ({ad.product_name || 'Unassigned'})</span>
                             </button>
-                          </>
+                          ) : (
+                            <>
+                              <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{ad.product_name}</strong>
+                              <button
+                                onClick={() => {
+                                  setLinkingAdRecord(ad);
+                                  setLinkingProductId(String(ad.product_id));
+                                }}
+                                className="btn btn-secondary btn-icon btn-xs"
+                                title="Change / re-map linked product"
+                                style={{ padding: '2px 4px' }}
+                              >
+                                <Link2 size={12} color="var(--accent-primary)" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        {ad.meta_campaign_name && (
+                          <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '600' }}>
+                            📢 {ad.meta_campaign_name}
+                          </span>
                         )}
                       </div>
                     </td>
@@ -1099,12 +1107,17 @@ export const PaidAds = () => {
 
             <form onSubmit={handleSaveProductLink}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '12px' }}>
-                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Campaign Details:</span>
-                  <strong style={{ color: 'var(--text-primary)', fontSize: '13px', display: 'block', marginTop: '2px' }}>
-                    {linkingAdRecord.notes || linkingAdRecord.product_name || 'Meta Ad Campaign'}
+                <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--accent-primary)', fontSize: '12px' }}>
+                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Facebook / Meta Campaign Name:</span>
+                  <strong style={{ color: '#38bdf8', fontSize: '14px', display: 'block', marginTop: '2px', wordBreak: 'break-word' }}>
+                    📢 {linkingAdRecord.meta_campaign_name || linkingAdRecord.notes || linkingAdRecord.product_name || 'Meta Ad Campaign'}
                   </strong>
-                  <span style={{ fontSize: '11px', color: 'var(--accent-primary)', marginTop: '4px', display: 'block' }}>
+                  {linkingAdRecord.ad_account_name && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                      Ad Account: 💳 {linkingAdRecord.ad_account_name}
+                    </span>
+                  )}
+                  <span style={{ fontSize: '11px', color: 'var(--accent-primary)', marginTop: '4px', display: 'block', fontWeight: '700' }}>
                     Ad Date: {new Date(linkingAdRecord.ad_date).toLocaleDateString()} • Spend: ${Number(linkingAdRecord.amount_usd).toFixed(2)} ({currency}{Number(linkingAdRecord.total_bdt_cost).toFixed(2)})
                   </span>
                 </div>
