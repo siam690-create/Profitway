@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, Package } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 
 export const ProductSelectSearch = ({ 
   products = [], 
@@ -7,15 +7,21 @@ export const ProductSelectSearch = ({
   onSelect, 
   placeholder = "Type product name or SKU to search...",
   allowAllOption = false,
-  allOptionLabel = "📦 All Products",
+  allOptionLabel = "📦 All Target Products",
   customOptions = []
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
+  const isTypingRef = useRef(false);
 
-  // Sync selected product name into search input when selectedId changes
+  // Sync selected product label into search input when selectedId changes externally
   useEffect(() => {
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      return;
+    }
+
     if (selectedId) {
       if (selectedId === 'all') {
         setSearchTerm(allOptionLabel);
@@ -32,10 +38,10 @@ export const ProductSelectSearch = ({
           }
         }
       }
-    } else {
+    } else if (!allowAllOption) {
       setSearchTerm('');
     }
-  }, [selectedId, products, allOptionLabel, customOptions]);
+  }, [selectedId, products, allOptionLabel, customOptions, allowAllOption]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -49,16 +55,28 @@ export const ProductSelectSearch = ({
   }, []);
 
   const filteredProducts = products.filter(p => {
-    if (!searchTerm || String(p.id) === String(selectedId) || searchTerm === allOptionLabel) return true;
-    const term = searchTerm.toLowerCase();
+    if (!searchTerm) return true;
+    if (searchTerm === allOptionLabel) return true;
+    const term = searchTerm.toLowerCase().trim();
     const nameMatch = p.name ? p.name.toLowerCase().includes(term) : false;
     const skuMatch = p.sku ? p.sku.toLowerCase().includes(term) : false;
     return nameMatch || skuMatch;
   });
 
   const handleClear = () => {
+    isTypingRef.current = false;
     setSearchTerm('');
     onSelect(allowAllOption ? 'all' : '');
+    setIsOpen(true);
+  };
+
+  const handleInputChange = (e) => {
+    isTypingRef.current = true;
+    const val = e.target.value;
+    setSearchTerm(val);
+    if (selectedId) {
+      onSelect('');
+    }
     setIsOpen(true);
   };
 
@@ -72,11 +90,7 @@ export const ProductSelectSearch = ({
           placeholder={placeholder}
           value={searchTerm}
           onFocus={() => setIsOpen(true)}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            if (selectedId) onSelect('');
-            setIsOpen(true);
-          }}
+          onChange={handleInputChange}
           style={{
             paddingLeft: '34px',
             paddingRight: searchTerm ? '30px' : '10px',
@@ -119,7 +133,7 @@ export const ProductSelectSearch = ({
             background: 'var(--bg-primary)',
             border: '1px solid var(--accent-primary)',
             borderRadius: '10px',
-            maxHeight: '260px',
+            maxHeight: '240px',
             overflowY: 'auto',
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
             marginTop: '4px'
@@ -129,6 +143,7 @@ export const ProductSelectSearch = ({
           {allowAllOption && (
             <div
               onClick={() => {
+                isTypingRef.current = false;
                 onSelect('all');
                 setSearchTerm(allOptionLabel);
                 setIsOpen(false);
@@ -152,6 +167,7 @@ export const ProductSelectSearch = ({
             <div
               key={opt.id}
               onClick={() => {
+                isTypingRef.current = false;
                 onSelect(opt.id);
                 setSearchTerm(opt.name);
                 setIsOpen(false);
@@ -174,6 +190,7 @@ export const ProductSelectSearch = ({
           {!allowAllOption && customOptions.length === 0 && (
             <div
               onClick={() => {
+                isTypingRef.current = false;
                 onSelect('');
                 setSearchTerm('');
                 setIsOpen(false);
@@ -200,6 +217,7 @@ export const ProductSelectSearch = ({
               <div
                 key={p.id}
                 onClick={() => {
+                  isTypingRef.current = false;
                   onSelect(p.id);
                   setSearchTerm(p.sku ? `${p.name} (${p.sku})` : p.name);
                   setIsOpen(false);
