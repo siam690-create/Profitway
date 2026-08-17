@@ -37,7 +37,7 @@ exports.getProductAnalytics = async (req, res) => {
     let returnsWhere = 'WHERE ri.tenant_id = ?';
     let returnsOnlyWhere = 'WHERE tenant_id = ?';
     let adsWhere = 'WHERE tenant_id = ?';
-    let expensesWhere = 'WHERE tenant_id = ? AND category NOT IN (\'Marketing\', \'Transport\', \'Courier Return Charges\', \'Courier Return\', \'Return Fees\')';
+    let expensesWhere = 'WHERE tenant_id = ? AND category NOT IN (\'Marketing\', \'Courier Return Charges\', \'Courier Return\', \'Return Fees\')';
     let wholesaleWhere = 'WHERE tenant_id = ?';
     let wholesaleBuyersWhere = 'WHERE wc.tenant_id = ?';
     
