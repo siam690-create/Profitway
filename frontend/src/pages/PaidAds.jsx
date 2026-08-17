@@ -43,6 +43,33 @@ export const PaidAds = () => {
   const [adDate, setAdDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
 
+  // Manual Product Linking State
+  const [linkingAdRecord, setLinkingAdRecord] = useState(null);
+  const [linkingProductId, setLinkingProductId] = useState('');
+
+  const handleSaveProductLink = async (e) => {
+    e.preventDefault();
+    if (!linkingAdRecord || !linkingProductId) return;
+    try {
+      const res = await authFetch(`/api/ads/${linkingAdRecord.id}/link-product`, {
+        method: 'PATCH',
+        body: JSON.stringify({ product_id: linkingProductId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || 'Product linked successfully!', 'success');
+        setLinkingAdRecord(null);
+        setLinkingProductId('');
+        fetchAds();
+        refreshAllData();
+      } else {
+        showToast(`Error: ${data.error}`, 'error');
+      }
+    } catch (err) {
+      showToast(`Error: ${err.message}`, 'error');
+    }
+  };
+
   const fetchAds = async () => {
     try {
       const res = await authFetch('/api/ads');
@@ -499,7 +526,37 @@ export const PaidAds = () => {
                       {new Date(ad.ad_date).toLocaleDateString()}
                     </td>
                     <td>
-                      <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{ad.product_name}</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {!ad.product_id || ad.product_name?.includes('General') ? (
+                          <button
+                            onClick={() => {
+                              setLinkingAdRecord(ad);
+                              setLinkingProductId(ad.product_id ? String(ad.product_id) : '');
+                            }}
+                            className="btn btn-secondary btn-xs"
+                            style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: '1px solid rgba(234, 179, 8, 0.4)', fontWeight: '700', gap: '4px' }}
+                            title="Manually link this ad spend to a specific inventory product"
+                          >
+                            <LinkIcon size={12} />
+                            <span>🔗 Link Product ({ad.product_name || 'Unassigned'})</span>
+                          </button>
+                        ) : (
+                          <>
+                            <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{ad.product_name}</strong>
+                            <button
+                              onClick={() => {
+                                setLinkingAdRecord(ad);
+                                setLinkingProductId(String(ad.product_id));
+                              }}
+                              className="btn btn-secondary btn-icon btn-xs"
+                              title="Change / re-map linked product"
+                              style={{ padding: '2px 4px' }}
+                            >
+                              <LinkIcon size={12} color="var(--accent-primary)" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <span className="badge badge-primary" style={{ fontSize: '12px' }}>
@@ -1014,6 +1071,55 @@ export const PaidAds = () => {
                 <button type="submit" className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #1877f2 0%, #6366f1 100%)' }} disabled={isSyncingMeta}>
                   {isSyncingMeta ? 'Syncing Meta Marketing API...' : '⚡ Execute Meta Sync Now'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: MANUAL LINK AD TO PRODUCT */}
+      {linkingAdRecord && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <LinkIcon size={20} color="var(--accent-primary)" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Link Ad Campaign to Product</h3>
+              </div>
+              <button onClick={() => setLinkingAdRecord(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleSaveProductLink}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '12px' }}>
+                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Campaign Details:</span>
+                  <strong style={{ color: 'var(--text-primary)', fontSize: '13px', display: 'block', marginTop: '2px' }}>
+                    {linkingAdRecord.notes || linkingAdRecord.product_name || 'Meta Ad Campaign'}
+                  </strong>
+                  <span style={{ fontSize: '11px', color: 'var(--accent-primary)', marginTop: '4px', display: 'block' }}>
+                    Ad Date: {new Date(linkingAdRecord.ad_date).toLocaleDateString()} • Spend: ${Number(linkingAdRecord.amount_usd).toFixed(2)} ({currency}{Number(linkingAdRecord.total_bdt_cost).toFixed(2)})
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: '700' }}>Select Product from Inventory (প্রোডাক্ট নির্বাচন করুন) *</label>
+                  <select
+                    className="form-select"
+                    required
+                    value={linkingProductId}
+                    onChange={(e) => setLinkingProductId(e.target.value)}
+                  >
+                    <option value="">-- Choose target product --</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} {p.sku ? `(SKU: ${p.sku})` : ''} - {currency}{p.selling_price}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setLinkingAdRecord(null)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Product Link 🔗</button>
               </div>
             </form>
           </div>

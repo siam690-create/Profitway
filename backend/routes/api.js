@@ -168,6 +168,7 @@ router.post('/ads/meta-sync', checkActiveSubscription, adController.syncMetaAds)
 router.post('/ads', checkActiveSubscription, adController.createAd);
 router.post('/ads/bulk-import', checkActiveSubscription, adController.bulkImportAds);
 router.get('/ads', adController.getAds);
+router.patch('/ads/:id/link-product', checkActiveSubscription, adController.linkAdProduct);
 router.delete('/ads/:id', checkActiveSubscription, adController.deleteAd);
 
 // Category APIs

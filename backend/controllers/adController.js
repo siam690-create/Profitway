@@ -565,3 +565,73 @@ exports.syncMetaAds = async (req, res) => {
     connection.release();
   }
 };
+
+// Manually Link / Remap Ad Campaign to an Inventory Product
+exports.linkAdProduct = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+    const { product_id } = req.body;
+
+    if (!product_id) {
+      return res.status(400).json({ error: 'Please select a valid product to link.' });
+    }
+
+    const [adRows] = await connection.query(
+      'SELECT * FROM paid_ads WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
+    );
+
+    if (adRows.length === 0) {
+      return res.status(404).json({ error: 'Ad record not found.' });
+    }
+
+    const adRecord = adRows[0];
+
+    const [prodRows] = await connection.query(
+      'SELECT id, name FROM products WHERE id = ? AND tenant_id = ?',
+      [product_id, tenantId]
+    );
+
+    if (prodRows.length === 0) {
+      return res.status(404).json({ error: 'Selected product not found in inventory.' });
+    }
+
+    const targetProduct = prodRows[0];
+
+    await connection.beginTransaction();
+
+    // 1. Update Paid Ad Record with Linked Product
+    await connection.query(
+      'UPDATE paid_ads SET product_id = ?, product_name = ? WHERE id = ? AND tenant_id = ?',
+      [targetProduct.id, targetProduct.name, id, tenantId]
+    );
+
+    // 2. Update associated Operating Expense entry if exists
+    await connection.query(
+      `UPDATE expenses SET title = ?, notes = ? 
+       WHERE tenant_id = ? AND category = 'Marketing' AND notes LIKE ?`,
+      [
+        `Paid Ad (${adRecord.platform}) - ${targetProduct.name}`,
+        `Ad Spend: $${Number(adRecord.amount_usd).toFixed(2)} @ ${Number(adRecord.exchange_rate).toFixed(2)} BDT/$ (Ad ID: #${adRecord.id}) ${adRecord.ad_account_name ? `[Account: ${adRecord.ad_account_name}]` : ''} ${adRecord.notes ? `- ${adRecord.notes}` : ''}`,
+        tenantId,
+        `%(Ad ID: #${adRecord.id})%`
+      ]
+    );
+
+    await connection.commit();
+
+    res.json({
+      message: `Successfully linked campaign to product "${targetProduct.name}"!`,
+      product_id: targetProduct.id,
+      product_name: targetProduct.name
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
