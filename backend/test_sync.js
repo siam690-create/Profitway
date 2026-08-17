@@ -14,6 +14,11 @@ async function testMetaSync() {
 
       const timeRange = JSON.stringify({ since: '2026-08-10', until: '2026-08-10' });
       
+      // Check token permissions
+      const permRes = await fetch(`https://graph.facebook.com/v19.0/me/permissions?access_token=${encodeURIComponent(token)}`);
+      const permData = await permRes.json();
+      console.log('Token Permissions from Meta:', JSON.stringify(permData, null, 2));
+      
       // Test format 1: time_range JSON string
       const url1 = `https://graph.facebook.com/v19.0/${actId}/insights?level=campaign&fields=campaign_id,campaign_name,spend,impressions,clicks&limit=500&time_range=${encodeURIComponent(timeRange)}&access_token=${encodeURIComponent(token)}`;
       console.log('Testing URL 1:', url1.replace(token, 'TOKEN'));
