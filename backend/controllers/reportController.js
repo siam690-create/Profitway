@@ -8,14 +8,18 @@ exports.getProfitLossReport = async (req, res) => {
     const isAllTime = !start_date || !end_date || start_date === '2000-01-01';
 
     let salesWhere = 'WHERE tenant_id = ?';
-    let returnsWhere = 'WHERE tenant_id = ?';
+    let returnItemsWhere = 'WHERE ri.tenant_id = ?';
+    let returnsWhere = 'WHERE r.tenant_id = ?';
+    let simpleReturnsWhere = 'WHERE tenant_id = ?';
     let expensesWhere = 'WHERE tenant_id = ?';
     let adsWhere = 'WHERE tenant_id = ?';
     let queryParams = [tenantId];
 
     if (!isAllTime) {
       salesWhere += ' AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?';
-      returnsWhere += ' AND DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?';
+      returnItemsWhere += ' AND DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?';
+      returnsWhere += ' AND DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?';
+      simpleReturnsWhere += ' AND DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?';
       expensesWhere += ' AND DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?';
       adsWhere += ' AND DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?';
       queryParams.push(start_date, end_date);
@@ -43,7 +47,7 @@ exports.getProfitLossReport = async (req, res) => {
        FROM return_items ri
        JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
        JOIN products p ON ri.product_id = p.id AND ri.tenant_id = p.tenant_id
-       ${returnsWhere.replace('WHERE tenant_id = ?', 'WHERE ri.tenant_id = ?')}`,
+       ${returnItemsWhere}`,
       queryParams
     );
 
@@ -51,7 +55,7 @@ exports.getProfitLossReport = async (req, res) => {
     const [returnedDeliverySummary] = await db.query(
       `SELECT 
         COALESCE(SUM(r.courier_charge), 0) as returned_delivery_profit_reversal
-       FROM returns r ${returnsWhere.replace('WHERE tenant_id = ?', 'WHERE r.tenant_id = ?')}`,
+       FROM returns r ${returnsWhere}`,
       queryParams
     );
 
@@ -66,7 +70,7 @@ exports.getProfitLossReport = async (req, res) => {
     // 5. Total Courier Return Fees from returns table
     const [returnFeesResult] = await db.query(
       `SELECT COALESCE(SUM(courier_charge), 0) as total_courier_return_charges
-       FROM returns ${returnsWhere}`,
+       FROM returns ${simpleReturnsWhere}`,
       queryParams
     );
 
