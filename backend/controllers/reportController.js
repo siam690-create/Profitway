@@ -135,10 +135,15 @@ exports.getProfitLossReport = async (req, res) => {
     const totalReturnFees = Number(returnFeesResult[0].total_courier_return_charges || 0);
     const totalAdsCost = Number(adsResult[0].total_paid_ads_cost || 0);
 
-    // Ensure Paid Ads and Return Fees are accounted for in expenses if not already in expenses table
-    if (!expenseBreakdown['Marketing'] && !expenseBreakdown['Paid Ads'] && totalAdsCost > 0) {
-      expenseBreakdown['Marketing (Paid Ads)'] = totalAdsCost;
-      totalOperatingExpenses += totalAdsCost;
+    // Always prefer live Meta API Auto Synced Ads cost for Marketing expense if greater
+    if (totalAdsCost > 0) {
+      const existingMkt = Number(expenseBreakdown['Marketing'] || 0);
+      if (totalAdsCost > existingMkt) {
+        totalOperatingExpenses -= existingMkt;
+        expenseBreakdown['Marketing (Meta Paid Ads)'] = totalAdsCost;
+        delete expenseBreakdown['Marketing'];
+        totalOperatingExpenses += totalAdsCost;
+      }
     }
 
     if (!expenseBreakdown['Courier Return Charges'] && !expenseBreakdown['Courier Return'] && !expenseBreakdown['Return Fees'] && totalReturnFees > 0) {
