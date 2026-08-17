@@ -21,24 +21,9 @@ export const PaidAds = () => {
   // Meta Auto Syncing State
   const [isSyncingMeta, setIsSyncingMeta] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState(null);
-
-  // Ad Account Create / Edit Form
-  const [newAccountName, setNewAccountName] = useState('');
-  const [newAccountPlatform, setNewAccountPlatform] = useState('Facebook Ads');
-  const [newAccountIdCode, setNewAccountIdCode] = useState('');
-  const [newAccountAccessToken, setNewAccountAccessToken] = useState('');
-  const [newAccountExchangeRate, setNewAccountExchangeRate] = useState('127');
-  const [newAccountDefaultProduct, setNewAccountDefaultProduct] = useState('');
-  const [newAccountIsMetaConnected, setNewAccountIsMetaConnected] = useState(true);
-
-  // Multi-Product Ad Items Form State
-  const [adItems, setAdItems] = useState([
-    { product_id: '', amount_usd: '', notes: '' }
-  ]);
-  const [platform, setPlatform] = useState('Facebook Ads');
-  const [exchangeRate, setExchangeRate] = useState('127');
-  const [adDate, setAdDate] = useState(new Date().toISOString().slice(0, 10));
-  const [notes, setNotes] = useState('');
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncTargetDate, setSyncTargetDate] = useState(new Date().toISOString().slice(0, 10));
+  const [syncDatePreset, setSyncDatePreset] = useState('today');
 
   const fetchAds = async () => {
     try {
@@ -65,13 +50,28 @@ export const PaidAds = () => {
     fetchAdAccounts();
   }, []);
 
-  const handleMetaSync = async () => {
+  const handleMetaSync = async (e) => {
+    if (e) e.preventDefault();
     if (isSyncingMeta) return;
     setIsSyncingMeta(true);
+    setShowSyncModal(false);
     try {
+      let targetDateVal = undefined;
+      if (syncDatePreset === 'custom') {
+        targetDateVal = syncTargetDate;
+      } else if (syncDatePreset === 'today') {
+        targetDateVal = new Date().toISOString().slice(0, 10);
+      }
+
+      const payload = {
+        ad_account_id: selectedAccountFilter,
+        date_preset: syncDatePreset === 'custom' ? undefined : syncDatePreset,
+        date: targetDateVal
+      };
+
       const res = await authFetch('/api/ads/meta-sync', {
         method: 'POST',
-        body: JSON.stringify({ ad_account_id: selectedAccountFilter })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {
@@ -321,7 +321,7 @@ export const PaidAds = () => {
           />
 
           <button 
-            onClick={handleMetaSync} 
+            onClick={() => setShowSyncModal(true)} 
             disabled={isSyncingMeta}
             className="btn btn-secondary"
             style={{ 
@@ -936,6 +936,71 @@ export const PaidAds = () => {
         products={products}
         adAccounts={adAccounts}
       />
+
+      {/* MODAL: META AD SYNC DATE OPTIONS */}
+      {showSyncModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={20} color="#38bdf8" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>⚡ Meta Ads Auto-Sync</h3>
+              </div>
+              <button onClick={() => setShowSyncModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleMetaSync}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Pull live campaign ad spend from connected Meta Ad Accounts and auto-match products in inventory.
+                </p>
+
+                <div className="form-group">
+                  <label className="form-label">Select Target Date / Period (তারিখ বা সময় নির্বাচন করুন)</label>
+                  <select
+                    className="form-select"
+                    value={syncDatePreset}
+                    onChange={(e) => setSyncDatePreset(e.target.value)}
+                  >
+                    <option value="today">⚡ Today (আজকের খরচ)</option>
+                    <option value="yesterday">📅 Yesterday (গতকালের খরচ)</option>
+                    <option value="last_7d">📆 Last 7 Days (গত ৭ দিন)</option>
+                    <option value="last_30d">📊 Last 30 Days (গত ৩০ দিন)</option>
+                    <option value="custom">📅 Custom Date (নির্দিষ্ট তারিখ - যেমন ۱۵/08/2026)</option>
+                  </select>
+                </div>
+
+                {syncDatePreset === 'custom' && (
+                  <div className="form-group">
+                    <label className="form-label">Custom Target Date (তারিখ বেছে নিন)</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      required
+                      value={syncTargetDate}
+                      onChange={(e) => setSyncTargetDate(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '12px' }}>
+                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Target Account Filter:</span>
+                  <strong style={{ color: 'var(--accent-primary)' }}>
+                    {selectedAccountFilter === 'all' ? '💳 All Connected Meta Ad Accounts' : (adAccounts.find(a => Number(a.id) === Number(selectedAccountFilter))?.account_name || 'Selected Ad Account')}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowSyncModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #1877f2 0%, #6366f1 100%)' }} disabled={isSyncingMeta}>
+                  {isSyncingMeta ? 'Syncing Meta Marketing API...' : '⚡ Execute Meta Sync Now'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

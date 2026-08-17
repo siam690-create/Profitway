@@ -429,7 +429,12 @@ exports.syncMetaAds = async (req, res) => {
           const rawId = (acc.meta_account_id || acc.account_id_code).trim();
           const actId = rawId.startsWith('act_') ? rawId : `act_${rawId}`;
 
-          const fbUrl = `https://graph.facebook.com/v19.0/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks&date_preset=${date_preset || 'today'}&access_token=${encodeURIComponent(acc.access_token.trim())}`;
+          let dateParam = `date_preset=${date_preset || 'today'}`;
+          if (date) {
+            dateParam = `time_range=${encodeURIComponent(JSON.stringify({ since: date, until: date }))}`;
+          }
+
+          const fbUrl = `https://graph.facebook.com/v19.0/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks&${dateParam}&access_token=${encodeURIComponent(acc.access_token.trim())}`;
           
           const fbRes = await fetch(fbUrl);
           const fbData = await fbRes.json();
