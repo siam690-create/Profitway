@@ -44,13 +44,13 @@ exports.getProductAnalytics = async (req, res) => {
     let baseParams = [tenantId];
 
     if (!isAllTime) {
-      salesWhere += ' AND (sale_date IS NULL OR DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?)';
-      returnsWhere += ' AND (r.return_date IS NULL OR DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?)';
-      returnsOnlyWhere += ' AND (return_date IS NULL OR DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?)';
-      adsWhere += ' AND (ad_date IS NULL OR DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?)';
-      expensesWhere += ' AND (expense_date IS NULL OR DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?)';
-      wholesaleWhere += ' AND (sale_date IS NULL OR DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?)';
-      wholesaleBuyersWhere += ' AND (ws.sale_date IS NULL OR DATE(COALESCE(ws.sale_date, ws.created_at)) BETWEEN ? AND ?)';
+      salesWhere += ' AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?';
+      returnsWhere += ' AND DATE(COALESCE(r.return_date, r.created_at)) BETWEEN ? AND ?';
+      returnsOnlyWhere += ' AND DATE(COALESCE(return_date, created_at)) BETWEEN ? AND ?';
+      adsWhere += ' AND DATE(COALESCE(ad_date, created_at)) BETWEEN ? AND ?';
+      expensesWhere += ' AND DATE(COALESCE(expense_date, created_at)) BETWEEN ? AND ?';
+      wholesaleWhere += ' AND DATE(sale_date) BETWEEN ? AND ?';
+      wholesaleBuyersWhere += ' AND DATE(ws.sale_date) BETWEEN ? AND ?';
       baseParams.push(startDate, endDate);
     }
 
