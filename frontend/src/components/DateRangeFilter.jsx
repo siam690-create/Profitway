@@ -5,23 +5,30 @@ export const DateRangeFilter = ({ onFilterChange, initialRange = 'all' }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  const formatDateLocal = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const calculateDatesForRange = (selectedRange, customStart = '', customEnd = '') => {
     const now = new Date();
     let start = '';
     let end = '';
 
     if (selectedRange === 'today') {
-      start = now.toISOString().slice(0, 10);
+      start = formatDateLocal(now);
       end = start;
     } else if (selectedRange === 'week') {
       const temp = new Date();
       const firstDay = new Date(temp.setDate(temp.getDate() - temp.getDay()));
-      start = firstDay.toISOString().slice(0, 10);
-      end = new Date().toISOString().slice(0, 10);
+      start = formatDateLocal(firstDay);
+      end = formatDateLocal(now);
     } else if (selectedRange === 'month') {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      start = firstDay.toISOString().slice(0, 10);
-      end = new Date().toISOString().slice(0, 10);
+      start = formatDateLocal(firstDay);
+      end = formatDateLocal(now);
     } else if (selectedRange === 'custom') {
       start = customStart;
       end = customEnd;
@@ -59,6 +66,7 @@ export const DateRangeFilter = ({ onFilterChange, initialRange = 'all' }) => {
         >
           Today
         </button>
+
         <button
           type="button"
           onClick={() => handleRangeClick('week')}
@@ -66,6 +74,7 @@ export const DateRangeFilter = ({ onFilterChange, initialRange = 'all' }) => {
         >
           This Week
         </button>
+
         <button
           type="button"
           onClick={() => handleRangeClick('month')}
@@ -73,6 +82,7 @@ export const DateRangeFilter = ({ onFilterChange, initialRange = 'all' }) => {
         >
           This Month
         </button>
+
         <button
           type="button"
           onClick={() => handleRangeClick('all')}
@@ -80,6 +90,7 @@ export const DateRangeFilter = ({ onFilterChange, initialRange = 'all' }) => {
         >
           All Time
         </button>
+
         <button
           type="button"
           onClick={() => handleRangeClick('custom')}
@@ -90,29 +101,29 @@ export const DateRangeFilter = ({ onFilterChange, initialRange = 'all' }) => {
       </div>
 
       {range === 'custom' && (
-        <form onSubmit={handleApplyCustom} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--bg-secondary)', padding: '12px 16px', borderRadius: '10px', border: '1px solid var(--border-color)', width: 'fit-content' }}>
+        <form onSubmit={handleApplyCustom} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-secondary)', padding: '8px 12px', borderRadius: '10px', border: '1px solid var(--border-color)', width: 'fit-content' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>From:</label>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>From:</span>
             <input
               type="date"
               className="form-input"
-              style={{ padding: '4px 10px', fontSize: '13px' }}
+              style={{ padding: '4px 8px', fontSize: '12px', width: 'auto' }}
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              required
             />
           </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>To:</label>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>To:</span>
             <input
               type="date"
               className="form-input"
-              style={{ padding: '4px 10px', fontSize: '13px' }}
+              style={{ padding: '4px 8px', fontSize: '12px', width: 'auto' }}
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              required
             />
           </div>
+
           <button type="submit" className="btn btn-primary btn-sm">
             Apply Date Filter
           </button>

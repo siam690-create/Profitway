@@ -300,7 +300,7 @@ export const PaidAds = () => {
       }
     }
     if (!startDate || !endDate) return true;
-    const d = new Date(ad.ad_date).toISOString().slice(0, 10);
+    const d = String(ad.ad_date || '').slice(0, 10);
     return d >= startDate && d <= endDate;
   });
 
