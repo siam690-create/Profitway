@@ -364,6 +364,20 @@ export const Analytics = () => {
               </div>
             </div>
 
+            {Number(analyticsData?.wholesale_summary?.wholesale_profit || 0) > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ padding: '10px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '10px', color: 'var(--success)' }}>
+                  <Users size={20} />
+                </div>
+                <div>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block' }}>Reseller B2B Profit</span>
+                  <strong style={{ fontSize: '16px', color: 'var(--success)' }}>
+                    +{currency}{Number(analyticsData?.wholesale_summary?.wholesale_profit || 0).toLocaleString()} (Included in Net)
+                  </strong>
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ padding: '10px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '10px', color: 'var(--danger)' }}>
                 <AlertTriangle size={20} />
