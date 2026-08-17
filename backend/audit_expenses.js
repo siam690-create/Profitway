@@ -3,12 +3,19 @@ const db = require('./config/db');
 
 async function auditExpenses() {
   try {
+    const [upResult] = await db.query(
+      `UPDATE expenses 
+       SET category = 'Courier Return Charges' 
+       WHERE (title LIKE 'Courier Return Fee%' OR notes LIKE 'Courier Return%') AND category = 'Transport'`
+    );
+    console.log('=== UPDATED EXPENSES CATEGORY ROWS ===', upResult.affectedRows);
+
     const [expRows] = await db.query(
       `SELECT category, SUM(amount) as total_amt, COUNT(*) as cnt 
        FROM expenses 
        GROUP BY category`
     );
-    console.log('=== EXPENSES TABLE GROUP BY CATEGORY ===');
+    console.log('=== EXPENSES TABLE GROUP BY CATEGORY AFTER UPDATE ===');
     console.table(expRows);
 
     const [transRows] = await db.query(
