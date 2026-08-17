@@ -434,36 +434,36 @@ exports.syncMetaAds = async (req, res) => {
             dateParam = `time_range=${encodeURIComponent(JSON.stringify({ since: date, until: date }))}`;
           }
 
-          const fbUrl = `https://graph.facebook.com/v19.0/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks&${dateParam}&access_token=${encodeURIComponent(acc.access_token.trim())}`;
-          
-          const fbRes = await fetch(fbUrl);
-          const fbData = await fbRes.json();
+          let nextUrl = `https://graph.facebook.com/v19.0/${actId}/insights?level=campaign&fields=campaign_id,campaign_name,spend,impressions,clicks&limit=500&${dateParam}&access_token=${encodeURIComponent(acc.access_token.trim())}`;
 
-          if (fbData.data && Array.isArray(fbData.data)) {
-            campaigns = fbData.data.map(item => ({
-              campaign_id: item.campaign_id,
-              campaign_name: item.campaign_name || 'Meta Ad Campaign',
-              spend_usd: Number(item.spend || 0)
-            }));
-          } else if (fbData.error) {
-            console.warn(`Meta API Notice for Account ${acc.account_name}:`, fbData.error.message);
+          while (nextUrl) {
+            const fbRes = await fetch(nextUrl);
+            const fbData = await fbRes.json();
+
+            if (fbData.data && Array.isArray(fbData.data)) {
+              for (const item of fbData.data) {
+                const spendVal = Number(item.spend || 0);
+                if (spendVal > 0) {
+                  campaigns.push({
+                    campaign_id: item.campaign_id,
+                    campaign_name: item.campaign_name || 'Meta Ad Campaign',
+                    spend_usd: spendVal
+                  });
+                }
+              }
+            } else if (fbData.error) {
+              console.warn(`Meta API Error for Account ${acc.account_name}:`, fbData.error.message);
+              break;
+            }
+
+            if (fbData.paging && fbData.paging.next) {
+              nextUrl = fbData.paging.next;
+            } else {
+              nextUrl = null;
+            }
           }
         } catch (metaErr) {
           console.warn(`Meta API Connection error for ${acc.account_name}:`, metaErr.message);
-        }
-      }
-
-      // Fallback demo/test sync if no live campaign response returned or account is manual/demo
-      if (campaigns.length === 0) {
-        if (shopProducts.length > 0) {
-          const sampleProd = shopProducts[Math.floor(Math.random() * shopProducts.length)];
-          campaigns = [
-            {
-              campaign_id: `meta_demo_${acc.id}_${Date.now()}`,
-              campaign_name: `[Meta Ads] ${sampleProd.name} Promo Campaign`,
-              spend_usd: Number((Math.random() * 15 + 5).toFixed(2))
-            }
-          ];
         }
       }
 
@@ -486,13 +486,14 @@ exports.syncMetaAds = async (req, res) => {
         const productName = matchedProduct ? matchedProduct.name : (acc.default_product_id ? (shopProducts.find(p => p.id === acc.default_product_id)?.name || camp.campaign_name) : camp.campaign_name);
         const bdtCost = Number((camp.spend_usd * rateVal).toFixed(2));
 
-        // Check duplicate entry for same campaign & date
+        // Check if record already exists for this campaign & date
         const [existing] = await connection.query(
-          'SELECT id FROM paid_ads WHERE tenant_id = ? AND meta_campaign_id = ? AND ad_date = ?',
+          'SELECT id, amount_usd FROM paid_ads WHERE tenant_id = ? AND meta_campaign_id = ? AND ad_date = ?',
           [tenantId, camp.campaign_id, targetDate]
         );
 
         if (existing.length === 0) {
+          // Insert new Paid Ad record
           const [adRes] = await connection.query(
             `INSERT INTO paid_ads (tenant_id, product_id, product_name, ad_account_id, ad_account_name, platform, amount_usd, exchange_rate, total_bdt_cost, ad_date, meta_campaign_id, meta_campaign_name, notes)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -513,29 +514,50 @@ exports.syncMetaAds = async (req, res) => {
             ]
           );
 
+          // Insert into operating expenses
           await connection.query(
             `INSERT INTO expenses (tenant_id, title, category, amount, expense_date, notes)
              VALUES (?, ?, 'Marketing', ?, ?, ?)`,
             [
               tenantId,
-              `Paid Ad (Meta) - ${productName}`,
+              `Paid Ad (${acc.platform || 'Facebook Ads'}) - ${productName}`,
               bdtCost,
               targetDate,
-              `Meta Auto-Sync Spend: $${camp.spend_usd.toFixed(2)} @ ${rateVal} BDT/$ [Account: ${acc.account_name}] (Campaign: ${camp.campaign_name})`
+              `Ad Spend: $${camp.spend_usd.toFixed(2)} @ ${rateVal} BDT/$ (Ad ID: #${adRes.insertId}) [Account: ${acc.account_name}] - Meta Campaign: ${camp.campaign_name}`
             ]
           );
 
           totalSyncedCampaigns++;
           totalSyncedUsd += camp.spend_usd;
           totalSyncedBdt += bdtCost;
-          syncedItems.push({
-            id: adRes.insertId,
-            account_name: acc.account_name,
-            campaign_name: camp.campaign_name,
-            product_name: productName,
-            spend_usd: camp.spend_usd,
-            bdt_cost: bdtCost
-          });
+          syncedItems.push({ campaign: camp.campaign_name, usd: camp.spend_usd, bdt: bdtCost });
+        } else {
+          // Record exists: update spend & bdt if changed
+          const existingId = existing[0].id;
+          const oldUsd = Number(existing[0].amount_usd || 0);
+
+          if (Math.abs(oldUsd - camp.spend_usd) > 0.001) {
+            await connection.query(
+              `UPDATE paid_ads SET amount_usd = ?, total_bdt_cost = ?, exchange_rate = ? WHERE id = ? AND tenant_id = ?`,
+              [camp.spend_usd, bdtCost, rateVal, existingId, tenantId]
+            );
+
+            await connection.query(
+              `UPDATE expenses SET amount = ?, notes = ? 
+               WHERE tenant_id = ? AND category = 'Marketing' AND notes LIKE ?`,
+              [
+                bdtCost,
+                `Ad Spend: $${camp.spend_usd.toFixed(2)} @ ${rateVal} BDT/$ (Ad ID: #${existingId}) [Account: ${acc.account_name}] - Meta Campaign: ${camp.campaign_name}`,
+                tenantId,
+                `%(Ad ID: #${existingId})%`
+              ]
+            );
+
+            totalSyncedCampaigns++;
+            totalSyncedUsd += Math.max(0, camp.spend_usd - oldUsd);
+            totalSyncedBdt += Math.max(0, bdtCost - (oldUsd * rateVal));
+            syncedItems.push({ campaign: camp.campaign_name, usd: camp.spend_usd, bdt: bdtCost });
+          }
         }
       }
 
