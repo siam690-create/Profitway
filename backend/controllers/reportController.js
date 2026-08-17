@@ -119,9 +119,23 @@ exports.getProfitLossReport = async (req, res) => {
     const grossDeliveryProfit = Number(salesResult[0].gross_delivery_profit || 0);
     const returnedDeliveryProfitReversal = Number(returnedDeliverySummary[0].returned_delivery_profit_reversal || 0);
 
-    const netDeliveryProfit = grossDeliveryProfit - returnedDeliveryProfitReversal;
+    // 8. Wholesale B2B Sales Gross Profit & Revenue
+    let wholesaleWhere = 'WHERE tenant_id = ?';
+    if (!isAllTime) {
+      wholesaleWhere += ' AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?';
+    }
+    const [wholesaleResult] = await db.query(
+      `SELECT 
+        COALESCE(SUM(total_amount), 0) as total_wholesale_revenue,
+        COALESCE(SUM(total_cost), 0) as total_wholesale_cogs,
+        COALESCE(SUM(gross_profit), 0) as wholesale_gross_profit
+       FROM wholesale_sales ${wholesaleWhere}`,
+      queryParams
+    );
+    const wholesaleGrossProfit = Number(wholesaleResult[0].wholesale_gross_profit || 0);
+    const wholesaleSalesRevenue = Number(wholesaleResult[0].total_wholesale_revenue || 0);
 
-    const totalOperatingGrossIncome = netProductProfit + netDeliveryProfit;
+    const totalOperatingGrossIncome = netProductProfit + netDeliveryProfit + resellerGrossProfit + wholesaleGrossProfit;
 
     let expenseBreakdown = {};
     let totalOperatingExpenses = 0;
@@ -151,9 +165,9 @@ exports.getProfitLossReport = async (req, res) => {
       totalOperatingExpenses += totalReturnFees;
     }
 
-    // Net Operating Profit = Total Operating Gross Income + Reseller Gross Profit - Total Operating Expenses
-    const netOperatingProfit = totalOperatingGrossIncome + resellerGrossProfit - totalOperatingExpenses;
-    const totalRevForMargin = netSalesRevenue + resellerSalesRevenue;
+    // Net Operating Profit = Total Operating Gross Income - Total Operating Expenses
+    const netOperatingProfit = totalOperatingGrossIncome - totalOperatingExpenses;
+    const totalRevForMargin = netSalesRevenue + resellerSalesRevenue + wholesaleSalesRevenue;
     const profitMarginPct = totalRevForMargin > 0 ? ((netOperatingProfit / totalRevForMargin) * 100).toFixed(2) : 0;
 
     res.json({
@@ -168,6 +182,8 @@ exports.getProfitLossReport = async (req, res) => {
         net_delivery_profit: Number(netDeliveryProfit.toFixed(2)),
         reseller_sales_revenue: Number(resellerSalesRevenue.toFixed(2)),
         reseller_gross_profit: Number(resellerGrossProfit.toFixed(2)),
+        wholesale_sales_revenue: Number(wholesaleSalesRevenue.toFixed(2)),
+        wholesale_gross_profit: Number(wholesaleGrossProfit.toFixed(2)),
         total_operating_gross_income: Number(totalOperatingGrossIncome.toFixed(2)),
         total_operating_expenses: Number(totalOperatingExpenses.toFixed(2)),
         total_return_fees: Number(totalReturnFees.toFixed(2)),

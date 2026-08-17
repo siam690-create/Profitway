@@ -134,15 +134,15 @@ exports.getProductAnalytics = async (req, res) => {
       console.error('Analytics expensesSummary Query Error:', e.message);
     }
 
-    // 6. Wholesale B2B Reseller Analytics Summary
-    let wholesaleSummary = [{ wholesale_orders_count: 0, wholesale_revenue: 0, wholesale_cogs: 0, wholesale_profit: 0, wholesale_cash_collected: 0, wholesale_pending_pawna: 0 }];
+    // 6. Reseller Sales Analytics Summary
+    let resellerSummary = [{ reseller_orders_count: 0, reseller_revenue: 0, reseller_cogs: 0, reseller_profit: 0 }];
     try {
       const [rows] = await db.query(
         `SELECT 
-          COUNT(*) as wholesale_orders_count,
-          COALESCE(SUM(total_amount), 0) as wholesale_revenue,
-          COALESCE(SUM(total_cost), 0) as wholesale_cogs,
-          COALESCE(SUM(gross_profit + delivery_profit), 0) as wholesale_profit
+          COUNT(*) as reseller_orders_count,
+          COALESCE(SUM(total_amount), 0) as reseller_revenue,
+          COALESCE(SUM(total_cost), 0) as reseller_cogs,
+          COALESCE(SUM(gross_profit + delivery_profit), 0) as reseller_profit
          FROM reseller_sales ${wholesaleWhere}`,
         baseParams
       );
@@ -151,10 +151,27 @@ exports.getProductAnalytics = async (req, res) => {
         baseParams
       );
       if (rows.length > 0) {
-        wholesaleSummary = rows;
+        resellerSummary = rows;
         const loss = Number(returnRows[0]?.reseller_return_loss || 0);
-        wholesaleSummary[0].wholesale_profit = Number(wholesaleSummary[0].wholesale_profit || 0) - loss;
+        resellerSummary[0].reseller_profit = Number(resellerSummary[0].reseller_profit || 0) - loss;
       }
+    } catch (e) {
+      console.error('Analytics resellerSummary Query Error:', e.message);
+    }
+
+    // 6b. Wholesale B2B Analytics Summary
+    let wholesaleSummary = [{ wholesale_orders_count: 0, wholesale_revenue: 0, wholesale_cogs: 0, wholesale_profit: 0 }];
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+          COUNT(*) as wholesale_orders_count,
+          COALESCE(SUM(total_amount), 0) as wholesale_revenue,
+          COALESCE(SUM(total_cost), 0) as wholesale_cogs,
+          COALESCE(SUM(gross_profit), 0) as wholesale_profit
+         FROM wholesale_sales ${wholesaleWhere}`,
+        baseParams
+      );
+      if (rows.length > 0) wholesaleSummary = rows;
     } catch (e) {
       console.error('Analytics wholesaleSummary Query Error:', e.message);
     }
@@ -210,11 +227,12 @@ exports.getProductAnalytics = async (req, res) => {
     const returnRatePct = totalPosOrders > 0 ? ((totalReturnsCount / totalPosOrders) * 100).toFixed(1) : '0.0';
     const roasMultiplier = paidAdsCost > 0 ? (grossSalesRev / paidAdsCost).toFixed(2) : '0.0';
 
-    const resellerGrossProfit = Number(wholesaleSummary[0].wholesale_profit || 0);
+    const resellerGrossProfit = Number(resellerSummary[0].reseller_profit || 0);
+    const wholesaleB2BGrossProfit = Number(wholesaleSummary[0].wholesale_profit || 0);
 
     const netDelivProfitHarmonized = grossDeliveryProfit - returnChargesCost;
-    // NET REAL PROFIT = Realized Retail Product Profit + Net Delivery Profit + Reseller Profit - Paid Ads - Return Courier Charges - General Expenses
-    const netRealProfit = netRealizedGrossProfit + netDelivProfitHarmonized + resellerGrossProfit - paidAdsCost - returnChargesCost - otherExpensesCost;
+    // NET REAL PROFIT = Realized Retail Product Profit + Net Delivery Profit + Reseller Profit + Wholesale Profit - Paid Ads - Return Courier Charges - General Expenses
+    const netRealProfit = netRealizedGrossProfit + netDelivProfitHarmonized + resellerGrossProfit + wholesaleB2BGrossProfit - paidAdsCost - returnChargesCost - otherExpensesCost;
 
     // 8. Itemized Product-wise Breakdown
     let salesAggParams = [tenantId];
@@ -523,6 +541,8 @@ exports.getProductAnalytics = async (req, res) => {
         paid_ads_cost: Number(paidAdsCost.toFixed(2)),
         courier_return_cost: Number(returnChargesCost.toFixed(2)),
         other_expenses_cost: Number(otherExpensesCost.toFixed(2)),
+        reseller_gross_profit: Number(resellerGrossProfit.toFixed(2)),
+        wholesale_b2b_profit: Number(wholesaleB2BGrossProfit.toFixed(2)),
         net_real_profit: Number(netRealProfit.toFixed(2)),
         total_pos_orders: totalPosOrders,
         total_returns_count: totalReturnsCount,
