@@ -11,6 +11,7 @@ export const PaidAds = () => {
   const [adsList, setAdsList] = useState([]);
   const [adAccounts, setAdAccounts] = useState([]);
   const [selectedAccountFilter, setSelectedAccountFilter] = useState('all');
+  const [selectedProductFilter, setSelectedProductFilter] = useState('all');
   const [selectedAdAccount, setSelectedAdAccount] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -286,10 +287,17 @@ export const PaidAds = () => {
     }
   };
 
-  // Metrics Filtered by Date & Ad Account
+  // Metrics Filtered by Date, Ad Account & Product
   const filteredAdsList = adsList.filter(ad => {
     if (selectedAccountFilter !== 'all' && Number(ad.ad_account_id) !== Number(selectedAccountFilter)) {
       return false;
+    }
+    if (selectedProductFilter !== 'all') {
+      if (selectedProductFilter === 'unlinked') {
+        if (ad.product_id && !ad.product_name?.includes('General')) return false;
+      } else if (Number(ad.product_id) !== Number(selectedProductFilter)) {
+        return false;
+      }
     }
     if (!startDate || !endDate) return true;
     const d = new Date(ad.ad_date).toISOString().slice(0, 10);
@@ -497,7 +505,31 @@ export const PaidAds = () => {
 
       {/* Paid Ads Table Log */}
       <div className="glass-card" style={{ padding: '24px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>Paid Ad Campaigns History</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Paid Ad Campaigns History</h3>
+
+          {/* Product-wise Filter Dropdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)' }}>Filter by Product:</span>
+            <select
+              className="form-select"
+              value={selectedProductFilter}
+              onChange={(e) => setSelectedProductFilter(e.target.value)}
+              style={{ width: 'auto', minWidth: '240px', padding: '6px 12px', fontSize: '13px', borderRadius: '8px', background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', fontWeight: '600' }}
+            >
+              <option value="all">📦 All Target Products ({adsList.length} campaigns)</option>
+              <option value="unlinked">🔗 Unlinked / General Shop Campaigns</option>
+              {products.map(p => {
+                const count = adsList.filter(a => Number(a.product_id) === Number(p.id)).length;
+                return (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {count > 0 ? `(${count} ads)` : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        </div>
 
         <div className="table-wrapper">
           <table className="data-table">
