@@ -5,7 +5,7 @@ import { ProductSelectSearch } from '../components/ProductSelectSearch';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Purchases = () => {
-  const { authFetch, products, currency, refreshAllData } = useApp();
+  const { authFetch, products, currency, refreshAllData, showToast } = useApp();
   const [activeSubTab, setActiveSubTab] = useState('orders'); // 'orders' or 'suppliers'
   const [purchasesList, setPurchasesList] = useState([]);
   const [suppliersList, setSuppliersList] = useState([]);
@@ -157,6 +157,7 @@ export const Purchases = () => {
     if (finalItems.length === 0) return alert('Please add at least one product to purchase order.');
 
     setIsSubmitting(true);
+    setShowModal(false);
     try {
       const res = await authFetch('/api/purchases', {
         method: 'POST',
@@ -175,7 +176,6 @@ export const Purchases = () => {
 
       const data = await res.json();
       if (res.ok) {
-        setShowModal(false);
         setPurchaseItems([]);
         setSelectedProductId('');
         setSupplierId('');
@@ -184,14 +184,14 @@ export const Purchases = () => {
         setNotes('');
         setPaidAmount('0');
         setPaymentStatus('paid');
+        showToast('Stock purchase order saved to database!', 'success');
         refreshAllData();
         fetchData();
-        alert('Stock purchase order recorded! Inventory quantities, financial accounts, and supplier dues updated.');
       } else {
-        alert(`Error: ${data.error}`);
+        showToast(`Error: ${data.error}`, 'error');
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, 'error');
     } finally {
       setIsSubmitting(false);
     }

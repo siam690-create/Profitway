@@ -26,6 +26,9 @@ import { Support } from './pages/Support';
 import StaffPortal from './pages/StaffPortal';
 import TeamChat from './pages/TeamChat';
 
+import { TopProgressBar } from './components/TopProgressBar';
+import { ToastNotification } from './components/ToastNotification';
+
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -60,36 +63,55 @@ class ErrorBoundary extends Component {
 }
 
 function MainApp() {
-  const { view, user, activeTab } = useApp();
+  const { view, user, activeTab, topLoading, topProgress, toast, setToast } = useApp();
 
   if (view === 'landing') {
-    return <LandingPage />;
+    return (
+      <>
+        <TopProgressBar isLoading={topLoading} progress={topProgress} />
+        <ToastNotification toast={toast} onClose={() => setToast(null)} />
+        <LandingPage />
+      </>
+    );
   }
 
-  if (view === 'superadmin' || user?.role === 'superadmin') {
-    return <SuperAdminDashboard />;
+  const role = (user?.role || '').toLowerCase();
+  const isSuperAdmin = role === 'super_admin' || role === 'saas_admin' || role === 'admin';
+
+  if (activeTab === 'saas-master' && isSuperAdmin) {
+    return (
+      <div className="app-container">
+        <TopProgressBar isLoading={topLoading} progress={topProgress} />
+        <ToastNotification toast={toast} onClose={() => setToast(null)} />
+        <Sidebar />
+        <div className="main-content">
+          <Header />
+          <main className="page-wrapper">
+            <SuperAdminDashboard />
+          </main>
+        </div>
+      </div>
+    );
   }
 
-  const userPermissions = user?.permissions;
-  const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'superadmin';
-
-  const hasModulePermission = (tabId) => {
-    if (isOwnerOrAdmin || !userPermissions || !Array.isArray(userPermissions)) return true;
-    if (tabId === 'staff-portal' || tabId === 'settings' || tabId === 'subscription' || tabId === 'support') return true;
-    if (tabId === 'team-chat') return userPermissions.includes('chat') || userPermissions.includes('team-chat');
-    return userPermissions.includes(tabId);
+  // Permission Checks for Staff/Employee roles
+  const hasModulePermission = (moduleKey) => {
+    if (isSuperAdmin || role === 'owner') return true;
+    try {
+      const perms = user?.permissions ? (typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions) : {};
+      return Boolean(perms[moduleKey]);
+    } catch (e) {
+      return false;
+    }
   };
 
   const renderActivePage = () => {
-    if (!hasModulePermission(activeTab)) {
+    if (!isSuperAdmin && role !== 'owner' && !hasModulePermission(activeTab)) {
       return (
-        <div className="glass-card" style={{ padding: '60px 20px', textAlign: 'center', margin: '40px auto', maxWidth: '560px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '32px' }}>🔒</span>
-          </div>
-          <h3 style={{ fontSize: '20px', fontWeight: '800', color: '#ef4444' }}>Access Restricted (মডিউল অনুমতি নেই)</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.6', margin: 0 }}>
-            আপনার স্টাফ অ্যাকাউন্টে <strong>{activeTab.toUpperCase()}</strong> মডিউল বা ড্যাশবোর্ড দেখার অনুমতি দেওয়া হয়নি। প্রয়োজনে শপ ওনারের সাথে যোগাযোগ করুন।
+        <div className="glass-card" style={{ padding: '40px', textAlign: 'center', margin: '20px' }}>
+          <h3 style={{ fontSize: '20px', color: 'var(--danger)', fontWeight: '700' }}>🔒 Access Restricted</h3>
+          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
+            You do not have permission to access the "{activeTab}" module. Please contact your business owner or admin.
           </p>
         </div>
       );
@@ -122,6 +144,8 @@ function MainApp() {
 
   return (
     <div className="app-container">
+      <TopProgressBar isLoading={topLoading} progress={topProgress} />
+      <ToastNotification toast={toast} onClose={() => setToast(null)} />
       <Sidebar />
       <div className="main-content">
         <Header />

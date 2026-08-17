@@ -58,8 +58,38 @@ export const AppProvider = ({ children }) => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
+  const [topLoading, setTopLoading] = useState(false);
+  const [topProgress, setTopProgress] = useState(0);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (text, type = 'success') => {
+    setToast({ text, type, id: Date.now() });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const startTopLoading = () => {
+    setTopLoading(true);
+    setTopProgress(35);
+    setTimeout(() => setTopProgress(75), 120);
+  };
+
+  const finishTopLoading = () => {
+    setTopProgress(100);
+    setTimeout(() => {
+      setTopLoading(false);
+      setTopProgress(0);
+    }, 250);
+  };
+
   // Helper fetch with Auth Bearer token
   const authFetch = async (url, options = {}) => {
+    const method = (options.method || 'GET').toUpperCase();
+    const isMutation = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+
+    if (isMutation) {
+      startTopLoading();
+    }
+
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers
@@ -68,11 +98,21 @@ export const AppProvider = ({ children }) => {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const res = await fetch(url, { ...options, headers });
-    if (res.status === 401) {
-      logout();
+    try {
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401) {
+        logout();
+      }
+      if (isMutation) {
+        finishTopLoading();
+      }
+      return res;
+    } catch (err) {
+      if (isMutation) {
+        finishTopLoading();
+      }
+      throw err;
     }
-    return res;
   };
 
   // Fetch Public Plans
@@ -537,6 +577,13 @@ export const AppProvider = ({ children }) => {
         cart,
         shopSettings,
         fetchSettings,
+        topLoading,
+        topProgress,
+        toast,
+        setToast,
+        showToast,
+        startTopLoading,
+        finishTopLoading,
         loading,
         error,
         currency,

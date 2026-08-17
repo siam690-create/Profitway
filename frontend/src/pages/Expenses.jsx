@@ -4,7 +4,7 @@ import { Plus, Receipt, Trash2, Calendar, DollarSign, CreditCard, Search, Filter
 import { DateRangeFilter } from '../components/DateRangeFilter';
 
 export const Expenses = () => {
-  const { expenses, currency, addExpense, deleteExpense, authFetch, refreshAllData } = useApp();
+  const { expenses, currency, addExpense, deleteExpense, authFetch, refreshAllData, showToast } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [accounts, setAccounts] = useState([]);
 
@@ -52,17 +52,18 @@ export const Expenses = () => {
     e.preventDefault();
     if (isSubmitting) return;
     setIsSubmitting(true);
+    setShowModal(false);
     try {
       const res = await addExpense(formData);
       if (res.success) {
-        setShowModal(false);
         setFormData({ title: '', category: 'Utilities', amount: '', account_id: '', expense_date: new Date().toISOString().slice(0, 10), notes: '' });
+        showToast('Operating expense saved to database!', 'success');
         refreshAllData();
       } else {
-        alert(`Error: ${res.error}`);
+        showToast(`Error: ${res.error}`, 'error');
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, 'error');
     } finally {
       setIsSubmitting(false);
     }

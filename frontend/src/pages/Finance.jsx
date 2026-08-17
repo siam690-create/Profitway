@@ -47,7 +47,7 @@ const exportPassbookToExcel = (accountName, transactions) => {
 };
 
 export const Finance = () => {
-  const { authFetch, currency, tenant, refreshAllData } = useApp();
+  const { authFetch, currency, tenant, refreshAllData, showToast } = useApp();
   const [activeSubTab, setActiveSubTab] = useState('accounts');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -249,6 +249,7 @@ export const Finance = () => {
 
   const handleDepositSubmit = async (e) => {
     e.preventDefault();
+    setShowDepositModal(false);
     try {
       const res = await authFetch('/api/finance/deposit', {
         method: 'POST',
@@ -256,20 +257,20 @@ export const Finance = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        setShowDepositModal(false);
         setDepositForm({ account_id: '', amount: '', source_title: 'Manual Fund Deposit', notes: '' });
         fetchFinance();
-        alert(data.message || 'Funds deposited into account successfully!');
+        showToast(data.message || 'Funds deposited into account successfully!', 'success');
       } else {
-        alert(`Error: ${data.error}`);
+        showToast(`Error: ${data.error}`, 'error');
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, 'error');
     }
   };
 
   const handleTransfer = async (e) => {
     e.preventDefault();
+    setShowTransferModal(false);
     try {
       const res = await authFetch('/api/finance/transfer', {
         method: 'POST',
@@ -277,15 +278,14 @@ export const Finance = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        setShowTransferModal(false);
         setTransferForm({ from_account_id: '', to_account_id: '', amount: '' });
         fetchFinance();
-        alert('Funds transferred successfully!');
+        showToast('Funds transferred successfully!', 'success');
       } else {
-        alert(`Error: ${data.error}`);
+        showToast(`Error: ${data.error}`, 'error');
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      showToast(`Error: ${err.message}`, 'error');
     }
   };
 
@@ -306,6 +306,7 @@ export const Finance = () => {
       }
     }
 
+    setShowAdjustModal(false);
     try {
       const res = await authFetch('/api/finance/adjust', {
         method: 'POST',
@@ -316,15 +317,14 @@ export const Finance = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        setShowAdjustModal(false);
         setAdjustForm({ account_id: '', adjustment_type: 'debit', amount: '', reason_title: 'Owner Personal Cash Draw / Withdrawal', custom_category: '', notes: '' });
         fetchFinance();
-        alert(data.message || 'Account balance adjusted successfully!');
+        showToast(data.message || 'Account balance adjusted successfully!', 'success');
       } else {
-        alert(`Error: ${data.error}`);
+        showToast(`Error: ${data.error}`, 'error');
       }
     } catch (err) {
-      alert(`Error adjusting balance: ${err.message}`);
+      showToast(`Error adjusting balance: ${err.message}`, 'error');
     }
   };
 
