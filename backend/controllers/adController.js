@@ -420,6 +420,8 @@ exports.syncMetaAds = async (req, res) => {
 
     await connection.beginTransaction();
 
+    let metaApiErrorMsg = null;
+
     for (const acc of accounts) {
       const isMetaConnected = Boolean(acc.is_meta_connected && acc.access_token && (acc.meta_account_id || acc.account_id_code));
       let campaigns = [];
@@ -453,6 +455,7 @@ exports.syncMetaAds = async (req, res) => {
               }
             } else if (fbData.error) {
               console.warn(`Meta API Error for Account ${acc.account_name}:`, fbData.error.message);
+              metaApiErrorMsg = `${acc.account_name}: ${fbData.error.message}`;
               break;
             }
 
@@ -464,6 +467,7 @@ exports.syncMetaAds = async (req, res) => {
           }
         } catch (metaErr) {
           console.warn(`Meta API Connection error for ${acc.account_name}:`, metaErr.message);
+          metaApiErrorMsg = `${acc.account_name}: ${metaErr.message}`;
         }
       }
 
@@ -568,12 +572,17 @@ exports.syncMetaAds = async (req, res) => {
       );
     }
 
+    if (totalSyncedCampaigns === 0 && metaApiErrorMsg) {
+      await connection.rollback();
+      return res.status(400).json({ error: `Meta API Error: ${metaApiErrorMsg}` });
+    }
+
     await connection.commit();
 
     res.json({
       message: totalSyncedCampaigns > 0
         ? `Successfully synced ${totalSyncedCampaigns} Meta Ad campaign(s) totaling $${totalSyncedUsd.toFixed(2)} (৳${totalSyncedBdt.toLocaleString()} BDT)!`
-        : 'All Meta Ad accounts are up to date. No new campaign spend to sync for today.',
+        : 'All Meta Ad accounts are up to date. No new campaign spend to sync for this period.',
       total_synced_campaigns: totalSyncedCampaigns,
       total_synced_usd: totalSyncedUsd,
       total_synced_bdt: totalSyncedBdt,
