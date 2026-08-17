@@ -406,9 +406,9 @@ exports.syncMetaAds = async (req, res) => {
       return res.status(400).json({ error: 'No active Ad Accounts found. Please create or connect an Ad Account first.' });
     }
 
-    // Get all active shop products for auto matching
+    // Get all shop products for auto matching
     const [shopProducts] = await connection.query(
-      'SELECT id, name, sku FROM products WHERE tenant_id = ? AND status = "active"',
+      'SELECT id, name, sku FROM products WHERE tenant_id = ?',
       [tenantId]
     );
 
