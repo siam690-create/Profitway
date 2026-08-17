@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { BarChart3, Calendar, TrendingUp, DollarSign, PackageCheck, Layers3, Award, ArrowUpRight, ArrowDownRight, Megaphone, Undo2, Receipt, RotateCcw, Truck, ShoppingBag, Users, AlertTriangle, Flame, ShieldAlert, Sparkles, CheckCircle2, RefreshCw, Target, Zap, AlertCircle, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { BarChart3, Calendar, TrendingUp, DollarSign, PackageCheck, Layers3, Award, ArrowUpRight, ArrowDownRight, Megaphone, Undo2, Receipt, RotateCcw, Truck, ShoppingBag, Users, AlertTriangle, Flame, ShieldAlert, Sparkles, CheckCircle2, RefreshCw, Target, Zap, AlertCircle, ChevronLeft, ChevronRight, Info, FileSpreadsheet, Download } from 'lucide-react';
 
 export const Analytics = () => {
   const { authFetch, currency } = useApp();
@@ -68,6 +68,73 @@ export const Analytics = () => {
       const scrollAmount = direction === 'left' ? -280 : 280;
       el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
     }
+  };
+
+  const handleExportExcel = () => {
+    if (!products || products.length === 0) return alert('No data available to export.');
+
+    const headers = [
+      'Product Name',
+      'SKU',
+      'Cost Price (BDT)',
+      'Selling Price (BDT)',
+      'Customer Parcels (Orders)',
+      'Units Sold',
+      'Product Gross Profit (BDT)',
+      'Returned Units',
+      'Returned Courier Loss (BDT)',
+      'Return Profit Adjust (BDT)',
+      'Delivery Profit/Loss (BDT)',
+      'Marketing Cost (BDT)',
+      'Net Real Profit (BDT)',
+      'Profit Margin (%)'
+    ];
+
+    const rows = products.map(p => [
+      `"${(p.product_name || '').replace(/"/g, '""')}"`,
+      `"${(p.sku || '').replace(/"/g, '""')}"`,
+      p.cost_price.toFixed(2),
+      p.selling_price.toFixed(2),
+      p.parcels_count || 0,
+      p.units_sold || 0,
+      p.gross_profit.toFixed(2),
+      p.units_returned || 0,
+      (p.return_charges || 0).toFixed(2),
+      (p.return_profit_adjust || 0).toFixed(2),
+      p.product_delivery_profit.toFixed(2),
+      p.ad_spend_bdt.toFixed(2),
+      p.net_real_profit.toFixed(2),
+      p.profit_margin.toFixed(2)
+    ]);
+
+    // Add TOTAL SUMMARY Row at the bottom of the Excel sheet
+    rows.push([
+      '"TOTAL SUMMARY (সর্বমোট)"',
+      '""',
+      '""',
+      '""',
+      totalParcelsCount,
+      totalUnitsSold,
+      totalGrossProfit.toFixed(2),
+      totalUnitsReturned,
+      totalReturnCharges.toFixed(2),
+      totalReturnProfitAdjust.toFixed(2),
+      totalProductDeliveryProfit.toFixed(2),
+      totalAdSpendBdt.toFixed(2),
+      totalNetRealProfit.toFixed(2),
+      '""'
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Product_Profitability_Analytics_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -299,7 +366,19 @@ export const Analytics = () => {
       {activeTab === 'products' && (
         <div className="glass-card" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Itemized Product Financial Performance Breakdown</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>Itemized Product Financial Performance Breakdown</h3>
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="btn btn-sm"
+                style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', border: '1px solid rgba(16, 185, 129, 0.4)', fontWeight: '700', gap: '6px' }}
+                title="Download this profitability report as an Excel (.csv) spreadsheet file"
+              >
+                <FileSpreadsheet size={15} />
+                <span>Export to Excel (.csv)</span>
+              </button>
+            </div>
 
             {/* Table Horizontal Scroll Mover Buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-secondary)', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
