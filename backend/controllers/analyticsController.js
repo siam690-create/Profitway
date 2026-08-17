@@ -134,7 +134,7 @@ exports.getProductAnalytics = async (req, res) => {
       console.error('Analytics expensesSummary Query Error:', e.message);
     }
 
-    // 6. Wholesale B2B Analytics Summary
+    // 6. Wholesale B2B Reseller Analytics Summary
     let wholesaleSummary = [{ wholesale_orders_count: 0, wholesale_revenue: 0, wholesale_cogs: 0, wholesale_profit: 0, wholesale_cash_collected: 0, wholesale_pending_pawna: 0 }];
     try {
       const [rows] = await db.query(
@@ -142,13 +142,21 @@ exports.getProductAnalytics = async (req, res) => {
           COUNT(*) as wholesale_orders_count,
           COALESCE(SUM(total_amount), 0) as wholesale_revenue,
           COALESCE(SUM(total_cost), 0) as wholesale_cogs,
-          COALESCE(SUM(gross_profit), 0) as wholesale_profit,
+          COALESCE(SUM(gross_profit + delivery_profit), 0) as wholesale_profit,
           COALESCE(SUM(paid_amount), 0) as wholesale_cash_collected,
           COALESCE(SUM(due_amount), 0) as wholesale_pending_pawna
-         FROM wholesale_sales ${wholesaleWhere}`,
+         FROM reseller_sales ${wholesaleWhere}`,
         baseParams
       );
-      if (rows.length > 0) wholesaleSummary = rows;
+      const [returnRows] = await db.query(
+        `SELECT COALESCE(SUM(returned_profit_reversal), 0) as reseller_return_loss FROM reseller_returns ${wholesaleWhere.replace('sale_date', 'return_date')}`,
+        baseParams
+      );
+      if (rows.length > 0) {
+        wholesaleSummary = rows;
+        const loss = Number(returnRows[0]?.reseller_return_loss || 0);
+        wholesaleSummary[0].wholesale_profit = Number(wholesaleSummary[0].wholesale_profit || 0) - loss;
+      }
     } catch (e) {
       console.error('Analytics wholesaleSummary Query Error:', e.message);
     }
@@ -207,8 +215,8 @@ exports.getProductAnalytics = async (req, res) => {
     const resellerGrossProfit = Number(wholesaleSummary[0].wholesale_profit || 0);
 
     const netDelivProfitHarmonized = grossDeliveryProfit - returnChargesCost;
-    // NET REAL PROFIT = Realized Retail Product Profit + Net Delivery Profit + Reseller Profit - Paid Ads - Return Courier Charges - General Expenses
-    const netRealProfit = netRealizedGrossProfit + netDelivProfitHarmonized + resellerGrossProfit - paidAdsCost - returnChargesCost - otherExpensesCost;
+    // NET REAL PROFIT = Realized Retail Product Profit + Net Delivery Profit + Reseller Profit - Paid Ads - General Expenses
+    const netRealProfit = netRealizedGrossProfit + netDelivProfitHarmonized + resellerGrossProfit - paidAdsCost - otherExpensesCost;
 
     // 8. Itemized Product-wise Breakdown
     let salesAggParams = [tenantId];
