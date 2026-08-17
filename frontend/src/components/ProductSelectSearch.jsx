@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Package } from 'lucide-react';
 
-export const ProductSelectSearch = ({ products = [], selectedId, onSelect, placeholder = "Type product name or SKU to search..." }) => {
+export const ProductSelectSearch = ({ 
+  products = [], 
+  selectedId, 
+  onSelect, 
+  placeholder = "Type product name or SKU to search...",
+  allowAllOption = false,
+  allOptionLabel = "📦 All Products",
+  customOptions = []
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
@@ -9,14 +17,25 @@ export const ProductSelectSearch = ({ products = [], selectedId, onSelect, place
   // Sync selected product name into search input when selectedId changes
   useEffect(() => {
     if (selectedId) {
-      const found = products.find(p => String(p.id) === String(selectedId));
-      if (found) {
-        setSearchTerm(`${found.name} (${found.sku})`);
+      if (selectedId === 'all') {
+        setSearchTerm(allOptionLabel);
+      } else {
+        const customOpt = customOptions.find(o => String(o.id) === String(selectedId));
+        if (customOpt) {
+          setSearchTerm(customOpt.name);
+        } else {
+          const found = products.find(p => String(p.id) === String(selectedId));
+          if (found) {
+            setSearchTerm(found.sku ? `${found.name} (${found.sku})` : found.name);
+          } else {
+            setSearchTerm('');
+          }
+        }
       }
     } else {
       setSearchTerm('');
     }
-  }, [selectedId, products]);
+  }, [selectedId, products, allOptionLabel, customOptions]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -30,7 +49,7 @@ export const ProductSelectSearch = ({ products = [], selectedId, onSelect, place
   }, []);
 
   const filteredProducts = products.filter(p => {
-    if (!searchTerm || String(p.id) === String(selectedId)) return true;
+    if (!searchTerm || String(p.id) === String(selectedId) || searchTerm === allOptionLabel) return true;
     const term = searchTerm.toLowerCase();
     const nameMatch = p.name ? p.name.toLowerCase().includes(term) : false;
     const skuMatch = p.sku ? p.sku.toLowerCase().includes(term) : false;
@@ -39,7 +58,7 @@ export const ProductSelectSearch = ({ products = [], selectedId, onSelect, place
 
   const handleClear = () => {
     setSearchTerm('');
-    onSelect('');
+    onSelect(allowAllOption ? 'all' : '');
     setIsOpen(true);
   };
 
@@ -100,30 +119,77 @@ export const ProductSelectSearch = ({ products = [], selectedId, onSelect, place
             background: 'var(--bg-primary)',
             border: '1px solid var(--accent-primary)',
             borderRadius: '10px',
-            maxHeight: '230px',
+            maxHeight: '260px',
             overflowY: 'auto',
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
             marginTop: '4px'
           }}
         >
-          {/* General / Option to clear */}
-          <div
-            onClick={() => {
-              onSelect('');
-              setSearchTerm('');
-              setIsOpen(false);
-            }}
-            style={{
-              padding: '10px 14px',
-              borderBottom: '1px solid var(--border-color)',
-              cursor: 'pointer',
-              fontSize: '12px',
-              color: 'var(--text-muted)',
-              background: !selectedId ? 'var(--bg-secondary)' : 'transparent'
-            }}
-          >
-            <em>General Campaign / All Shop Products (No specific product)</em>
-          </div>
+          {/* Allow All option if enabled */}
+          {allowAllOption && (
+            <div
+              onClick={() => {
+                onSelect('all');
+                setSearchTerm(allOptionLabel);
+                setIsOpen(false);
+              }}
+              style={{
+                padding: '10px 14px',
+                borderBottom: '1px solid var(--border-color)',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: '#38bdf8',
+                background: selectedId === 'all' ? 'var(--bg-secondary)' : 'transparent'
+              }}
+            >
+              {allOptionLabel}
+            </div>
+          )}
+
+          {/* Render custom extra options if provided */}
+          {customOptions.map(opt => (
+            <div
+              key={opt.id}
+              onClick={() => {
+                onSelect(opt.id);
+                setSearchTerm(opt.name);
+                setIsOpen(false);
+              }}
+              style={{
+                padding: '10px 14px',
+                borderBottom: '1px solid var(--border-color)',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: '#eab308',
+                background: String(selectedId) === String(opt.id) ? 'var(--bg-secondary)' : 'transparent'
+              }}
+            >
+              {opt.name}
+            </div>
+          ))}
+
+          {/* Default General Option for modals */}
+          {!allowAllOption && customOptions.length === 0 && (
+            <div
+              onClick={() => {
+                onSelect('');
+                setSearchTerm('');
+                setIsOpen(false);
+              }}
+              style={{
+                padding: '10px 14px',
+                borderBottom: '1px solid var(--border-color)',
+                cursor: 'pointer',
+                fontSize: '12px',
+                color: 'var(--text-muted)',
+                background: !selectedId ? 'var(--bg-secondary)' : 'transparent'
+              }}
+            >
+              <em>General Campaign / All Shop Products (No specific product)</em>
+            </div>
+          )}
 
           {filteredProducts.length === 0 ? (
             <div style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
@@ -135,7 +201,7 @@ export const ProductSelectSearch = ({ products = [], selectedId, onSelect, place
                 key={p.id}
                 onClick={() => {
                   onSelect(p.id);
-                  setSearchTerm(`${p.name} (${p.sku})`);
+                  setSearchTerm(p.sku ? `${p.name} (${p.sku})` : p.name);
                   setIsOpen(false);
                 }}
                 style={{
@@ -143,21 +209,23 @@ export const ProductSelectSearch = ({ products = [], selectedId, onSelect, place
                   borderBottom: '1px solid var(--border-color)',
                   cursor: 'pointer',
                   display: 'flex',
-                  justify: 'space-between',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
                   background: String(selectedId) === String(p.id) ? 'var(--bg-secondary)' : 'transparent'
                 }}
               >
                 <div>
                   <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>{p.name}</strong>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>SKU: {p.sku} | Stock: {p.stock_quantity} left</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>SKU: {p.sku || 'N/A'} {p.stock_quantity !== undefined ? `| Stock: ${p.stock_quantity} left` : ''}</span>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--success)', display: 'block' }}>
-                    ৳{Number(p.selling_price || 0).toFixed(2)}
-                  </span>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sell Price</span>
-                </div>
+                {p.selling_price !== undefined && (
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--success)', display: 'block' }}>
+                      ৳{Number(p.selling_price || 0).toFixed(2)}
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sell Price</span>
+                  </div>
+                )}
               </div>
             ))
           )}

@@ -508,26 +508,22 @@ export const PaidAds = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Paid Ad Campaigns History</h3>
 
-          {/* Product-wise Filter Dropdown */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)' }}>Filter by Product:</span>
-            <select
-              className="form-select"
-              value={selectedProductFilter}
-              onChange={(e) => setSelectedProductFilter(e.target.value)}
-              style={{ width: 'auto', minWidth: '240px', padding: '6px 12px', fontSize: '13px', borderRadius: '8px', background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)', fontWeight: '600' }}
-            >
-              <option value="all">📦 All Target Products ({adsList.length} campaigns)</option>
-              <option value="unlinked">🔗 Unlinked / General Shop Campaigns</option>
-              {products.map(p => {
-                const count = adsList.filter(a => Number(a.product_id) === Number(p.id)).length;
-                return (
-                  <option key={p.id} value={p.id}>
-                    {p.name} {count > 0 ? `(${count} ads)` : ''}
-                  </option>
-                );
-              })}
-            </select>
+          {/* Product-wise Filter Dropdown using ProductSelectSearch */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '320px' }}>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Filter by Product:</span>
+            <div style={{ flex: 1 }}>
+              <ProductSelectSearch
+                products={products}
+                selectedId={selectedProductFilter}
+                onSelect={(id) => setSelectedProductFilter(id || 'all')}
+                placeholder="Search product name or SKU to filter..."
+                allowAllOption={true}
+                allOptionLabel={`📦 All Target Products (${adsList.length} campaigns)`}
+                customOptions={[
+                  { id: 'unlinked', name: '🔗 Unlinked / General Shop Campaigns' }
+                ]}
+              />
+            </div>
           </div>
         </div>
 
