@@ -271,38 +271,19 @@ exports.getProductAnalytics = async (req, res) => {
       // Fetch all returns for this tenant directly from returns table
       const [allReturnsList] = await db.query(`SELECT * FROM returns ${returnsOnlyWhere}`, returnsOnlyParams);
 
-      // Fetch all return items for this tenant safely
+      // Fetch all return items for this tenant with proper date filtering
       let allReturnItemsList = [];
       try {
-        const [riRows] = await db.query('SELECT * FROM return_items WHERE tenant_id = ? OR return_id IN (SELECT id FROM returns WHERE tenant_id = ?)', [tenantId, tenantId]);
+        const [riRows] = await db.query(
+          `SELECT ri.*, r.courier_charge, r.return_delivery_loss 
+           FROM return_items ri
+           JOIN returns r ON ri.return_id = r.id AND ri.tenant_id = r.tenant_id
+           ${returnsWhere}`,
+          baseParams
+        );
         allReturnItemsList = riRows;
       } catch (errRi) {
         console.warn('Note on return_items query:', errRi.message);
-      }
-
-      // Fetch all returned sales from sales table safely
-      let retSalesRows = [];
-      try {
-        let salesRetWhere = 'WHERE s.tenant_id = ?';
-        let salesRetParams = [tenantId];
-        if (!isAllTime) {
-          salesRetWhere += ' AND (s.sale_date IS NULL OR DATE(COALESCE(s.sale_date, s.created_at)) BETWEEN ? AND ?)';
-          salesRetParams.push(startDate, endDate);
-        }
-
-        const [rows] = await db.query(
-          `SELECT 
-             si.product_id,
-             si.quantity as units_returned,
-             si.item_profit as returned_profit_reversal
-           FROM sale_items si
-           JOIN sales s ON si.sale_id = s.id AND si.tenant_id = s.tenant_id
-           ${salesRetWhere} AND 1=0`,
-          salesRetParams
-        );
-        retSalesRows = rows;
-      } catch (errSalesRet) {
-        console.warn('Note on retSalesRows:', errSalesRet.message);
       }
 
       // Maps for product matching
@@ -330,7 +311,7 @@ exports.getProductAnalytics = async (req, res) => {
       const totalShopCourierCharges = allReturnsList.reduce((sum, r) => sum + Number(r.courier_charge || 0), 0);
       const totalShopDeliveryLosses = allReturnsList.reduce((sum, r) => sum + Number(r.return_delivery_loss || 0), 0);
 
-      // Process direct return_items
+      // Process direct return_items with STRICT matching (NO fallback to allProducts[0])
       for (const item of allReturnItemsList) {
         let matchedProduct = null;
         if (item.product_id) {
@@ -348,10 +329,6 @@ exports.getProductAnalytics = async (req, res) => {
           }
         }
 
-        if (!matchedProduct && allProducts.length > 0) {
-          matchedProduct = allProducts[0];
-        }
-
         if (matchedProduct) {
           const summary = getOrCreateSummary(matchedProduct.id);
           const qty = Number(item.quantity || 1);
@@ -363,53 +340,20 @@ exports.getProductAnalytics = async (req, res) => {
         }
       }
 
-      // Process sales marked as 'returned'
-      for (const row of retSalesRows) {
-        if (row.product_id) {
-          const pId = Number(row.product_id);
-          const summary = getOrCreateSummary(pId);
-          if (summary.units_returned === 0) {
-            summary.units_returned += Number(row.units_returned || 0);
-            summary.returned_profit_reversal += Number(row.returned_profit_reversal || 0);
-          }
-        }
-      }
-
-      // Allocate total shop courier return fees and delivery profit reversals across all products
+      // Allocate total shop courier return fees and delivery profit reversals ONLY to returned products
       const totalReturnedUnitsAcrossAll = Array.from(returnSummaryByProd.values()).reduce((sum, s) => sum + s.units_returned, 0);
 
-      if (totalShopCourierCharges > 0 && allProducts.length > 0) {
-        const totalSoldUnits = allProducts.reduce((sum, p) => {
-          const s = salesMap.get(Number(p.id)) || salesMap.get(String(p.id)) || {};
-          return sum + Number(s.units_sold || 0);
-        }, 0);
+      for (const p of allProducts) {
+        const summary = getOrCreateSummary(p.id);
+        const retQty = summary.units_returned;
 
-        for (const p of allProducts) {
-          const summary = getOrCreateSummary(p.id);
-          const s = salesMap.get(Number(p.id)) || salesMap.get(String(p.id)) || {};
-          const soldQty = Number(s.units_sold || 0);
-          const retQty = summary.units_returned;
-
-          let chargeShare = 0;
-          let lossShare = 0;
-
-          if (totalReturnedUnitsAcrossAll > 0 && retQty > 0) {
-            chargeShare += totalShopCourierCharges * (retQty / totalReturnedUnitsAcrossAll) * 0.7;
-          }
-          if (totalSoldUnits > 0 && soldQty > 0) {
-            chargeShare += totalShopCourierCharges * (soldQty / totalSoldUnits) * 0.3;
-          } else if (retQty === 0) {
-            chargeShare += totalShopCourierCharges / allProducts.length;
-          }
-
-          if (totalReturnedUnitsAcrossAll > 0 && retQty > 0) {
-            lossShare += totalShopDeliveryLosses * (retQty / totalReturnedUnitsAcrossAll);
-          } else {
-            lossShare += totalShopDeliveryLosses / allProducts.length;
-          }
-
-          summary.return_charges = Number(chargeShare.toFixed(2));
-          summary.returned_deliv_profit_reversal = Number(lossShare.toFixed(2));
+        if (totalReturnedUnitsAcrossAll > 0 && retQty > 0) {
+          const ratio = retQty / totalReturnedUnitsAcrossAll;
+          summary.return_charges = Number((totalShopCourierCharges * ratio).toFixed(2));
+          summary.returned_deliv_profit_reversal = Number((totalShopDeliveryLosses * ratio).toFixed(2));
+        } else {
+          summary.return_charges = 0;
+          summary.returned_deliv_profit_reversal = 0;
         }
       }
 
