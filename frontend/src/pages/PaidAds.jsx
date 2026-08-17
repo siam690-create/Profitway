@@ -1110,18 +1110,13 @@ export const PaidAds = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label" style={{ fontWeight: '700' }}>Select Product from Inventory (প্রোডাক্ট নির্বাচন করুন) *</label>
-                  <select
-                    className="form-select"
-                    required
-                    value={linkingProductId}
-                    onChange={(e) => setLinkingProductId(e.target.value)}
-                  >
-                    <option value="">-- Choose target product --</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} {p.sku ? `(SKU: ${p.sku})` : ''} - {currency}{p.selling_price}</option>
-                    ))}
-                  </select>
+                  <label className="form-label" style={{ fontWeight: '700' }}>Select Product from Inventory (প্রোডাক্ট টাইপ বা সার্চ করুন) *</label>
+                  <ProductSelectSearch
+                    products={products}
+                    selectedId={linkingProductId}
+                    onSelect={(id) => setLinkingProductId(id)}
+                    placeholder="Search product by name or SKU..."
+                  />
                 </div>
               </div>
 
