@@ -197,15 +197,17 @@ exports.getProductAnalytics = async (req, res) => {
     const netDeliveryProfit = grossDeliveryProfit - returnedDeliveryProfitReversal;
 
     const paidAdsCost = Number(adsSummary[0].total_paid_ads_cost || 0);
-    const returnChargesCost = Number(returnsSummary[0].total_courier_return_cost || 0);
+    const returnChargesCost = Number(returnsSummary[0].total_returns_count > 0 ? (returnsSummary[0].total_courier_return_cost || 0) : 0);
     const totalReturnsCount = Number(returnsSummary[0].total_returns_count || 0);
     const otherExpensesCost = Number(expensesSummary[0].total_other_expenses || 0);
 
     const returnRatePct = totalPosOrders > 0 ? ((totalReturnsCount / totalPosOrders) * 100).toFixed(1) : '0.0';
     const roasMultiplier = paidAdsCost > 0 ? (grossSalesRev / paidAdsCost).toFixed(2) : '0.0';
 
-    // NET REAL PROFIT = Realized Product Profit + Net Delivery Profit - Paid Ads - Courier Return Charges - Other Expenses
-    const netRealProfit = netRealizedGrossProfit + netDeliveryProfit - paidAdsCost - returnChargesCost - otherExpensesCost;
+    const resellerGrossProfit = Number(wholesaleSummary[0].wholesale_profit || 0);
+
+    // NET REAL PROFIT = Realized Retail Product Profit + Net Delivery Profit + Reseller Profit - Paid Ads - Return Courier Charges - General Expenses
+    const netRealProfit = netRealizedGrossProfit + (grossDeliveryProfit - returnedDeliveryProfitReversal) + resellerGrossProfit - paidAdsCost - returnChargesCost - otherExpensesCost;
 
     // 8. Itemized Product-wise Breakdown
     let salesAggParams = [tenantId];
