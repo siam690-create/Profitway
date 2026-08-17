@@ -308,6 +308,11 @@ export const Analytics = () => {
                 <Megaphone size={16} color="var(--warning)" />
               </div>
               <strong style={{ fontSize: '20px', color: 'var(--danger)' }}>{currency}{Number(summary.paid_ads_cost || 0).toFixed(2)}</strong>
+              {Number(summary.other_expenses_cost || 0) > 0 && (
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  + {currency}{Number(summary.other_expenses_cost || 0).toFixed(2)} Other Shop Expenses
+                </div>
+              )}
             </div>
 
             <div className="glass-card" style={{ padding: '18px', background: isNetProfitPositive ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)', border: `1px solid ${isNetProfitPositive ? 'var(--success)' : 'var(--danger)'}` }}>
@@ -343,6 +348,18 @@ export const Analytics = () => {
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block' }}>Marketing ROAS Multiplier</span>
                 <strong style={{ fontSize: '16px', color: 'var(--accent-primary)' }}>
                   {summary.roas_multiplier}x ROAS
+                </strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ padding: '10px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '10px', color: 'var(--warning)' }}>
+                <Receipt size={20} />
+              </div>
+              <div>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block' }}>Other Shop Expenses</span>
+                <strong style={{ fontSize: '16px', color: 'var(--warning)' }}>
+                  {currency}{Number(summary.other_expenses_cost || 0).toLocaleString()} (General Expenses)
                 </strong>
               </div>
             </div>
