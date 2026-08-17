@@ -137,7 +137,7 @@ exports.getProfitLossReport = async (req, res) => {
       totalOperatingExpenses += totalAdsCost;
     }
 
-    if (!expenseBreakdown['Courier Return'] && !expenseBreakdown['Return Fees'] && totalReturnFees > 0) {
+    if (!expenseBreakdown['Courier Return Charges'] && !expenseBreakdown['Courier Return'] && !expenseBreakdown['Return Fees'] && totalReturnFees > 0) {
       expenseBreakdown['Courier Return Charges'] = totalReturnFees;
       totalOperatingExpenses += totalReturnFees;
     }
