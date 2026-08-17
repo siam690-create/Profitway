@@ -142,9 +142,7 @@ exports.getProductAnalytics = async (req, res) => {
           COUNT(*) as wholesale_orders_count,
           COALESCE(SUM(total_amount), 0) as wholesale_revenue,
           COALESCE(SUM(total_cost), 0) as wholesale_cogs,
-          COALESCE(SUM(gross_profit + delivery_profit), 0) as wholesale_profit,
-          COALESCE(SUM(paid_amount), 0) as wholesale_cash_collected,
-          COALESCE(SUM(due_amount), 0) as wholesale_pending_pawna
+          COALESCE(SUM(gross_profit + delivery_profit), 0) as wholesale_profit
          FROM reseller_sales ${wholesaleWhere}`,
         baseParams
       );
