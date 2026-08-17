@@ -48,6 +48,17 @@ export const Analytics = () => {
   const riskProducts = analyticsData?.risk_products || [];
   const products = analyticsData?.products || [];
 
+  // Total Aggregates for Product Profitability Summary Row
+  const totalParcelsCount = products.reduce((sum, p) => sum + Number(p.parcels_count || 0), 0);
+  const totalUnitsSold = products.reduce((sum, p) => sum + Number(p.units_sold || 0), 0);
+  const totalGrossProfit = products.reduce((sum, p) => sum + Number(p.gross_profit || 0), 0);
+  const totalUnitsReturned = products.reduce((sum, p) => sum + Number(p.units_returned || 0), 0);
+  const totalReturnCharges = products.reduce((sum, p) => sum + Number(p.return_charges || 0), 0);
+  const totalReturnProfitAdjust = products.reduce((sum, p) => sum + Number(p.return_profit_adjust || 0), 0);
+  const totalProductDeliveryProfit = products.reduce((sum, p) => sum + Number(p.product_delivery_profit || 0), 0);
+  const totalAdSpendBdt = products.reduce((sum, p) => sum + Number(p.ad_spend_bdt || 0), 0);
+  const totalNetRealProfit = products.reduce((sum, p) => sum + Number(p.net_real_profit || 0), 0);
+
   const isNetProfitPositive = Number(summary.net_real_profit || 0) >= 0;
   const netDelivProfit = Number(summary.net_delivery_profit || 0);
 
@@ -317,6 +328,48 @@ export const Analytics = () => {
           <div id="products-table-container" className="table-wrapper" style={{ overflowX: 'auto', scrollBehavior: 'smooth' }}>
             <table className="data-table" style={{ minWidth: '1500px' }}>
               <thead>
+                {/* 🌟 TOTAL COLUMN SUMMARY ROW */}
+                {products.length > 0 && (
+                  <tr style={{ background: 'linear-gradient(90deg, rgba(56, 189, 248, 0.22), rgba(16, 185, 129, 0.22))', borderBottom: '2px solid var(--accent-primary)' }}>
+                    <td style={{ padding: '14px 12px', background: 'transparent' }}>
+                      <div style={{ fontWeight: '800', color: '#38bdf8', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Sparkles size={16} color="#38bdf8" />
+                        <span>TOTAL SUMMARY (সর্বমোট)</span>
+                      </div>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{products.length} Products Aggregate</span>
+                    </td>
+                    <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>-</td>
+                    <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>-</td>
+                    <td style={{ textAlign: 'center', fontWeight: '800', color: '#38bdf8', fontSize: '14px' }}>
+                      {totalParcelsCount.toLocaleString()} Orders
+                    </td>
+                    <td style={{ textAlign: 'center', fontWeight: '800', color: 'var(--success)', fontSize: '14px' }}>
+                      {totalUnitsSold.toLocaleString()} Sold
+                    </td>
+                    <td style={{ fontWeight: '800', color: 'var(--success)', fontSize: '14px' }}>
+                      +{currency}{totalGrossProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'center', fontWeight: '800', color: totalUnitsReturned > 0 ? 'var(--danger)' : 'var(--text-muted)', fontSize: '14px' }}>
+                      {totalUnitsReturned.toLocaleString()} Returned
+                    </td>
+                    <td style={{ fontWeight: '800', color: totalReturnCharges > 0 ? 'var(--danger)' : 'var(--text-muted)', fontSize: '14px' }}>
+                      -{currency}{totalReturnCharges.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ fontWeight: '800', color: totalReturnProfitAdjust > 0 ? 'var(--danger)' : 'var(--text-muted)', fontSize: '14px' }}>
+                      -{currency}{totalReturnProfitAdjust.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ fontWeight: '800', color: totalProductDeliveryProfit >= 0 ? 'var(--success)' : 'var(--danger)', fontSize: '14px' }}>
+                      {totalProductDeliveryProfit >= 0 ? '+' : ''}{currency}{totalProductDeliveryProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ fontWeight: '800', color: totalAdSpendBdt > 0 ? 'var(--danger)' : 'var(--text-muted)', fontSize: '14px' }}>
+                      -{currency}{totalAdSpendBdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ fontWeight: '800', fontSize: '15px', color: totalNetRealProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                      {totalNetRealProfit >= 0 ? '+' : ''}{currency}{totalNetRealProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                )}
+
                 <tr>
                   <th style={{ minWidth: '180px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
