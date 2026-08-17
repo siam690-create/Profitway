@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X, Layers, FileSpreadsheet, CreditCard, Settings, Filter } from 'lucide-react';
+import { Megaphone, Plus, DollarSign, Calculator, Trash2, Calendar, ShoppingBag, X, Layers, FileSpreadsheet, CreditCard, Settings, Filter, Zap, RefreshCw, CheckCircle2, Link2 } from 'lucide-react';
 
 import { ProductSelectSearch } from '../components/ProductSelectSearch';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { BulkImportAdsModal } from '../components/BulkImportAdsModal';
 
 export const PaidAds = () => {
-  const { authFetch, products, currency, refreshAllData, user } = useApp();
+  const { authFetch, products, currency, refreshAllData, user, showToast } = useApp();
   const [adsList, setAdsList] = useState([]);
   const [adAccounts, setAdAccounts] = useState([]);
   const [selectedAccountFilter, setSelectedAccountFilter] = useState('all');
@@ -18,17 +18,25 @@ export const PaidAds = () => {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
 
-  // Ad Account Create Form
+  // Meta Auto Syncing State
+  const [isSyncingMeta, setIsSyncingMeta] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState(null);
+
+  // Ad Account Create / Edit Form
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountPlatform, setNewAccountPlatform] = useState('Facebook Ads');
   const [newAccountIdCode, setNewAccountIdCode] = useState('');
+  const [newAccountAccessToken, setNewAccountAccessToken] = useState('');
+  const [newAccountExchangeRate, setNewAccountExchangeRate] = useState('127');
+  const [newAccountDefaultProduct, setNewAccountDefaultProduct] = useState('');
+  const [newAccountIsMetaConnected, setNewAccountIsMetaConnected] = useState(true);
 
   // Multi-Product Ad Items Form State
   const [adItems, setAdItems] = useState([
     { product_id: '', amount_usd: '', notes: '' }
   ]);
   const [platform, setPlatform] = useState('Facebook Ads');
-  const [exchangeRate, setExchangeRate] = useState('122');
+  const [exchangeRate, setExchangeRate] = useState('127');
   const [adDate, setAdDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
 
@@ -57,24 +65,77 @@ export const PaidAds = () => {
     fetchAdAccounts();
   }, []);
 
-  const handleCreateAccount = async (e) => {
+  const handleMetaSync = async () => {
+    if (isSyncingMeta) return;
+    setIsSyncingMeta(true);
+    try {
+      const res = await authFetch('/api/ads/meta-sync', {
+        method: 'POST',
+        body: JSON.stringify({ ad_account_id: selectedAccountFilter })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || 'Meta Marketing API synced successfully!', 'success');
+        fetchAds();
+        fetchAdAccounts();
+        refreshAllData();
+      } else {
+        showToast(`Meta Sync Error: ${data.error}`, 'error');
+      }
+    } catch (err) {
+      showToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setIsSyncingMeta(false);
+    }
+  };
+
+  const resetAccountForm = () => {
+    setEditingAccountId(null);
+    setNewAccountName('');
+    setNewAccountPlatform('Facebook Ads');
+    setNewAccountIdCode('');
+    setNewAccountAccessToken('');
+    setNewAccountExchangeRate('127');
+    setNewAccountDefaultProduct('');
+    setNewAccountIsMetaConnected(true);
+  };
+
+  const handleEditAccount = (acc) => {
+    setEditingAccountId(acc.id);
+    setNewAccountName(acc.account_name || '');
+    setNewAccountPlatform(acc.platform || 'Facebook Ads');
+    setNewAccountIdCode(acc.meta_account_id || acc.account_id_code || '');
+    setNewAccountAccessToken(acc.access_token || '');
+    setNewAccountExchangeRate(acc.exchange_rate ? String(acc.exchange_rate) : '127');
+    setNewAccountDefaultProduct(acc.default_product_id ? String(acc.default_product_id) : '');
+    setNewAccountIsMetaConnected(Boolean(acc.is_meta_connected));
+  };
+
+  const handleCreateOrUpdateAccount = async (e) => {
     e.preventDefault();
     if (!newAccountName.trim()) return alert('Please enter Ad Account Name');
     try {
-      const res = await authFetch('/api/ads/accounts', {
-        method: 'POST',
+      const endpoint = editingAccountId ? `/api/ads/accounts/${editingAccountId}` : '/api/ads/accounts';
+      const method = editingAccountId ? 'PUT' : 'POST';
+
+      const res = await authFetch(endpoint, {
+        method,
         body: JSON.stringify({
           account_name: newAccountName.trim(),
           platform: newAccountPlatform,
-          account_id_code: newAccountIdCode.trim()
+          account_id_code: newAccountIdCode.trim(),
+          meta_account_id: newAccountIdCode.trim(),
+          access_token: newAccountAccessToken.trim(),
+          exchange_rate: newAccountExchangeRate ? Number(newAccountExchangeRate) : 127.00,
+          default_product_id: newAccountDefaultProduct ? Number(newAccountDefaultProduct) : null,
+          is_meta_connected: newAccountIsMetaConnected ? 1 : 0
         })
       });
       const data = await res.json();
       if (res.ok) {
-        setNewAccountName('');
-        setNewAccountIdCode('');
+        resetAccountForm();
         fetchAdAccounts();
-        alert('Ad Account created successfully!');
+        showToast(editingAccountId ? 'Ad Account updated successfully!' : 'Ad Account connected successfully!', 'success');
       } else {
         alert(`Error: ${data.error}`);
       }
@@ -258,6 +319,32 @@ export const PaidAds = () => {
               setEndDate(e);
             }}
           />
+
+          <button 
+            onClick={handleMetaSync} 
+            disabled={isSyncingMeta}
+            className="btn btn-secondary"
+            style={{ 
+              gap: '6px', 
+              fontWeight: '700', 
+              background: 'linear-gradient(135deg, rgba(24, 119, 242, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)', 
+              borderColor: '#1877f2', 
+              color: '#38bdf8' 
+            }}
+            title="Auto Sync Meta Marketing API Campaign Spend"
+          >
+            {isSyncingMeta ? (
+              <>
+                <RefreshCw size={16} className="spin" />
+                <span>Syncing Meta Ads...</span>
+              </>
+            ) : (
+              <>
+                <Zap size={16} color="#38bdf8" />
+                <span>⚡ Sync Meta Ads (অটো সিঙ্ক)</span>
+              </>
+            )}
+          </button>
 
           <button 
             onClick={() => {
@@ -660,28 +747,38 @@ export const PaidAds = () => {
       {/* MODAL: AD ACCOUNTS MANAGER */}
       {showAccountModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '540px' }}>
+          <div className="modal-content" style={{ maxWidth: '620px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CreditCard size={20} color="var(--accent-primary)" />
-                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Manage Ad Accounts</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>
+                  {editingAccountId ? 'Edit Ad Account Connection' : 'Connect Meta & Ad Accounts'}
+                </h3>
               </div>
-              <button onClick={() => setShowAccountModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+              <button onClick={() => { resetAccountForm(); setShowAccountModal(false); }} className="btn btn-secondary btn-icon"><X size={18} /></button>
             </div>
 
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Form to Add New Ad Account */}
-              <form onSubmit={handleCreateAccount} style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <strong style={{ fontSize: '13px', color: 'var(--accent-primary)' }}>+ Add New Ad Account</strong>
+              {/* Form to Add / Edit Meta Ad Account */}
+              <form onSubmit={handleCreateOrUpdateAccount} style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--accent-primary)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ fontSize: '14px', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Zap size={16} />
+                    <span>{editingAccountId ? 'Edit Meta Ad Account Setup' : '+ Connect New Meta Ad Account'}</span>
+                  </strong>
+                  {editingAccountId && (
+                    <button type="button" onClick={resetAccountForm} className="btn btn-secondary btn-xs">Cancel Edit</button>
+                  )}
+                </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '10px' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '11px' }}>Ad Account Name *</label>
+                    <label className="form-label" style={{ fontSize: '11px' }}>Ad Account Name / Title *</label>
                     <input
                       type="text"
                       className="form-input"
                       required
-                      placeholder="e.g. Meta Account #1 (Trendx)"
+                      placeholder="e.g. Cholojai Meta Ad Account 1"
                       value={newAccountName}
                       onChange={(e) => setNewAccountName(e.target.value)}
                     />
@@ -694,7 +791,7 @@ export const PaidAds = () => {
                       value={newAccountPlatform}
                       onChange={(e) => setNewAccountPlatform(e.target.value)}
                     >
-                      <option value="Facebook Ads">Facebook / Meta</option>
+                      <option value="Facebook Ads">Facebook / Meta Ads</option>
                       <option value="Google Ads">Google Ads</option>
                       <option value="TikTok Ads">TikTok Ads</option>
                       <option value="Others">Others</option>
@@ -702,43 +799,117 @@ export const PaidAds = () => {
                   </div>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '11px' }}>Account Code / ID (Optional)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. act_109283746"
-                    value={newAccountIdCode}
-                    onChange={(e) => setNewAccountIdCode(e.target.value)}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '10px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '11px' }}>Meta Ad Account ID (act_XXXXXXXXXXX)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. act_1234567890"
+                      value={newAccountIdCode}
+                      onChange={(e) => setNewAccountIdCode(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '11px' }}>Default Exchange Rate (৳/$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="form-input"
+                      placeholder="e.g. 127.00"
+                      value={newAccountExchangeRate}
+                      onChange={(e) => setNewAccountExchangeRate(e.target.value)}
+                    />
+                  </div>
                 </div>
 
-                <button type="submit" className="btn btn-primary btn-sm" style={{ marginTop: '4px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '11px' }}>Meta System / User Access Token (Marketing API)</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="e.g. EAAB..."
+                    value={newAccountAccessToken}
+                    onChange={(e) => setNewAccountAccessToken(e.target.value)}
+                  />
+                  <small style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>
+                    Generate User / System Access Token from Meta Business Manager with ads_read permission.
+                  </small>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '10px', alignItems: 'center' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '11px' }}>Sync Default Linked Product (Fallback)</label>
+                    <select
+                      className="form-select"
+                      value={newAccountDefaultProduct}
+                      onChange={(e) => setNewAccountDefaultProduct(e.target.value)}
+                    >
+                      <option value="">Auto-match product by campaign name...</option>
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({currency}{p.selling_price})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '14px' }}>
+                    <input
+                      type="checkbox"
+                      id="isMetaConn"
+                      checked={newAccountIsMetaConnected}
+                      onChange={(e) => setNewAccountIsMetaConnected(e.target.checked)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="isMetaConn" style={{ fontSize: '12px', fontWeight: '700', cursor: 'pointer', color: '#38bdf8' }}>
+                      Enable Meta Auto-Sync ⚡
+                    </label>
+                  </div>
+                </div>
+
+                <button type="submit" className="btn btn-primary btn-sm" style={{ marginTop: '6px' }}>
                   <Plus size={14} />
-                  <span>Save Ad Account</span>
+                  <span>{editingAccountId ? 'Update Ad Account' : 'Save & Connect Ad Account'}</span>
                 </button>
               </form>
 
-              {/* List of Existing Ad Accounts */}
+              {/* List of Existing Connected Ad Accounts */}
               <div>
-                <strong style={{ fontSize: '13px', display: 'block', marginBottom: '8px' }}>Created Ad Accounts ({adAccounts.length})</strong>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+                <strong style={{ fontSize: '13px', display: 'block', marginBottom: '8px' }}>Connected Ad Accounts ({adAccounts.length})</strong>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
                   {adAccounts.length === 0 ? (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '16px' }}>
-                      No ad accounts created yet. Add one above!
+                      No ad accounts created yet. Connect your first Meta Ad Account above!
                     </div>
                   ) : (
                     adAccounts.map(acc => (
-                      <div key={acc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                      <div key={acc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                         <div>
-                          <strong style={{ fontSize: '13px' }}>💳 {acc.account_name}</strong>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            {acc.platform} {acc.account_id_code ? `• Code: ${acc.account_id_code}` : ''}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <strong style={{ fontSize: '13px' }}>💳 {acc.account_name}</strong>
+                            {acc.is_meta_connected ? (
+                              <span style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.3)', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: '700' }}>
+                                🟢 Meta API Active
+                              </span>
+                            ) : (
+                              <span style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border-color)', padding: '2px 8px', borderRadius: '12px', fontSize: '10px' }}>
+                                ⚪ Manual
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {acc.platform} {acc.meta_account_id || acc.account_id_code ? `• ID: ${acc.meta_account_id || acc.account_id_code}` : ''} • Exchange: ৳{acc.exchange_rate || 127}/$
                           </div>
                         </div>
-                        <button onClick={() => handleDeleteAccount(acc.id)} className="btn btn-secondary btn-icon btn-xs">
-                          <Trash2 size={13} color="var(--danger)" />
-                        </button>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button onClick={() => handleEditAccount(acc)} className="btn btn-secondary btn-icon btn-xs" title="Edit Settings">
+                            <Settings size={13} color="var(--accent-primary)" />
+                          </button>
+                          <button onClick={() => handleDeleteAccount(acc.id)} className="btn btn-secondary btn-icon btn-xs" title="Delete Account">
+                            <Trash2 size={13} color="var(--danger)" />
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -747,7 +918,7 @@ export const PaidAds = () => {
             </div>
 
             <div className="modal-footer">
-              <button type="button" onClick={() => setShowAccountModal(false)} className="btn btn-secondary">Done</button>
+              <button type="button" onClick={() => { resetAccountForm(); setShowAccountModal(false); }} className="btn btn-secondary">Done</button>
             </div>
           </div>
         </div>

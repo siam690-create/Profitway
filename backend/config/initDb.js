@@ -252,12 +252,28 @@ async function autoMigrate() {
         account_name VARCHAR(255) NOT NULL,
         platform VARCHAR(100) DEFAULT 'Facebook Ads',
         account_id_code VARCHAR(100) DEFAULT NULL,
+        access_token TEXT DEFAULT NULL,
+        meta_account_id VARCHAR(100) DEFAULT NULL,
+        exchange_rate DECIMAL(10,2) DEFAULT 127.00,
+        default_product_id INT DEFAULT NULL,
+        is_meta_connected TINYINT(1) DEFAULT 0,
+        last_synced_at DATETIME DEFAULT NULL,
         is_active TINYINT(1) DEFAULT 1,
         notes TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_ada_tenant (tenant_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    await addColumnIfNotExists('ad_accounts', 'access_token', 'TEXT DEFAULT NULL');
+    await addColumnIfNotExists('ad_accounts', 'meta_account_id', 'VARCHAR(100) DEFAULT NULL');
+    await addColumnIfNotExists('ad_accounts', 'exchange_rate', 'DECIMAL(10,2) DEFAULT 127.00');
+    await addColumnIfNotExists('ad_accounts', 'default_product_id', 'INT DEFAULT NULL');
+    await addColumnIfNotExists('ad_accounts', 'is_meta_connected', 'TINYINT(1) DEFAULT 0');
+    await addColumnIfNotExists('ad_accounts', 'last_synced_at', 'DATETIME DEFAULT NULL');
+
+    await addColumnIfNotExists('paid_ads', 'meta_campaign_id', 'VARCHAR(100) DEFAULT NULL');
+    await addColumnIfNotExists('paid_ads', 'meta_campaign_name', 'VARCHAR(255) DEFAULT NULL');
 
     await db.query(`
       CREATE TABLE IF NOT EXISTS paid_ads (
