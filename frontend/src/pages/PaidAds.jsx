@@ -25,6 +25,24 @@ export const PaidAds = () => {
   const [syncTargetDate, setSyncTargetDate] = useState(new Date().toISOString().slice(0, 10));
   const [syncDatePreset, setSyncDatePreset] = useState('today');
 
+  // Ad Account Create / Edit Form
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountPlatform, setNewAccountPlatform] = useState('Facebook Ads');
+  const [newAccountIdCode, setNewAccountIdCode] = useState('');
+  const [newAccountAccessToken, setNewAccountAccessToken] = useState('');
+  const [newAccountExchangeRate, setNewAccountExchangeRate] = useState('127');
+  const [newAccountDefaultProduct, setNewAccountDefaultProduct] = useState('');
+  const [newAccountIsMetaConnected, setNewAccountIsMetaConnected] = useState(true);
+
+  // Multi-Product Ad Items Form State
+  const [adItems, setAdItems] = useState([
+    { product_id: '', amount_usd: '', notes: '' }
+  ]);
+  const [platform, setPlatform] = useState('Facebook Ads');
+  const [exchangeRate, setExchangeRate] = useState('127');
+  const [adDate, setAdDate] = useState(new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState('');
+
   const fetchAds = async () => {
     try {
       const res = await authFetch('/api/ads');
