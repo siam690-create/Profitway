@@ -24,6 +24,7 @@ export const PaidAds = () => {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncTargetDate, setSyncTargetDate] = useState(new Date().toISOString().slice(0, 10));
   const [syncDatePreset, setSyncDatePreset] = useState('today');
+  const [syncAdAccountId, setSyncAdAccountId] = useState('all');
 
   // Ad Account Create / Edit Form
   const [newAccountName, setNewAccountName] = useState('');
@@ -109,7 +110,7 @@ export const PaidAds = () => {
       }
 
       const payload = {
-        ad_account_id: selectedAccountFilter,
+        ad_account_id: syncAdAccountId,
         date_preset: syncDatePreset === 'custom' ? undefined : syncDatePreset,
         date: targetDateVal
       };
@@ -1058,11 +1059,18 @@ export const PaidAds = () => {
                   </div>
                 )}
 
-                <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '12px' }}>
-                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Target Account Filter:</span>
-                  <strong style={{ color: 'var(--accent-primary)' }}>
-                    {selectedAccountFilter === 'all' ? '💳 All Connected Meta Ad Accounts' : (adAccounts.find(a => Number(a.id) === Number(selectedAccountFilter))?.account_name || 'Selected Ad Account')}
-                  </strong>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: '700' }}>Select Ad Account (অ্যাড একাউন্ট বেছে নিন)</label>
+                  <select
+                    className="form-select"
+                    value={syncAdAccountId}
+                    onChange={(e) => setSyncAdAccountId(e.target.value)}
+                  >
+                    <option value="all">💳 All Connected Meta Ad Accounts (সবগুলো একাউন্ট)</option>
+                    {adAccounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>💳 {acc.account_name} ({acc.platform})</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
