@@ -436,7 +436,7 @@ exports.syncMetaAds = async (req, res) => {
             dateParam = `time_range=${encodeURIComponent(JSON.stringify({ since: date, until: date }))}`;
           }
 
-          let nextUrl = `https://graph.facebook.com/v19.0/${actId}/insights?level=campaign&fields=campaign_id,campaign_name,spend,impressions,clicks&limit=500&${dateParam}&access_token=${encodeURIComponent(acc.access_token.trim())}`;
+          let nextUrl = `https://graph.facebook.com/v19.0/${actId}/insights?level=campaign&fields=campaign_id,campaign_name,spend,impressions,clicks&time_increment=1&limit=500&${dateParam}&access_token=${encodeURIComponent(acc.access_token.trim())}`;
 
           while (nextUrl) {
             const fbRes = await fetch(nextUrl);
@@ -449,7 +449,8 @@ exports.syncMetaAds = async (req, res) => {
                   campaigns.push({
                     campaign_id: item.campaign_id,
                     campaign_name: item.campaign_name || 'Meta Ad Campaign',
-                    spend_usd: spendVal
+                    spend_usd: spendVal,
+                    ad_date: item.date_start || targetDate
                   });
                 }
               }
@@ -476,6 +477,8 @@ exports.syncMetaAds = async (req, res) => {
       for (const camp of campaigns) {
         if (camp.spend_usd <= 0) continue;
 
+        const itemAdDate = camp.ad_date || targetDate;
+
         // Auto Match Campaign Name with Products
         let matchedProduct = null;
         if (shopProducts.length > 0) {
@@ -493,7 +496,7 @@ exports.syncMetaAds = async (req, res) => {
         // Check if record already exists for this campaign & date
         const [existing] = await connection.query(
           'SELECT id, amount_usd FROM paid_ads WHERE tenant_id = ? AND meta_campaign_id = ? AND ad_date = ?',
-          [tenantId, camp.campaign_id, targetDate]
+          [tenantId, camp.campaign_id, itemAdDate]
         );
 
         if (existing.length === 0) {
@@ -511,7 +514,7 @@ exports.syncMetaAds = async (req, res) => {
               camp.spend_usd,
               rateVal,
               bdtCost,
-              targetDate,
+              itemAdDate,
               camp.campaign_id,
               camp.campaign_name,
               `Auto-synced via Meta Marketing API (${acc.account_name})`
@@ -526,7 +529,7 @@ exports.syncMetaAds = async (req, res) => {
               tenantId,
               `Paid Ad (${acc.platform || 'Facebook Ads'}) - ${productName}`,
               bdtCost,
-              targetDate,
+              itemAdDate,
               `Ad Spend: $${camp.spend_usd.toFixed(2)} @ ${rateVal} BDT/$ (Ad ID: #${adRes.insertId}) [Account: ${acc.account_name}] - Meta Campaign: ${camp.campaign_name}`
             ]
           );
