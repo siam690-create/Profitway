@@ -233,7 +233,7 @@ exports.createAd = async (req, res) => {
 exports.getAds = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const { ad_account_id } = req.query;
+    const { ad_account_id, start_date, end_date } = req.query;
 
     let query = 'SELECT * FROM paid_ads WHERE tenant_id = ?';
     let params = [tenantId];
@@ -243,7 +243,12 @@ exports.getAds = async (req, res) => {
       params.push(Number(ad_account_id));
     }
 
-    query += ' ORDER BY ad_date DESC, id DESC LIMIT 500';
+    if (start_date && end_date) {
+      query += ' AND ad_date >= ? AND ad_date <= ?';
+      params.push(start_date, end_date);
+    }
+
+    query += ' ORDER BY ad_date DESC, id DESC LIMIT 5000';
     const [ads] = await db.query(query, params);
     res.json(ads);
   } catch (error) {

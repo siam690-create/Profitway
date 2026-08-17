@@ -72,9 +72,13 @@ export const PaidAds = () => {
     }
   };
 
-  const fetchAds = async () => {
+  const fetchAds = async (sDate = startDate, eDate = endDate) => {
     try {
-      const res = await authFetch('/api/ads');
+      let url = '/api/ads';
+      if (sDate && eDate) {
+        url += `?start_date=${sDate}&end_date=${eDate}`;
+      }
+      const res = await authFetch(url);
       const data = await res.json();
       if (res.ok) setAdsList(data);
     } catch (err) {
@@ -371,6 +375,7 @@ export const PaidAds = () => {
             onFilterChange={({ startDate: s, endDate: e }) => {
               setStartDate(s);
               setEndDate(e);
+              fetchAds(s, e);
             }}
           />
 
