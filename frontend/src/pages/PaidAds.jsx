@@ -537,7 +537,7 @@ export const PaidAds = () => {
                             style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#eab308', border: '1px solid rgba(234, 179, 8, 0.4)', fontWeight: '700', gap: '4px' }}
                             title="Manually link this ad spend to a specific inventory product"
                           >
-                            <LinkIcon size={12} />
+                            <Link2 size={12} />
                             <span>🔗 Link Product ({ad.product_name || 'Unassigned'})</span>
                           </button>
                         ) : (
@@ -552,7 +552,7 @@ export const PaidAds = () => {
                               title="Change / re-map linked product"
                               style={{ padding: '2px 4px' }}
                             >
-                              <LinkIcon size={12} color="var(--accent-primary)" />
+                              <Link2 size={12} color="var(--accent-primary)" />
                             </button>
                           </>
                         )}
@@ -1083,7 +1083,7 @@ export const PaidAds = () => {
           <div className="modal-content" style={{ maxWidth: '480px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <LinkIcon size={20} color="var(--accent-primary)" />
+                <Link2 size={20} color="var(--accent-primary)" />
                 <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Link Ad Campaign to Product</h3>
               </div>
               <button onClick={() => setLinkingAdRecord(null)} className="btn btn-secondary btn-icon"><X size={18} /></button>
