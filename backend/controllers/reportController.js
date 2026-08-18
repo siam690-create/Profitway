@@ -122,7 +122,7 @@ exports.getProfitLossReport = async (req, res) => {
     // 8. Wholesale B2B Sales Gross Profit & Revenue
     let wholesaleWhere = 'WHERE tenant_id = ?';
     if (!isAllTime) {
-      wholesaleWhere += ' AND DATE(COALESCE(sale_date, created_at)) BETWEEN ? AND ?';
+      wholesaleWhere += ' AND DATE(sale_date) BETWEEN ? AND ?';
     }
     const [wholesaleResult] = await db.query(
       `SELECT 
