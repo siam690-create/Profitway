@@ -101,19 +101,23 @@ const resolveTenantId = async (req) => {
   if (req.user && req.user.tenantId) {
     return req.user.tenantId;
   }
-  const resellerName = req.query.reseller_name || req.body.reseller_name || req.body.identifier;
+  const resellerName = req.query.reseller_name || req.query.reseller_id || req.body.reseller_name || req.body.reseller_id || req.body.identifier;
   if (resellerName) {
     const [pRows] = await db.query(
-      `SELECT tenant_id FROM reseller_profiles WHERE name = ? OR email = ? OR phone = ? LIMIT 1`,
-      [resellerName, resellerName, resellerName]
+      `SELECT tenant_id FROM reseller_profiles WHERE id = ? OR name = ? OR email = ? OR phone = ? LIMIT 1`,
+      [resellerName, resellerName, resellerName, resellerName]
     );
     if (pRows.length > 0) {
       return pRows[0].tenant_id;
     }
   }
-  const [tRows] = await db.query(`SELECT id FROM tenants LIMIT 1`);
+  if (req.query.tenant_id) {
+    return Number(req.query.tenant_id);
+  }
+  // Fallback to primary tenant with inventory products
+  const [tRows] = await db.query(`SELECT tenant_id, COUNT(*) as cnt FROM products GROUP BY tenant_id ORDER BY cnt DESC LIMIT 1`);
   if (tRows.length > 0) {
-    return tRows[0].id;
+    return tRows[0].tenant_id;
   }
   return 1;
 };

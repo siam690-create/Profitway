@@ -107,7 +107,10 @@ const ResellerPortal = () => {
   const fetchCatalog = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/reseller/catalog');
+      const url = resellerName 
+        ? `/api/reseller/catalog?reseller_name=${encodeURIComponent(resellerName)}`
+        : '/api/reseller/catalog';
+      const res = await fetch(url);
       const data = await res.json();
       if (res.ok) setCatalog(data);
     } catch (e) {
@@ -134,11 +137,10 @@ const ResellerPortal = () => {
 
   useEffect(() => {
     fetchCatalog();
-  }, []);
-
-  useEffect(() => {
     fetchWalletAndOrders();
-    localStorage.setItem('profitway_reseller_name', resellerName);
+    if (resellerName) {
+      localStorage.setItem('profitway_reseller_name', resellerName);
+    }
   }, [resellerName]);
 
   const handleOpenOrderModal = (product) => {
