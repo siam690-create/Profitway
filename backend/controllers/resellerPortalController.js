@@ -459,3 +459,111 @@ exports.processResellerPayout = async (req, res) => {
     connection.release();
   }
 };
+
+// 6. Get all Reseller Profiles
+exports.getResellerProfiles = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const connection = await db.getConnection();
+    try {
+      await ensureResellerSchema(connection);
+    } finally {
+      connection.release();
+    }
+
+    const [profiles] = await db.query(
+      `SELECT * FROM reseller_profiles WHERE tenant_id = ? ORDER BY id DESC`,
+      [tenantId]
+    );
+
+    res.json(profiles);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 7. Create Reseller Profile
+exports.createResellerProfile = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { name, phone, email, address, bkash_no, nagad_no, bank_info, status } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Reseller Name is required.' });
+    }
+
+    const connection = await db.getConnection();
+    try {
+      await ensureResellerSchema(connection);
+    } finally {
+      connection.release();
+    }
+
+    const [result] = await db.query(
+      `INSERT INTO reseller_profiles (tenant_id, name, phone, email, address, bkash_no, nagad_no, bank_info, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        name.trim(),
+        phone ? phone.trim() : null,
+        email ? email.trim() : null,
+        address || null,
+        bkash_no ? bkash_no.trim() : null,
+        nagad_no ? nagad_no.trim() : null,
+        bank_info || null,
+        status || 'active'
+      ]
+    );
+
+    res.status(201).json({
+      message: `Reseller Profile created for "${name}"!`,
+      profileId: result.insertId
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 8. Update Reseller Profile
+exports.updateResellerProfile = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+    const { name, phone, email, address, bkash_no, nagad_no, bank_info, status } = req.body;
+
+    await db.query(
+      `UPDATE reseller_profiles 
+       SET name = ?, phone = ?, email = ?, address = ?, bkash_no = ?, nagad_no = ?, bank_info = ?, status = ?
+       WHERE id = ? AND tenant_id = ?`,
+      [
+        name ? name.trim() : 'Reseller',
+        phone ? phone.trim() : null,
+        email ? email.trim() : null,
+        address || null,
+        bkash_no ? bkash_no.trim() : null,
+        nagad_no ? nagad_no.trim() : null,
+        bank_info || null,
+        status || 'active',
+        id,
+        tenantId
+      ]
+    );
+
+    res.json({ message: 'Reseller profile updated successfully!' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 9. Delete Reseller Profile
+exports.deleteResellerProfile = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+
+    await db.query('DELETE FROM reseller_profiles WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    res.json({ message: 'Reseller profile deleted successfully!' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

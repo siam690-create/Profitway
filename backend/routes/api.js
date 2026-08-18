@@ -141,7 +141,11 @@ router.delete('/reseller/sales/:id', checkActiveSubscription, resellerController
 router.get('/reseller/returns', resellerController.getResellerReturns);
 router.post('/reseller/returns', checkActiveSubscription, resellerController.createResellerReturn);
 
-// Reseller Self-Service Portal & Payout Routes
+// Reseller Self-Service Portal, Profiles & Payout Routes
+router.get('/reseller/profiles', resellerPortalController.getResellerProfiles);
+router.post('/reseller/profiles', checkActiveSubscription, resellerPortalController.createResellerProfile);
+router.put('/reseller/profiles/:id', checkActiveSubscription, resellerPortalController.updateResellerProfile);
+router.delete('/reseller/profiles/:id', checkActiveSubscription, resellerPortalController.deleteResellerProfile);
 router.get('/reseller/catalog', resellerPortalController.getResellerCatalog);
 router.post('/reseller/orders/submit', checkActiveSubscription, resellerPortalController.submitResellerOrder);
 router.get('/reseller/orders/my-orders', resellerPortalController.getResellerOrders);

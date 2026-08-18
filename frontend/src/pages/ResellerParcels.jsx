@@ -103,6 +103,87 @@ export const ResellerParcels = () => {
   const [retCostPrice, setRetCostPrice] = useState('0');
   const [retCondition, setRetCondition] = useState('good_restockable');
 
+  // Reseller Profile Modal State
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(null);
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    bkash_no: '',
+    nagad_no: '',
+    bank_info: '',
+    status: 'active'
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const handleOpenAddProfileModal = () => {
+    setEditingProfile(null);
+    setProfileForm({ name: '', phone: '', email: '', address: '', bkash_no: '', nagad_no: '', bank_info: '', status: 'active' });
+    setShowProfileModal(true);
+  };
+
+  const handleOpenEditProfileModal = (profile) => {
+    setEditingProfile(profile);
+    setProfileForm({
+      name: profile.name || '',
+      phone: profile.phone || '',
+      email: profile.email || '',
+      address: profile.address || '',
+      bkash_no: profile.bkash_no || '',
+      nagad_no: profile.nagad_no || '',
+      bank_info: profile.bank_info || '',
+      status: profile.status || 'active'
+    });
+    setShowProfileModal(true);
+  };
+
+  const handleSaveProfileSubmit = async (e) => {
+    e.preventDefault();
+    if (!profileForm.name) return alert('Reseller Name is required.');
+
+    setIsSavingProfile(true);
+    try {
+      let res;
+      if (editingProfile) {
+        res = await authFetch(`/api/reseller/profiles/${editingProfile.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(profileForm)
+        });
+      } else {
+        res = await authFetch('/api/reseller/profiles', {
+          method: 'POST',
+          body: JSON.stringify(profileForm)
+        });
+      }
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'Reseller profile saved successfully!');
+        setShowProfileModal(false);
+        fetchData();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error saving profile: ${err.message}`);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleDeleteProfile = async (id, name) => {
+    if (window.confirm(`Are you sure you want to delete reseller profile "${name}"?`)) {
+      try {
+        const res = await authFetch(`/api/reseller/profiles/${id}`, { method: 'DELETE' });
+        if (res.ok) fetchData();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
   const fetchData = async () => {
     try {
       const sRes = await authFetch('/api/reseller/sales');
@@ -116,6 +197,10 @@ export const ResellerParcels = () => {
       const fRes = await authFetch('/api/finance/summary');
       const fData = await fRes.json();
       if (fRes.ok) setAccountsList(fData.accounts || []);
+
+      const pRes = await authFetch('/api/reseller/profiles');
+      const pData = await pRes.json();
+      if (pRes.ok) setProfilesList(pData || []);
     } catch (err) {
       console.error('Error fetching reseller data:', err);
     }
@@ -350,6 +435,10 @@ export const ResellerParcels = () => {
               setEndDate(e);
             }}
           />
+          <button onClick={handleOpenAddProfileModal} className="btn btn-secondary" style={{ borderColor: '#8b5cf6', color: '#8b5cf6' }}>
+            <Users size={16} />
+            <span>+ Add Reseller Profile</span>
+          </button>
           <button onClick={() => setShowPayoutModal(true)} className="btn btn-secondary" style={{ borderColor: '#10b981', color: '#10b981' }}>
             <Wallet size={16} />
             <span>💸 Pay Reseller Profit</span>
@@ -380,6 +469,13 @@ export const ResellerParcels = () => {
           style={activeTab === 'returns' ? { background: '#ef4444', borderColor: '#ef4444' } : {}}
         >
           🔄 Reseller Returns ({returnsList.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('profiles')}
+          className={`btn ${activeTab === 'profiles' ? 'btn-primary' : 'btn-secondary'}`}
+          style={activeTab === 'profiles' ? { background: '#8b5cf6', borderColor: '#8b5cf6' } : {}}
+        >
+          👥 Reseller Profiles ({profilesList.length})
         </button>
       </div>
 
@@ -599,6 +695,76 @@ export const ResellerParcels = () => {
           </div>
         );
       })()}
+
+      {/* --- SUB TAB 3: RESELLER PROFILES DIRECTORY --- */}
+      {activeTab === 'profiles' && (
+        <div className="card" style={{ padding: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={18} color="#8b5cf6" />
+                <span>Registered Reseller Profiles ({profilesList.length})</span>
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                Manage reseller contact details, bKash/Nagad payout accounts, and portal access status
+              </p>
+            </div>
+            <button onClick={handleOpenAddProfileModal} className="btn btn-primary" style={{ background: '#8b5cf6', borderColor: '#8b5cf6' }}>
+              <Plus size={16} /> + New Reseller Profile
+            </button>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Reseller Name</th>
+                  <th>Phone</th>
+                  <th>bKash No</th>
+                  <th>Nagad No</th>
+                  <th>Bank / Notes</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {profilesList.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                      No reseller profiles created yet. Click "+ New Reseller Profile" to register your first reseller!
+                    </td>
+                  </tr>
+                ) : (
+                  profilesList.map(p => (
+                    <tr key={p.id}>
+                      <td><strong style={{ color: '#8b5cf6', fontSize: '14px' }}>👤 {p.name}</strong></td>
+                      <td>{p.phone || '-'}</td>
+                      <td style={{ fontWeight: '600' }}>{p.bkash_no ? `📱 ${p.bkash_no}` : '-'}</td>
+                      <td style={{ fontWeight: '600' }}>{p.nagad_no ? `📱 ${p.nagad_no}` : '-'}</td>
+                      <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{p.bank_info || p.address || '-'}</td>
+                      <td>
+                        <span className={`badge ${p.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+                          {p.status || 'active'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button onClick={() => handleOpenEditProfileModal(p)} className="btn btn-secondary btn-icon btn-sm" title="Edit Profile">
+                            <Eye size={14} />
+                          </button>
+                          <button onClick={() => handleDeleteProfile(p.id, p.name)} className="btn btn-danger btn-icon btn-sm" title="Delete Profile">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* --- CREATE RESELLER SALE MODAL --- */}
       {showSaleModal && (
@@ -1048,7 +1214,7 @@ export const ResellerParcels = () => {
                     onChange={(e) => setPayoutResellerName(e.target.value)}
                   >
                     <option value="">Select Reseller...</option>
-                    {Array.from(new Set(salesList.map(s => s.reseller_name).filter(Boolean))).map((rName, idx) => (
+                    {Array.from(new Set([...profilesList.map(p => p.name), ...salesList.map(s => s.reseller_name)].filter(Boolean))).map((rName, idx) => (
                       <option key={idx} value={rName}>👤 {rName}</option>
                     ))}
                   </select>
@@ -1116,6 +1282,116 @@ export const ResellerParcels = () => {
                 <button type="button" onClick={() => setShowPayoutModal(false)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" disabled={isProcessingPayout} className="btn btn-success" style={{ background: '#10b981', borderColor: '#10b981' }}>
                   {isProcessingPayout ? 'Processing...' : 'Confirm & Process Payout'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- RESELLER PROFILE CREATE / EDIT MODAL --- */}
+      {showProfileModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={20} color="#8b5cf6" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>
+                  {editingProfile ? `Edit Reseller Profile: ${editingProfile.name}` : 'Create New Reseller Profile'}
+                </h3>
+              </div>
+              <button onClick={() => setShowProfileModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleSaveProfileSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Reseller Name / Brand *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. sellway / Tanvir Ahmed"
+                    value={profileForm.name}
+                    onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Phone Number</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="01711000000"
+                      value={profileForm.phone}
+                      onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Email Address</label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      placeholder="reseller@example.com"
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">bKash Personal / Merchant No</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="01711000000"
+                      value={profileForm.bkash_no}
+                      onChange={(e) => setProfileForm({ ...profileForm, bkash_no: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Nagad Personal No</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="01711000000"
+                      value={profileForm.nagad_no}
+                      onChange={(e) => setProfileForm({ ...profileForm, nagad_no: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Bank Account Details / Address</label>
+                  <textarea
+                    className="form-input"
+                    rows="2"
+                    placeholder="Bank Name, Branch, Account No, Account Holder Name..."
+                    value={profileForm.bank_info}
+                    onChange={(e) => setProfileForm({ ...profileForm, bank_info: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Portal Status</label>
+                  <select
+                    className="form-select"
+                    value={profileForm.status}
+                    onChange={(e) => setProfileForm({ ...profileForm, status: e.target.value })}
+                  >
+                    <option value="active">Active (সক্রিয়)</option>
+                    <option value="suspended">Suspended (স্থগিত)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowProfileModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" disabled={isSavingProfile} className="btn btn-primary" style={{ background: '#8b5cf6', borderColor: '#8b5cf6' }}>
+                  {isSavingProfile ? 'Saving...' : (editingProfile ? 'Save Profile Changes' : 'Create Reseller Profile')}
                 </button>
               </div>
             </form>
