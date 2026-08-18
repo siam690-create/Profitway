@@ -21,6 +21,7 @@ export const Orders = () => {
   const [editNotes, setEditNotes] = useState('');
   const [editDeliveryFee, setEditDeliveryFee] = useState('0');
   const [editCourierFee, setEditCourierFee] = useState('0');
+  const [editParcelCount, setEditParcelCount] = useState('1');
   const [editItems, setEditItems] = useState([]);
   const [selectedAddProductId, setSelectedAddProductId] = useState('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
@@ -54,6 +55,7 @@ export const Orders = () => {
         setEditNotes(data.notes || '');
         setEditDeliveryFee(String(data.delivery_fee_charged || 0));
         setEditCourierFee(String(data.courier_actual_cost || 0));
+        setEditParcelCount(String(data.parcel_count || 1));
         
         // Format sale date for datetime-local input
         if (data.sale_date) {
@@ -148,6 +150,7 @@ export const Orders = () => {
         customer_delivery_fee: Number(editDeliveryFee || 0),
         courier_fee: Number(editCourierFee || 0),
         sale_date: editDate || undefined,
+        parcel_count: Number(editParcelCount || 1),
         items: editItems.map(i => ({
           product_id: i.product_id,
           quantity: i.quantity,
@@ -206,6 +209,7 @@ export const Orders = () => {
   const totalFilteredAmount = filteredSales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
   const totalFilteredProfit = filteredSales.reduce((sum, s) => sum + Number(s.gross_profit || 0), 0);
   const totalFilteredPcs = filteredSales.reduce((sum, s) => sum + Number(s.total_items_qty || 0), 0);
+  const totalFilteredParcels = filteredSales.reduce((sum, s) => sum + Number(s.parcel_count || 1), 0);
 
   // Edit Modal Live Calculations
   const editSubtotal = editItems.reduce((sum, i) => sum + (Number(i.unit_price || 0) * Number(i.quantity || 1)), 0);
@@ -227,7 +231,7 @@ export const Orders = () => {
               {currency}{totalFilteredAmount.toLocaleString()}
             </h2>
             <span style={{ fontSize: '14px', fontWeight: '700', color: '#38bdf8' }}>
-              📦 {filteredSales.length} Orders ({totalFilteredPcs} Product Pcs)
+              📦 {totalFilteredParcels} Parcels ({totalFilteredPcs} Product Pcs)
             </span>
             <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--success)' }}>
               Gross Profit: +{currency}{totalFilteredProfit.toLocaleString()}
@@ -319,7 +323,7 @@ export const Orders = () => {
                     <td style={{ fontSize: '14px', fontWeight: '500' }}>{sale.customer_name || 'Walk-in Customer'}</td>
                     <td>
                       <span className="badge badge-info" style={{ fontWeight: '700' }}>
-                        📦 1 Parcel ({sale.total_items_qty || 1} Pcs)
+                        📦 {sale.parcel_count || 1} Parcel(s) ({sale.total_items_qty || 1} Pcs)
                       </span>
                     </td>
                     <td>
@@ -386,10 +390,10 @@ export const Orders = () => {
             <form onSubmit={handleSaveOrderEdit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 
-                {/* Section 1: Date & Time, Customer, Payment */}
-                <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                {/* Section 1: Date & Time, Customer, Payment, Parcel Count */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label" style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>📅 Order Date & Time (তারিখ ও সময়)</label>
+                    <label className="form-label" style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>📅 Order Date & Time (তারিখ)</label>
                     <input
                       type="datetime-local"
                       className="form-input"
@@ -405,6 +409,18 @@ export const Orders = () => {
                       className="form-input"
                       value={editCustomerName}
                       onChange={(e) => setEditCustomerName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontWeight: '700', color: '#38bdf8' }}>📦 Parcel Count (পার্সেল সংখ্যা)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="form-input"
+                      style={{ fontWeight: '800', color: '#38bdf8', borderColor: '#38bdf8' }}
+                      value={editParcelCount}
+                      onChange={(e) => setEditParcelCount(e.target.value)}
                     />
                   </div>
 

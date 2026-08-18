@@ -12,10 +12,11 @@ export const POS = () => {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [notes, setNotes] = useState('');
 
-  // Manual Delivery Charge & Courier Bill Inputs
+  // Manual Delivery Charge, Courier Bill & Parcel Count Inputs
   const [customerDeliveryFee, setCustomerDeliveryFee] = useState('120');
   const [courierFee, setCourierFee] = useState('120');
   const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 10));
+  const [parcelCount, setParcelCount] = useState('1');
 
   const [completedSale, setCompletedSale] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,9 +57,10 @@ export const POS = () => {
     if (cart.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const result = await checkoutSale(customerName, paymentMethod, notes, customerDeliveryFee, courierFee, saleDate);
+      const result = await checkoutSale(customerName, paymentMethod, notes, customerDeliveryFee, courierFee, saleDate, parcelCount);
       if (result.success) {
         setCompletedSale(result.sale);
+        setParcelCount('1');
       } else {
         alert(`Checkout failed: ${result.error}`);
       }
@@ -184,7 +186,7 @@ export const POS = () => {
           <div style={{ background: 'var(--bg-primary)', padding: '12px 14px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
             {/* Real-time Order & Parcel Count Summary */}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px', background: 'rgba(56, 189, 248, 0.1)', padding: '6px 10px', borderRadius: '6px', color: '#38bdf8', fontWeight: '700' }}>
-              <span>📦 Orders / Parcels: <strong>{cart.length > 0 ? 1 : 0} Parcel</strong></span>
+              <span>📦 Orders / Parcels: <strong>{parcelCount || 1} Parcel(s)</strong></span>
               <span>🔢 Product Pcs: <strong>{totalProductPcs} Pcs ({cart.length} Items)</strong></span>
             </div>
 
@@ -279,19 +281,38 @@ export const POS = () => {
             </div>
           </div>
 
-          {/* Payment Method */}
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label">Payment Method</label>
-            <select
-              className="form-select"
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-            >
-              <option value="Cash">Cash</option>
-              <option value="bKash">bKash Mobile Banking</option>
-              <option value="Nagad">Nagad Mobile Banking</option>
-              <option value="Card">Credit / Debit Card</option>
-            </select>
+          {/* Parcel Count & Payment Method */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800' }}>
+                📦 Parcel Count (পার্সেল সংখ্যা) *
+              </label>
+              <input
+                type="number"
+                min="1"
+                className="form-input"
+                style={{ padding: '6px 10px', fontSize: '13px', fontWeight: '800', borderColor: '#38bdf8', color: '#38bdf8' }}
+                value={parcelCount}
+                onChange={(e) => setParcelCount(e.target.value)}
+                placeholder="e.g. 5"
+                title="Manual number of customer parcels for this sale (default: 1)"
+              />
+            </div>
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: '11px' }}>Payment Method</label>
+              <select
+                className="form-select"
+                style={{ padding: '6px 10px', fontSize: '13px' }}
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+              >
+                <option value="Cash">Cash</option>
+                <option value="bKash">bKash Mobile Banking</option>
+                <option value="Nagad">Nagad Mobile Banking</option>
+                <option value="Card">Credit / Debit Card</option>
+              </select>
+            </div>
           </div>
 
         </div>

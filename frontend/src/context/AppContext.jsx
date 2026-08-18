@@ -401,7 +401,7 @@ export const AppProvider = ({ children }) => {
   const clearCart = () => setCart([]);
 
   // Checkout Action (Create Sale)
-  const checkoutSale = async (customerName, paymentMethod, notes = '', customerDeliveryFee = 0, courierFee = 0, saleDate = null) => {
+  const checkoutSale = async (customerName, paymentMethod, notes = '', customerDeliveryFee = 0, courierFee = 0, saleDate = null, parcelCount = 1) => {
     if (cart.length === 0) return { success: false, error: 'Cart is empty' };
 
     try {
@@ -412,6 +412,7 @@ export const AppProvider = ({ children }) => {
         customer_delivery_fee: Number(customerDeliveryFee || 0),
         courier_fee: Number(courierFee || 0),
         sale_date: saleDate,
+        parcel_count: Number(parcelCount || 1),
         items: cart.map(item => ({
           product_id: item.id,
           quantity: item.qty || item.quantity || 1,

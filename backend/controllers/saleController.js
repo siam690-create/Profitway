@@ -6,7 +6,8 @@ const ensureSalesColumns = async (conn) => {
     { name: 'courier_actual_cost', def: 'DECIMAL(10,2) DEFAULT 0' },
     { name: 'delivery_profit', def: 'DECIMAL(10,2) DEFAULT 0' },
     { name: 'sale_date', def: 'DATETIME NULL' },
-    { name: 'store_api_key_id', def: 'INT NULL' }
+    { name: 'store_api_key_id', def: 'INT NULL' },
+    { name: 'parcel_count', def: 'INT DEFAULT 1' }
   ];
   for (const c of cols) {
     try {
@@ -21,7 +22,8 @@ const ensureSalesColumns = async (conn) => {
 };
 
 exports.createSale = async (req, res) => {
-  const { items, customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date } = req.body;
+  const { items, customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date, parcel_count } = req.body;
+  const parcelCountNum = Math.max(1, parseInt(parcel_count || 1, 10));
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Cart must contain at least one product.' });
@@ -29,6 +31,7 @@ exports.createSale = async (req, res) => {
 
   const connection = await db.getConnection();
   try {
+    await ensureSalesColumns(connection);
     const tenantId = req.user.tenantId;
 
     await connection.beginTransaction();
@@ -98,7 +101,27 @@ exports.createSale = async (req, res) => {
     let saleResult;
     if (customSaleDate) {
       [saleResult] = await connection.query(
-        `INSERT INTO sales (tenant_id, invoice_no, customer_name, total_amount, total_cost, gross_profit, payment_method, notes, delivery_fee_charged, courier_actual_cost, delivery_profit, sale_date)
+        `INSERT INTO sales (tenant_id, invoice_no, customer_name, total_amount, total_cost, gross_profit, payment_method, notes, delivery_fee_charged, courier_actual_cost, delivery_profit, parcel_count, sale_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tenantId,
+          invoice_no,
+          customer_name || 'Walk-in Customer',
+          total_amount,
+          total_cost,
+          gross_profit,
+          payment_method || 'Cash',
+          notes || null,
+          deliveryFeeCharged,
+          courierActualCost,
+          deliveryProfit,
+          parcelCountNum,
+          customSaleDate
+        ]
+      );
+    } else {
+      [saleResult] = await connection.query(
+        `INSERT INTO sales (tenant_id, invoice_no, customer_name, total_amount, total_cost, gross_profit, payment_method, notes, delivery_fee_charged, courier_actual_cost, delivery_profit, parcel_count)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tenantId,
@@ -112,25 +135,7 @@ exports.createSale = async (req, res) => {
           deliveryFeeCharged,
           courierActualCost,
           deliveryProfit,
-          customSaleDate
-        ]
-      );
-    } else {
-      [saleResult] = await connection.query(
-        `INSERT INTO sales (tenant_id, invoice_no, customer_name, total_amount, total_cost, gross_profit, payment_method, notes, delivery_fee_charged, courier_actual_cost, delivery_profit)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          tenantId,
-          invoice_no,
-          customer_name || 'Walk-in Customer',
-          total_amount,
-          total_cost,
-          gross_profit,
-          payment_method || 'Cash',
-          notes || null,
-          deliveryFeeCharged,
-          courierActualCost,
-          deliveryProfit
+          parcelCountNum
         ]
       );
     }
@@ -287,7 +292,8 @@ exports.updateSale = async (req, res) => {
       return res.status(403).json({ error: 'Permission Denied. Only Shop Owners can edit sales orders.' });
     }
 
-    const { customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date, items } = req.body;
+    const { customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date, items, parcel_count } = req.body;
+    const parcelCountNum = parcel_count !== undefined ? Math.max(1, parseInt(parcel_count, 10)) : Math.max(1, parseInt(saleOrder.parcel_count || 1, 10));
 
     const [existing] = await connection.query('SELECT * FROM sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (existing.length === 0) return res.status(404).json({ error: 'Sales order not found' });
@@ -439,7 +445,7 @@ exports.updateSale = async (req, res) => {
     await connection.query(
       `UPDATE sales 
        SET customer_name = ?, payment_method = ?, notes = ?, delivery_fee_charged = ?, courier_actual_cost = ?, delivery_profit = ?,
-           total_amount = ?, total_cost = ?, gross_profit = ?, sale_date = ?
+           total_amount = ?, total_cost = ?, gross_profit = ?, sale_date = ?, parcel_count = ?
        WHERE id = ? AND tenant_id = ?`,
       [
         customer_name || saleOrder.customer_name,
@@ -452,6 +458,7 @@ exports.updateSale = async (req, res) => {
         total_cost,
         gross_profit,
         updatedSaleDate,
+        parcelCountNum,
         id,
         tenantId
       ]
