@@ -173,17 +173,6 @@ exports.createSale = async (req, res) => {
           pItem.parcel_count
         ]
       );
-          sale_id,
-          pItem.product_id,
-          pItem.product_name,
-          pItem.quantity,
-          pItem.unit_cost,
-          pItem.unit_price,
-          pItem.total_price,
-          pItem.total_cost,
-          pItem.item_profit
-        ]
-      );
 
       if (pItem.is_combo) {
         const [comboChildItems] = await connection.query(
