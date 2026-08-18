@@ -228,20 +228,27 @@ exports.getSales = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const { start_date, end_date, search } = req.query;
-    let query = `SELECT * FROM sales WHERE tenant_id = ?`;
+    let query = `
+      SELECT s.*, 
+             COALESCE(SUM(si.quantity), 0) as total_items_qty,
+             COUNT(si.id) as total_unique_items
+      FROM sales s
+      LEFT JOIN sale_items si ON s.id = si.sale_id AND s.tenant_id = si.tenant_id
+      WHERE s.tenant_id = ?
+    `;
     const params = [tenantId];
 
     if (start_date && end_date) {
-      query += ` AND DATE(sale_date) BETWEEN ? AND ?`;
+      query += ` AND DATE(s.sale_date) BETWEEN ? AND ?`;
       params.push(start_date, end_date);
     }
 
     if (search) {
-      query += ` AND (invoice_no LIKE ? OR customer_name LIKE ?)`;
+      query += ` AND (s.invoice_no LIKE ? OR s.customer_name LIKE ?)`;
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    query += ` ORDER BY sale_date DESC LIMIT 100`;
+    query += ` GROUP BY s.id ORDER BY s.sale_date DESC LIMIT 500`;
 
     const [sales] = await db.query(query, params);
     res.json(sales);
@@ -268,8 +275,9 @@ exports.getSaleById = async (req, res) => {
   }
 };
 
-// Edit / Update Sale Order Info (RESTRICTED TO SHOP OWNER)
+// Edit / Update Sale Order Info & Item Quantities (RESTRICTED TO SHOP OWNER)
 exports.updateSale = async (req, res) => {
+  const connection = await db.getConnection();
   try {
     const tenantId = req.user.tenantId;
     const userRole = req.user.role;
@@ -279,19 +287,159 @@ exports.updateSale = async (req, res) => {
       return res.status(403).json({ error: 'Permission Denied. Only Shop Owners can edit sales orders.' });
     }
 
-    const { customer_name, payment_method, notes, customer_delivery_fee, courier_fee } = req.body;
+    const { customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date, items } = req.body;
 
-    const [existing] = await db.query('SELECT * FROM sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    const [existing] = await connection.query('SELECT * FROM sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (existing.length === 0) return res.status(404).json({ error: 'Sales order not found' });
 
     const saleOrder = existing[0];
+    await connection.beginTransaction();
+
+    let total_amount = Number(saleOrder.total_amount);
+    let total_cost = Number(saleOrder.total_cost);
+    let gross_profit = Number(saleOrder.gross_profit);
+
+    // If items array is provided, update order items & adjust inventory stock
+    if (items && Array.isArray(items) && items.length > 0) {
+      // 1. Revert previous stock deductions for old items
+      const [oldItems] = await connection.query('SELECT * FROM sale_items WHERE sale_id = ? AND tenant_id = ?', [id, tenantId]);
+
+      for (const oldItem of oldItems) {
+        const [comboChildren] = await connection.query(
+          'SELECT child_product_id, quantity FROM combo_items WHERE combo_product_id = ? AND tenant_id = ?',
+          [oldItem.product_id, tenantId]
+        );
+
+        if (comboChildren.length > 0) {
+          for (const child of comboChildren) {
+            const qtyToRestore = oldItem.quantity * child.quantity;
+            await connection.query(
+              'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?',
+              [qtyToRestore, child.child_product_id, tenantId]
+            );
+          }
+        } else {
+          await connection.query(
+            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?',
+            [oldItem.quantity, oldItem.product_id, tenantId]
+          );
+        }
+      }
+
+      // Delete old sale_items
+      await connection.query('DELETE FROM sale_items WHERE sale_id = ? AND tenant_id = ?', [id, tenantId]);
+
+      // 2. Add new items & deduct stock
+      total_amount = 0;
+      total_cost = 0;
+
+      for (const item of items) {
+        const [productRows] = await connection.query(
+          'SELECT id, name, cost_price, selling_price, stock_quantity, is_combo FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+          [item.product_id, tenantId]
+        );
+
+        if (productRows.length === 0) {
+          throw new Error(`Product ID ${item.product_id} not found in inventory.`);
+        }
+
+        const product = productRows[0];
+        const qty = Number(item.quantity);
+        if (qty <= 0) continue;
+
+        if (!product.is_combo && product.stock_quantity < qty) {
+          throw new Error(`Insufficient stock for product "${product.name}". Available: ${product.stock_quantity}, Requested: ${qty}`);
+        }
+
+        const unit_cost = Number(product.cost_price);
+        const unit_price = Number(item.unit_price !== undefined ? item.unit_price : product.selling_price);
+
+        const item_total_price = unit_price * qty;
+        const item_total_cost = unit_cost * qty;
+        const item_profit = item_total_price - item_total_cost;
+
+        total_amount += item_total_price;
+        total_cost += item_total_cost;
+
+        await connection.query(
+          `INSERT INTO sale_items (tenant_id, sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, total_cost, item_profit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            tenantId,
+            id,
+            product.id,
+            product.name,
+            qty,
+            unit_cost,
+            unit_price,
+            item_total_price,
+            item_total_cost,
+            item_profit
+          ]
+        );
+
+        // Deduct stock for new item
+        if (product.is_combo) {
+          const [comboChildItems] = await connection.query(
+            'SELECT child_product_id, quantity FROM combo_items WHERE combo_product_id = ? AND tenant_id = ?',
+            [product.id, tenantId]
+          );
+
+          for (const child of comboChildItems) {
+            const totalChildDeductQty = qty * child.quantity;
+            const [pRows] = await connection.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [child.child_product_id, tenantId]);
+            const prevStock = pRows.length > 0 ? Number(pRows[0].stock_quantity) : 0;
+            const newStock = Math.max(0, prevStock - totalChildDeductQty);
+
+            await connection.query(
+              `UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ? AND tenant_id = ?`,
+              [totalChildDeductQty, child.child_product_id, tenantId]
+            );
+
+            await connection.query(
+              `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+               VALUES (?, ?, 'pos_combo_sale_edit', ?, ?, ?, ?, ?)`,
+              [tenantId, child.child_product_id, -totalChildDeductQty, prevStock, newStock, saleOrder.invoice_no, `Updated via sale order edit #${saleOrder.invoice_no}`]
+            );
+          }
+        } else {
+          const [pRows] = await connection.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [product.id, tenantId]);
+          const prevStock = pRows.length > 0 ? Number(pRows[0].stock_quantity) : 0;
+          const newStock = Math.max(0, prevStock - qty);
+
+          await connection.query(
+            `UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ? AND tenant_id = ?`,
+            [qty, product.id, tenantId]
+          );
+
+          await connection.query(
+            `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+             VALUES (?, ?, 'pos_sale_edit', ?, ?, ?, ?, ?)`,
+            [tenantId, product.id, -qty, prevStock, newStock, saleOrder.invoice_no, `Updated via sale order edit #${saleOrder.invoice_no}`]
+          );
+        }
+      }
+
+      gross_profit = total_amount - total_cost;
+    }
+
     const deliveryFeeCharged = customer_delivery_fee !== undefined ? Number(customer_delivery_fee) : Number(saleOrder.delivery_fee_charged || 0);
     const courierActualCost = courier_fee !== undefined ? Number(courier_fee) : Number(saleOrder.courier_actual_cost || 0);
     const deliveryProfit = deliveryFeeCharged - courierActualCost;
 
-    await db.query(
+    let updatedSaleDate = saleOrder.sale_date;
+    if (sale_date) {
+      const d = new Date(sale_date);
+      if (!isNaN(d.getTime())) {
+        const timeStr = String(sale_date).length <= 10 ? ' 12:00:00' : '';
+        updatedSaleDate = String(sale_date).replace('T', ' ') + timeStr;
+      }
+    }
+
+    await connection.query(
       `UPDATE sales 
-       SET customer_name = ?, payment_method = ?, notes = ?, delivery_fee_charged = ?, courier_actual_cost = ?, delivery_profit = ?
+       SET customer_name = ?, payment_method = ?, notes = ?, delivery_fee_charged = ?, courier_actual_cost = ?, delivery_profit = ?,
+           total_amount = ?, total_cost = ?, gross_profit = ?, sale_date = ?
        WHERE id = ? AND tenant_id = ?`,
       [
         customer_name || saleOrder.customer_name,
@@ -300,14 +448,22 @@ exports.updateSale = async (req, res) => {
         deliveryFeeCharged,
         courierActualCost,
         deliveryProfit,
+        total_amount,
+        total_cost,
+        gross_profit,
+        updatedSaleDate,
         id,
         tenantId
       ]
     );
 
+    await connection.commit();
     res.json({ message: 'Sales order updated successfully by shop owner' });
   } catch (error) {
+    await connection.rollback();
     res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
   }
 };
 

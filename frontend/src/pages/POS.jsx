@@ -45,6 +45,8 @@ export const POS = () => {
 
   const cartGrossProfit = cartSubtotal - cartTotalCost;
 
+  const totalProductPcs = cart.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0);
+
   // Delivery Profit Calculation
   const delivFeeNum = Number(customerDeliveryFee || 0);
   const courierCostNum = Number(courierFee || 0);
@@ -180,6 +182,12 @@ export const POS = () => {
 
           {/* Real-time Profit & Total Summary Box */}
           <div style={{ background: 'var(--bg-primary)', padding: '12px 14px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            {/* Real-time Order & Parcel Count Summary */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px', background: 'rgba(56, 189, 248, 0.1)', padding: '6px 10px', borderRadius: '6px', color: '#38bdf8', fontWeight: '700' }}>
+              <span>📦 Orders / Parcels: <strong>{cart.length > 0 ? 1 : 0} Parcel</strong></span>
+              <span>🔢 Product Pcs: <strong>{totalProductPcs} Pcs ({cart.length} Items)</strong></span>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
               <span style={{ color: 'var(--text-secondary)' }}>Product Sale Subtotal:</span>
               <strong>{currency}{cartSubtotal.toFixed(2)}</strong>
@@ -357,48 +365,54 @@ export const POS = () => {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--border-color)', paddingTop: '6px' }}>
-                      {/* Quantity Controls: - / Editable Input / + */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-primary)', borderRadius: '6px', padding: '2px 4px', border: '1px solid var(--border-color)' }}>
-                        <button 
-                          onClick={() => updateCartQty(pId, Math.max(1, (Number(item.qty || 1) - 1)))} 
-                          style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', fontWeight: '800' }}
-                          title="Decrease quantity by 1"
-                        >
-                          -
-                        </button>
+                      {/* Quantity Controls & Pcs Multiplier */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-primary)', borderRadius: '6px', padding: '2px 4px', border: '1px solid var(--border-color)' }}>
+                          <button 
+                            onClick={() => updateCartQty(pId, Math.max(1, (Number(item.qty || 1) - 1)))} 
+                            style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', fontWeight: '800' }}
+                            title="Decrease quantity by 1"
+                          >
+                            -
+                          </button>
 
-                        <input
-                          type="number"
-                          min="1"
-                          max={item.stock_quantity || 9999}
-                          value={item.qty === undefined ? '' : item.qty}
-                          onChange={(e) => updateCartQty(pId, e.target.value)}
-                          onBlur={(e) => {
-                            if (!e.target.value || Number(e.target.value) < 1) {
-                              updateCartQty(pId, 1);
-                            }
-                          }}
-                          style={{
-                            width: '56px',
-                            textAlign: 'center',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '4px',
-                            background: 'var(--bg-secondary)',
-                            color: 'var(--text-primary)',
-                            fontSize: '13px',
-                            fontWeight: '800',
-                            padding: '2px 4px'
-                          }}
-                          title="Type custom quantity (e.g. 200, 300)"
-                        />
+                          <input
+                            type="number"
+                            min="1"
+                            max={item.stock_quantity || 9999}
+                            value={item.qty === undefined ? '' : item.qty}
+                            onChange={(e) => updateCartQty(pId, e.target.value)}
+                            onBlur={(e) => {
+                              if (!e.target.value || Number(e.target.value) < 1) {
+                                updateCartQty(pId, 1);
+                              }
+                            }}
+                            style={{
+                              width: '56px',
+                              textAlign: 'center',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              background: 'var(--bg-secondary)',
+                              color: 'var(--text-primary)',
+                              fontSize: '13px',
+                              fontWeight: '800',
+                              padding: '2px 4px'
+                            }}
+                            title="Type custom quantity (e.g. 200, 300)"
+                          />
 
-                        <button 
-                          onClick={() => updateCartQty(pId, (Number(item.qty || 1) + 1))} 
-                          style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', fontWeight: '800' }}
-                          title="Increase quantity by 1"
-                        >
-                          +
-                        </button>
+                          <button 
+                            onClick={() => updateCartQty(pId, (Number(item.qty || 1) + 1))} 
+                            style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', fontWeight: '800' }}
+                            title="Increase quantity by 1"
+                          >
+                            +
+                          </button>
+                        </div>
+                        
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>
+                          ({pQty} Pcs × {currency}{pPrice.toFixed(2)})
+                        </span>
                       </div>
 
                       {/* Line Item Total */}
