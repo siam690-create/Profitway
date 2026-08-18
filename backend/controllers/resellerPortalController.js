@@ -44,6 +44,8 @@ const ensureResellerSchema = async (conn) => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_payout_tenant (tenant_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     await conn.query(`
       CREATE TABLE IF NOT EXISTS reseller_delivery_zones (
         id INT AUTO_INCREMENT PRIMARY KEY,
