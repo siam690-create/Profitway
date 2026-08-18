@@ -67,7 +67,7 @@ export const ResellerParcels = () => {
 
   const fetchDeliveryRates = async () => {
     try {
-      const res = await fetch('/api/reseller/delivery-rates');
+      const res = await authFetch('/api/reseller/delivery-rates');
       const data = await res.json();
       if (data && Array.isArray(data.zones)) {
         setDeliveryZones(data.zones);

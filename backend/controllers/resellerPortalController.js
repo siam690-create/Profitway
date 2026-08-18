@@ -811,7 +811,14 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
 exports.getDeliveryRates = async (req, res) => {
   try {
     await ensureResellerSchema(db);
-    const tenantId = req.user ? req.user.tenantId : (req.query.tenant_id || 1);
+    let tenantId = req.user ? req.user.tenantId : null;
+
+    if (!tenantId && req.query.reseller_name) {
+      const [rRows] = await db.query('SELECT tenant_id FROM reseller_profiles WHERE name = ? LIMIT 1', [req.query.reseller_name]);
+      if (rRows.length > 0) tenantId = rRows[0].tenant_id;
+    }
+
+    if (!tenantId) tenantId = req.query.tenant_id || 1;
 
     let [zones] = await db.query(
       'SELECT id, zone_name, charge, display_order FROM reseller_delivery_zones WHERE tenant_id = ? ORDER BY display_order ASC, id ASC',
