@@ -402,19 +402,51 @@ const ResellerPortal = () => {
       {/* TAB 1: Wholesale Product Catalog */}
       {activeTab === 'catalog' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-            <div className="search-bar" style={{ flex: 1, maxWidth: '400px' }}>
-              <Search size={16} color="var(--text-muted)" />
-              <input
-                type="text"
-                placeholder="Search products by name or SKU..."
-                value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
-              />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div style={{ position: 'relative', flex: '1', maxWidth: '680px', width: '100%' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                background: 'rgba(30, 41, 59, 0.85)',
+                border: '1.5px solid rgba(139, 92, 246, 0.45)',
+                borderRadius: '14px',
+                padding: '12px 18px',
+                boxShadow: '0 8px 24px rgba(139, 92, 246, 0.15)',
+                backdropFilter: 'blur(8px)'
+              }}>
+                <Search size={20} color="#8b5cf6" style={{ flexShrink: 0 }} />
+                <input
+                  type="text"
+                  placeholder={`🔍 Search products by name, SKU, or keyword (${catalog.length} items)...`}
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: '#ffffff',
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    width: '100%'
+                  }}
+                />
+                {catalogSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setCatalogSearch('')}
+                    style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+                    title="Clear Search"
+                  >
+                    <XCircle size={18} />
+                  </button>
+                )}
+              </div>
             </div>
-            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-              Showing {filteredCatalog.length} wholesale products available
-            </span>
+
+            <div style={{ background: 'rgba(139, 92, 246, 0.12)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', color: '#c084fc' }}>
+              Showing {filteredCatalog.length} of {catalog.length} products available
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
@@ -462,15 +494,45 @@ const ResellerPortal = () => {
       {/* TAB 2: My Orders History */}
       {activeTab === 'orders' && (
         <div className="card" style={{ padding: 0 }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="search-bar" style={{ maxWidth: '350px' }}>
-              <Search size={16} color="var(--text-muted)" />
-              <input
-                type="text"
-                placeholder="Search by invoice #, customer name, phone..."
-                value={orderSearch}
-                onChange={(e) => setOrderSearch(e.target.value)}
-              />
+          <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div style={{ position: 'relative', flex: '1', maxWidth: '550px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                background: 'rgba(30, 41, 59, 0.85)',
+                border: '1.5px solid rgba(139, 92, 246, 0.4)',
+                borderRadius: '12px',
+                padding: '10px 16px',
+                boxShadow: '0 4px 16px rgba(139, 92, 246, 0.1)'
+              }}>
+                <Search size={18} color="#8b5cf6" style={{ flexShrink: 0 }} />
+                <input
+                  type="text"
+                  placeholder="🔍 Search orders by invoice #, customer name, or phone..."
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: '#ffffff',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    width: '100%'
+                  }}
+                />
+                {orderSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setOrderSearch('')}
+                    style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+                    title="Clear Search"
+                  >
+                    <XCircle size={16} />
+                  </button>
+                )}
+              </div>
             </div>
             <button onClick={fetchWalletAndOrders} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <RefreshCw size={14} /> Refresh Orders
