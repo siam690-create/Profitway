@@ -4,6 +4,20 @@ exports.getSettings = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
 
+    // Ensure delivery charge columns exist
+    const [c1] = await db.query(`SHOW COLUMNS FROM shop_settings LIKE 'delivery_inside_dhaka'`);
+    if (c1.length === 0) {
+      await db.query(`ALTER TABLE shop_settings ADD COLUMN delivery_inside_dhaka DECIMAL(10,2) DEFAULT 60.00`);
+    }
+    const [c2] = await db.query(`SHOW COLUMNS FROM shop_settings LIKE 'delivery_sub_dhaka'`);
+    if (c2.length === 0) {
+      await db.query(`ALTER TABLE shop_settings ADD COLUMN delivery_sub_dhaka DECIMAL(10,2) DEFAULT 100.00`);
+    }
+    const [c3] = await db.query(`SHOW COLUMNS FROM shop_settings LIKE 'delivery_outside_dhaka'`);
+    if (c3.length === 0) {
+      await db.query(`ALTER TABLE shop_settings ADD COLUMN delivery_outside_dhaka DECIMAL(10,2) DEFAULT 130.00`);
+    }
+
     // Check if shop_settings exists for this tenant
     const [rows] = await db.query('SELECT * FROM shop_settings WHERE tenant_id = ?', [tenantId]);
 
@@ -107,7 +121,10 @@ exports.updateSettings = async (req, res) => {
       show_vat_no,
       show_invoice_no,
       show_invoice_date,
-      show_customer_info
+      show_customer_info,
+      delivery_inside_dhaka,
+      delivery_sub_dhaka,
+      delivery_outside_dhaka
     } = req.body;
 
     const [existing] = await db.query('SELECT id FROM shop_settings WHERE tenant_id = ?', [tenantId]);
@@ -115,8 +132,8 @@ exports.updateSettings = async (req, res) => {
     if (existing.length === 0) {
       await db.query(
         `INSERT INTO shop_settings 
-          (tenant_id, currency, decimal_precision, pos_paper_size, wholesale_paper_size, company_name, tagline, address, phone, email, vat_reg_no, footer_terms, footer_thank_you, show_storage_location, show_staff_name, show_savings_discount, show_qr_barcode, show_shop_name, show_address, show_phone_email, show_vat_no, show_invoice_no, show_invoice_date, show_customer_info)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (tenant_id, currency, decimal_precision, pos_paper_size, wholesale_paper_size, company_name, tagline, address, phone, email, vat_reg_no, footer_terms, footer_thank_you, show_storage_location, show_staff_name, show_savings_discount, show_qr_barcode, show_shop_name, show_address, show_phone_email, show_vat_no, show_invoice_no, show_invoice_date, show_customer_info, delivery_inside_dhaka, delivery_sub_dhaka, delivery_outside_dhaka)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tenantId,
           currency || '৳',
@@ -141,7 +158,10 @@ exports.updateSettings = async (req, res) => {
           show_vat_no !== undefined ? (show_vat_no ? 1 : 0) : 1,
           show_invoice_no !== undefined ? (show_invoice_no ? 1 : 0) : 1,
           show_invoice_date !== undefined ? (show_invoice_date ? 1 : 0) : 1,
-          show_customer_info !== undefined ? (show_customer_info ? 1 : 0) : 1
+          show_customer_info !== undefined ? (show_customer_info ? 1 : 0) : 1,
+          delivery_inside_dhaka !== undefined ? Number(delivery_inside_dhaka) : 60.00,
+          delivery_sub_dhaka !== undefined ? Number(delivery_sub_dhaka) : 100.00,
+          delivery_outside_dhaka !== undefined ? Number(delivery_outside_dhaka) : 130.00
         ]
       );
     } else {
@@ -169,7 +189,10 @@ exports.updateSettings = async (req, res) => {
           show_vat_no = ?,
           show_invoice_no = ?,
           show_invoice_date = ?,
-          show_customer_info = ?
+          show_customer_info = ?,
+          delivery_inside_dhaka = ?,
+          delivery_sub_dhaka = ?,
+          delivery_outside_dhaka = ?
          WHERE tenant_id = ?`,
         [
           currency,
@@ -195,6 +218,9 @@ exports.updateSettings = async (req, res) => {
           show_invoice_no ? 1 : 0,
           show_invoice_date ? 1 : 0,
           show_customer_info ? 1 : 0,
+          delivery_inside_dhaka !== undefined ? Number(delivery_inside_dhaka) : 60.00,
+          delivery_sub_dhaka !== undefined ? Number(delivery_sub_dhaka) : 100.00,
+          delivery_outside_dhaka !== undefined ? Number(delivery_outside_dhaka) : 130.00,
           tenantId
         ]
       );

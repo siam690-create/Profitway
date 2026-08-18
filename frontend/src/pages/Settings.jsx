@@ -61,7 +61,10 @@ export const Settings = () => {
         show_vat_no: shopSettings.show_vat_no !== undefined ? Boolean(shopSettings.show_vat_no) : true,
         show_invoice_no: shopSettings.show_invoice_no !== undefined ? Boolean(shopSettings.show_invoice_no) : true,
         show_invoice_date: shopSettings.show_invoice_date !== undefined ? Boolean(shopSettings.show_invoice_date) : true,
-        show_customer_info: shopSettings.show_customer_info !== undefined ? Boolean(shopSettings.show_customer_info) : true
+        show_customer_info: shopSettings.show_customer_info !== undefined ? Boolean(shopSettings.show_customer_info) : true,
+        delivery_inside_dhaka: shopSettings.delivery_inside_dhaka !== undefined ? shopSettings.delivery_inside_dhaka : 60,
+        delivery_sub_dhaka: shopSettings.delivery_sub_dhaka !== undefined ? shopSettings.delivery_sub_dhaka : 100,
+        delivery_outside_dhaka: shopSettings.delivery_outside_dhaka !== undefined ? shopSettings.delivery_outside_dhaka : 130
       });
     }
   }, [shopSettings, tenant]);
@@ -261,10 +264,59 @@ export const Settings = () => {
             />
           </div>
 
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '10px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: '700', marginBottom: '12px', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              🚚 Reseller Delivery Charge Rates (কুরিয়ার ডেলিভারি চার্জ সেটিং)
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px' }}>
+              Set default courier delivery charge amounts for B2B reseller portal orders based on customer delivery area.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label">Inside Dhaka Delivery Rate (৳) *</label>
+                <input
+                  type="number"
+                  step="1"
+                  className="form-input"
+                  required
+                  placeholder="e.g. 60"
+                  value={form.delivery_inside_dhaka}
+                  onChange={(e) => setForm({ ...form, delivery_inside_dhaka: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Sub Dhaka Delivery Rate (৳) *</label>
+                <input
+                  type="number"
+                  step="1"
+                  className="form-input"
+                  required
+                  placeholder="e.g. 100"
+                  value={form.delivery_sub_dhaka}
+                  onChange={(e) => setForm({ ...form, delivery_sub_dhaka: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Outside Dhaka Delivery Rate (৳) *</label>
+                <input
+                  type="number"
+                  step="1"
+                  className="form-input"
+                  required
+                  placeholder="e.g. 130"
+                  value={form.delivery_outside_dhaka}
+                  onChange={(e) => setForm({ ...form, delivery_outside_dhaka: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
             <button type="submit" className="btn btn-primary" disabled={savingSettings}>
               <Save size={16} />
-              <span>{savingSettings ? 'Saving Settings...' : 'Save Invoice Branding Settings'}</span>
+              <span>{savingSettings ? 'Saving Settings...' : 'Save Settings & Delivery Rates'}</span>
             </button>
           </div>
         </form>

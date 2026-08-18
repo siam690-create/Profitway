@@ -793,3 +793,23 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
     connection.release();
   }
 };
+
+// 13. Public/Authenticated: Get Current Reseller Delivery Rates
+exports.getDeliveryRates = async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT delivery_inside_dhaka, delivery_sub_dhaka, delivery_outside_dhaka FROM shop_settings LIMIT 1'
+    );
+    if (rows.length > 0) {
+      res.json({
+        inside_dhaka: Number(rows[0].delivery_inside_dhaka || 60),
+        sub_dhaka: Number(rows[0].delivery_sub_dhaka || 100),
+        outside_dhaka: Number(rows[0].delivery_outside_dhaka || 130)
+      });
+    } else {
+      res.json({ inside_dhaka: 60, sub_dhaka: 100, outside_dhaka: 130 });
+    }
+  } catch (err) {
+    res.json({ inside_dhaka: 60, sub_dhaka: 100, outside_dhaka: 130 });
+  }
+};

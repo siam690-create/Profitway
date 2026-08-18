@@ -85,6 +85,19 @@ const ResellerPortal = () => {
     });
   };
 
+  // Reseller Delivery Charge Rates
+  const [deliveryArea, setDeliveryArea] = useState('inside_dhaka'); // 'inside_dhaka', 'sub_dhaka', 'outside_dhaka'
+  const [deliveryRates, setDeliveryRates] = useState({ inside_dhaka: 60, sub_dhaka: 100, outside_dhaka: 130 });
+
+  useEffect(() => {
+    fetch('/api/reseller/delivery-rates')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.inside_dhaka !== undefined) setDeliveryRates(data);
+      })
+      .catch(() => {});
+  }, []);
+
   // Reseller Login Modal State
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -215,8 +228,11 @@ const ResellerPortal = () => {
     }
   };
 
+  const selectedDeliveryFee = Number(deliveryRates[deliveryArea] || 60);
   const totalWholesaleCost = orderItems.reduce((sum, item) => sum + (item.total_reseller_cost || 0), 0);
-  const estimatedProfit = Math.max(0, Number(customerSellingPrice || 0) - totalWholesaleCost);
+  const customerProductSalePrice = Number(customerSellingPrice || 0);
+  const totalCOD = customerProductSalePrice > 0 ? (customerProductSalePrice + selectedDeliveryFee) : 0;
+  const estimatedProfit = Math.max(0, customerProductSalePrice - totalWholesaleCost);
 
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
@@ -224,8 +240,8 @@ const ResellerPortal = () => {
       return alert('Please enter Customer Phone and select at least 1 product.');
     }
 
-    if (Number(customerSellingPrice) < totalWholesaleCost) {
-      if (!window.confirm(`Warning: Customer selling price (${currency}${customerSellingPrice}) is lower than reseller wholesale cost (${currency}${totalWholesaleCost}). Do you want to proceed?`)) {
+    if (customerProductSalePrice < totalWholesaleCost) {
+      if (!window.confirm(`Warning: Customer product sale price (${currency}${customerProductSalePrice}) is lower than reseller wholesale cost (${currency}${totalWholesaleCost}). Do you want to proceed?`)) {
         return;
       }
     }
@@ -240,12 +256,12 @@ const ResellerPortal = () => {
           customer_name: customerName,
           customer_phone: customerPhone,
           customer_address: customerAddress,
-          district,
-          thana,
+          district: deliveryArea === 'inside_dhaka' ? 'Inside Dhaka' : (deliveryArea === 'sub_dhaka' ? 'Sub Dhaka' : 'Outside Dhaka'),
+          thana: deliveryArea,
           courier_name: courierName,
           items: orderItems,
-          customer_total_price: Number(customerSellingPrice),
-          delivery_fee_charged: Number(deliveryFeeCharged),
+          customer_total_price: totalCOD,
+          delivery_fee_charged: selectedDeliveryFee,
           notes: orderNotes
         })
       });
@@ -971,30 +987,54 @@ const ResellerPortal = () => {
                   </div>
                 </div>
 
-                {/* Total COD / Customer Sale Price */}
+                {/* Product Sale Price (without delivery charge) */}
                 <div className="form-group">
-                  <label className="form-label">Customer Sale Price / Total COD (ডিলেভারি চার্জ সহ কাষ্টমারের মোট বিক্রীদাম) *</label>
+                  <label className="form-label">Customer Product Sale Price (কাষ্টমারের প্রোডাক্ট বিক্রীদাম - ডেলিভারি চার্জ ছাড়া) *</label>
                   <input
                     type="number"
                     step="0.01"
                     className="form-input"
                     required
-                    placeholder="e.g. 500 (ডিলেভারি চার্জ সহ মোট দাম)"
+                    placeholder="e.g. 380 (ডেলিভারি চার্জ ছাড়া শুধু প্রোডাক্ট বিক্রীদাম)"
                     value={customerSellingPrice}
                     onChange={(e) => setCustomerSellingPrice(e.target.value)}
                   />
                 </div>
 
-                {/* Estimated Reseller Profit Display Box */}
-                <div style={{ background: estimatedProfit >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)', padding: '12px 16px', borderRadius: '10px', border: `1px solid ${estimatedProfit >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '600' }}>Estimated Profit on this Order:</span>
+                {/* Delivery Area Select Dropdown */}
+                <div className="form-group">
+                  <label className="form-label">Delivery Area / কুরিয়ার এলাকা নির্বাচন করুন *</label>
+                  <select
+                    className="form-select"
+                    value={deliveryArea}
+                    onChange={(e) => setDeliveryArea(e.target.value)}
+                    style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 14px', borderRadius: '8px', width: '100%', fontSize: '13.5px', fontWeight: '600' }}
+                  >
+                    <option value="inside_dhaka">🚚 Inside Dhaka (ঢাকা সিটির ভেতরে - {currency}{Number(deliveryRates.inside_dhaka || 60).toFixed(2)})</option>
+                    <option value="sub_dhaka">🚚 Sub Dhaka (ঢাকা সাব-আরবান / সাভার, গাজীপুর, কেরানীগঞ্জ... - {currency}{Number(deliveryRates.sub_dhaka || 100).toFixed(2)})</option>
+                    <option value="outside_dhaka">🚚 Outside Dhaka (ঢাকার বাইরে সারা বাংলাদেশ - {currency}{Number(deliveryRates.outside_dhaka || 130).toFixed(2)})</option>
+                  </select>
+                </div>
+
+                {/* Live Calculation Summary Box */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
+                    <span>Product Sale Price (প্রোডাক্ট দাম):</span>
+                    <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{currency}{customerProductSalePrice.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#38bdf8' }}>
+                    <span>Delivery Charge ({deliveryArea === 'inside_dhaka' ? 'Inside Dhaka' : (deliveryArea === 'sub_dhaka' ? 'Sub Dhaka' : 'Outside Dhaka')}):</span>
+                    <span style={{ fontWeight: '700' }}>+{currency}{selectedDeliveryFee.toFixed(2)}</span>
+                  </div>
+                  <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '800' }}>
+                    <span>Total COD (কাষ্টমারের ডেলিভারিসহ মোট বিক্রীদাম):</span>
+                    <span style={{ color: '#f59e0b', fontSize: '16px' }}>{currency}{totalCOD.toFixed(2)}</span>
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700' }}>Estimated Reseller Profit:</span>
                     <strong style={{ fontSize: '18px', fontWeight: '800', color: estimatedProfit >= 0 ? '#10b981' : '#ef4444' }}>
                       +{currency}{estimatedProfit.toFixed(2)}
                     </strong>
-                  </div>
-                  <div style={{ fontSize: '11.5px', color: '#94a3b8', fontStyle: 'italic', marginTop: '2px' }}>
-                    *(এই Estimated Profit থেকে পরবর্তীতে Delivery Charge এবং Packaging Cost বাদ যাবে)
                   </div>
                 </div>
 

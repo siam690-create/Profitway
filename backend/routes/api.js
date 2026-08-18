@@ -144,6 +144,7 @@ router.post('/wholesale/sales', checkActiveSubscription, wholesaleController.cre
 router.delete('/wholesale/sales/:id', checkActiveSubscription, wholesaleController.deleteWholesaleSale);
 
 // Reseller Parcels & Reseller Portal APIs
+router.get('/reseller/delivery-rates', resellerPortalController.getDeliveryRates);
 router.get('/reseller/sales', resellerController.getResellerSales);
 router.post('/reseller/sales', checkActiveSubscription, resellerController.createResellerSale);
 router.delete('/reseller/sales/:id', checkActiveSubscription, resellerController.deleteResellerSale);
