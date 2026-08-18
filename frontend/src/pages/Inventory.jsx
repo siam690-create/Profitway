@@ -121,6 +121,7 @@ export const Inventory = () => {
   const [categoryId, setCategoryId] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
+  const [resellerPrice, setResellerPrice] = useState('');
   const [stockQuantity, setStockQuantity] = useState('10');
   const [minStockAlert, setMinStockAlert] = useState('5');
   const [unit, setUnit] = useState('Pcs');
@@ -141,6 +142,7 @@ export const Inventory = () => {
     setCategoryId('');
     setCostPrice('');
     setSellingPrice('');
+    setResellerPrice('');
     setStockQuantity('10');
     setMinStockAlert('5');
     setUnit('Pcs');
@@ -157,6 +159,7 @@ export const Inventory = () => {
     setCategoryId(product.category_id || '');
     setCostPrice(product.cost_price);
     setSellingPrice(product.selling_price);
+    setResellerPrice(product.reseller_price || '');
     setStockQuantity(product.stock_quantity);
     setMinStockAlert(product.low_stock_threshold || product.min_stock_alert);
     setUnit(product.unit || 'Pcs');
@@ -251,6 +254,7 @@ export const Inventory = () => {
       category_id: categoryId ? Number(categoryId) : null,
       cost_price: isCombo ? calculatedComboCost : Number(costPrice),
       selling_price: Number(sellingPrice),
+      reseller_price: Number(resellerPrice || 0.00),
       stock_quantity: isCombo ? 0 : Number(stockQuantity),
       min_stock_alert: Number(minStockAlert),
       unit,
@@ -818,9 +822,9 @@ export const Inventory = () => {
                   </div>
                 ) : (
                   /* Standard Product Pricing */
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                     <div className="form-group">
-                      <label className="form-label">Cost Price (Buy Cost / কেনাদাম) *</label>
+                      <label className="form-label">Cost Price (Buy Cost) *</label>
                       <input
                         type="number"
                         step="0.01"
@@ -833,7 +837,7 @@ export const Inventory = () => {
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">Selling Price (বিক্রিদাম) *</label>
+                      <label className="form-label">Selling Price (Retail) *</label>
                       <input
                         type="number"
                         step="0.01"
@@ -844,23 +848,22 @@ export const Inventory = () => {
                         onChange={(e) => setSellingPrice(e.target.value)}
                       />
                     </div>
+
+                    <div className="form-group">
+                      <label className="form-label">🏷️ Reseller Price (Wholesale)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="form-input"
+                        placeholder="500.00"
+                        value={resellerPrice}
+                        onChange={(e) => setResellerPrice(e.target.value)}
+                      />
+                    </div>
                   </div>
                 )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Selling Price ({isCombo ? 'Set Bundle Price' : 'Standard Price'}) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-input"
-                      required
-                      placeholder="750.00"
-                      value={sellingPrice}
-                      onChange={(e) => setSellingPrice(e.target.value)}
-                    />
-                  </div>
-
                   {!isCombo && (
                     <div className="form-group">
                       <label className="form-label">Current Stock Qty *</label>
@@ -883,6 +886,17 @@ export const Inventory = () => {
                       placeholder="5"
                       value={minStockAlert}
                       onChange={(e) => setMinStockAlert(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Unit</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Pcs"
+                      value={unit}
+                      onChange={(e) => setUnit(e.target.value)}
                     />
                   </div>
                 </div>

@@ -48,6 +48,53 @@ export const ResellerParcels = () => {
   const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
   const [returnNotes, setReturnNotes] = useState('');
 
+  // Payout Modal State
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [payoutResellerName, setPayoutResellerName] = useState('');
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutMethod, setPayoutMethod] = useState('bKash');
+  const [payoutAccountId, setPayoutAccountId] = useState('');
+  const [payoutNotes, setPayoutNotes] = useState('');
+  const [isProcessingPayout, setIsProcessingPayout] = useState(false);
+
+  const handleProcessPayoutSubmit = async (e) => {
+    e.preventDefault();
+    if (!payoutResellerName || !payoutAmount || Number(payoutAmount) <= 0) {
+      return alert('Please enter Reseller Name and valid Payout Amount.');
+    }
+
+    setIsProcessingPayout(true);
+    try {
+      const res = await authFetch('/api/reseller/payouts/process', {
+        method: 'POST',
+        body: JSON.stringify({
+          reseller_name: payoutResellerName,
+          amount: Number(payoutAmount),
+          payment_method: payoutMethod,
+          account_id: payoutAccountId || null,
+          notes: payoutNotes
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'Reseller payout processed successfully!');
+        setShowPayoutModal(false);
+        setPayoutResellerName('');
+        setPayoutAmount('');
+        setPayoutNotes('');
+        fetchData();
+        refreshAllData();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error processing payout: ${err.message}`);
+    } finally {
+      setIsProcessingPayout(false);
+    }
+  };
+
   // Return Items Cart
   const [returnItems, setReturnItems] = useState([]);
   const [retProductId, setRetProductId] = useState('');
@@ -303,6 +350,10 @@ export const ResellerParcels = () => {
               setEndDate(e);
             }}
           />
+          <button onClick={() => setShowPayoutModal(true)} className="btn btn-secondary" style={{ borderColor: '#10b981', color: '#10b981' }}>
+            <Wallet size={16} />
+            <span>💸 Pay Reseller Profit</span>
+          </button>
           <button onClick={() => setShowReturnModal(true)} className="btn btn-secondary" style={{ borderColor: '#ef4444', color: '#ef4444' }}>
             <RotateCcw size={16} />
             <span>+ Record Reseller Return</span>
@@ -971,6 +1022,103 @@ export const ResellerParcels = () => {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- PAY RESELLER PROFIT MODAL --- */}
+      {showPayoutModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Wallet size={20} color="#10b981" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Execute Reseller Profit Payout</h3>
+              </div>
+              <button onClick={() => setShowPayoutModal(false)} className="btn btn-secondary btn-icon"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleProcessPayoutSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Select Reseller Profile / Name *</label>
+                  <select
+                    className="form-select"
+                    required
+                    value={payoutResellerName}
+                    onChange={(e) => setPayoutResellerName(e.target.value)}
+                  >
+                    <option value="">Select Reseller...</option>
+                    {Array.from(new Set(salesList.map(s => s.reseller_name).filter(Boolean))).map((rName, idx) => (
+                      <option key={idx} value={rName}>👤 {rName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Payout Amount ({currency}) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="form-input"
+                      required
+                      placeholder="e.g. 2500.00"
+                      value={payoutAmount}
+                      onChange={(e) => setPayoutAmount(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Payment Method</label>
+                    <select
+                      className="form-select"
+                      value={payoutMethod}
+                      onChange={(e) => setPayoutMethod(e.target.value)}
+                    >
+                      <option value="bKash">bKash Personal / Merchant</option>
+                      <option value="Nagad">Nagad Personal</option>
+                      <option value="Rocket">Rocket Mobile Banking</option>
+                      <option value="Bank Transfer">Bank Wire Transfer</option>
+                      <option value="Cash">Cash Handover</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Paid From Store Account (Automated Passbook Ledger)</label>
+                  <select
+                    className="form-select"
+                    value={payoutAccountId}
+                    onChange={(e) => setPayoutAccountId(e.target.value)}
+                  >
+                    <option value="">No Account Balance Deduction (Manual Payout Log Only)</option>
+                    {accountsList.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        🏦 {acc.name} ({currency}{Number(acc.balance || 0).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Payout Notes / Trx ID (Optional)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. bKash Trx ID: 9BX019A82 / Weekly Payout"
+                    value={payoutNotes}
+                    onChange={(e) => setPayoutNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowPayoutModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" disabled={isProcessingPayout} className="btn btn-success" style={{ background: '#10b981', borderColor: '#10b981' }}>
+                  {isProcessingPayout ? 'Processing...' : 'Confirm & Process Payout'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

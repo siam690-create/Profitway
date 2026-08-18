@@ -1,9 +1,29 @@
 const db = require('../config/db');
 
+// Ensure reseller_price column exists on products table
+const ensureProductResellerColumns = async (conn) => {
+  try {
+    const [cols] = await conn.query(`SHOW COLUMNS FROM products LIKE 'reseller_price'`);
+    if (cols.length === 0) {
+      await conn.query(`ALTER TABLE products ADD COLUMN reseller_price DECIMAL(10,2) DEFAULT 0.00 AFTER selling_price`);
+    }
+  } catch (e) {
+    // safety ignore
+  }
+};
+
 // Get all products for logged-in tenant (with calculated profit margin & combo items)
 exports.getProducts = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
+
+    const connection = await db.getConnection();
+    try {
+      await ensureProductResellerColumns(connection);
+    } finally {
+      connection.release();
+    }
+
     const [products] = await db.query(
       `SELECT p.*, c.name as category_name 
        FROM products p 
@@ -21,6 +41,7 @@ exports.getProducts = async (req, res) => {
 
       prod.unit_profit = Number(profit.toFixed(2));
       prod.profit_margin = Number(marginPercent.toFixed(1));
+      prod.reseller_price = Number(prod.reseller_price || 0.00);
 
       // Attach combo child items & calculate dynamic virtual stock based on child products availability
       if (prod.is_combo) {
@@ -82,7 +103,7 @@ const ensureComboTables = async (conn) => {
 
 // Create a new Product or Combo Bundle
 exports.createProduct = async (req, res) => {
-  const { name, sku, category_id, cost_price, selling_price, stock_quantity, min_stock_alert, low_stock_threshold, unit, location, is_combo, combo_items } = req.body;
+  const { name, sku, category_id, cost_price, selling_price, reseller_price, stock_quantity, min_stock_alert, low_stock_threshold, unit, location, is_combo, combo_items } = req.body;
 
   if (!name || !selling_price) {
     return res.status(400).json({ error: 'Product name and selling price are required.' });
@@ -92,6 +113,8 @@ exports.createProduct = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     await connection.beginTransaction();
+
+    await ensureProductResellerColumns(connection);
 
     let computedCostPrice = Number(cost_price || 0);
     const isCombo = is_combo ? 1 : 0;
@@ -112,8 +135,8 @@ exports.createProduct = async (req, res) => {
 
     const [result] = await connection.query(
       `INSERT INTO products 
-       (tenant_id, name, sku, category_id, cost_price, selling_price, stock_quantity, low_stock_threshold, unit, location, is_combo) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (tenant_id, name, sku, category_id, cost_price, selling_price, reseller_price, stock_quantity, low_stock_threshold, unit, location, is_combo) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tenantId,
         name,
@@ -121,6 +144,7 @@ exports.createProduct = async (req, res) => {
         category_id || null,
         computedCostPrice,
         Number(selling_price),
+        Number(reseller_price || 0.00),
         Number(stock_quantity || 0),
         alertThreshold,
         unit || 'Pcs',
@@ -165,9 +189,11 @@ exports.updateProduct = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
-    const { name, sku, category_id, cost_price, selling_price, stock_quantity, min_stock_alert, low_stock_threshold, unit, location, is_combo, combo_items } = req.body;
+    const { name, sku, category_id, cost_price, selling_price, reseller_price, stock_quantity, min_stock_alert, low_stock_threshold, unit, location, is_combo, combo_items } = req.body;
 
     await connection.beginTransaction();
+
+    await ensureProductResellerColumns(connection);
 
     let computedCostPrice = Number(cost_price || 0);
     const isCombo = is_combo ? 1 : 0;
@@ -188,7 +214,7 @@ exports.updateProduct = async (req, res) => {
 
     await connection.query(
       `UPDATE products 
-       SET name = ?, sku = ?, category_id = ?, cost_price = ?, selling_price = ?, stock_quantity = ?, low_stock_threshold = ?, unit = ?, location = ?, is_combo = ?
+       SET name = ?, sku = ?, category_id = ?, cost_price = ?, selling_price = ?, reseller_price = ?, stock_quantity = ?, low_stock_threshold = ?, unit = ?, location = ?, is_combo = ?
        WHERE id = ? AND tenant_id = ?`,
       [
         name,
@@ -196,6 +222,7 @@ exports.updateProduct = async (req, res) => {
         category_id || null,
         computedCostPrice,
         Number(selling_price),
+        Number(reseller_price || 0.00),
         Number(stock_quantity || 0),
         alertThreshold,
         unit || 'Pcs',

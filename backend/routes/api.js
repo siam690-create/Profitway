@@ -132,13 +132,21 @@ router.get('/wholesale/sales/:id', wholesaleController.getWholesaleSaleById);
 router.post('/wholesale/sales', checkActiveSubscription, wholesaleController.createWholesaleSale);
 router.delete('/wholesale/sales/:id', checkActiveSubscription, wholesaleController.deleteWholesaleSale);
 
-// Reseller Parcels APIs
+// Reseller Parcels & Reseller Portal APIs
 const resellerController = require('../controllers/resellerController');
+const resellerPortalController = require('../controllers/resellerPortalController');
 router.get('/reseller/sales', resellerController.getResellerSales);
 router.post('/reseller/sales', checkActiveSubscription, resellerController.createResellerSale);
 router.delete('/reseller/sales/:id', checkActiveSubscription, resellerController.deleteResellerSale);
 router.get('/reseller/returns', resellerController.getResellerReturns);
 router.post('/reseller/returns', checkActiveSubscription, resellerController.createResellerReturn);
+
+// Reseller Self-Service Portal & Payout Routes
+router.get('/reseller/catalog', resellerPortalController.getResellerCatalog);
+router.post('/reseller/orders/submit', checkActiveSubscription, resellerPortalController.submitResellerOrder);
+router.get('/reseller/orders/my-orders', resellerPortalController.getResellerOrders);
+router.get('/reseller/wallet', resellerPortalController.getResellerWallet);
+router.post('/reseller/payouts/process', checkActiveSubscription, resellerPortalController.processResellerPayout);
 
 // Supplier Directory APIs
 router.get('/suppliers', supplierController.getSuppliers);
