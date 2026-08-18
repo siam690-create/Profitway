@@ -954,29 +954,7 @@ const ResellerPortal = () => {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="form-group">
-                    <label className="form-label">District / City</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Dhaka"
-                      value={district}
-                      onChange={(e) => setDistrict(e.target.value)}
-                    />
-                  </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Thana / Area</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Uttara"
-                      value={thana}
-                      onChange={(e) => setThana(e.target.value)}
-                    />
-                  </div>
-                </div>
 
                 {/* Selected Products Breakdown */}
                 <div style={{ background: 'var(--bg-secondary)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
