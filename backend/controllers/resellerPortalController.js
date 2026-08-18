@@ -91,6 +91,10 @@ const ensureResellerSchema = async (conn) => {
     if (poIdCols.length === 0) {
       await conn.query(`ALTER TABLE reseller_sales ADD COLUMN payout_id INT DEFAULT NULL`);
     }
+    const [srcCols] = await conn.query(`SHOW COLUMNS FROM reseller_sales LIKE 'order_source'`);
+    if (srcCols.length === 0) {
+      await conn.query(`ALTER TABLE reseller_sales ADD COLUMN order_source VARCHAR(50) DEFAULT 'manual'`);
+    }
   } catch (e) {
     console.error('Schema migration error in resellerPortalController:', e);
   }
@@ -223,8 +227,8 @@ exports.submitResellerOrder = async (req, res) => {
     // Insert into reseller_sales
     const [result] = await connection.query(
       `INSERT INTO reseller_sales 
-        (tenant_id, reseller_id, reseller_name, customer_name, customer_phone, customer_address, district, thana, courier_name, invoice_no, total_amount, total_cost, gross_profit, delivery_fee_charged, courier_actual_cost, delivery_profit, order_status, payout_status, reseller_wholesale_cost, reseller_profit, sale_date, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, 'pending', 'unpaid', ?, ?, ?, ?)`,
+        (tenant_id, reseller_id, reseller_name, customer_name, customer_phone, customer_address, district, thana, courier_name, invoice_no, total_amount, total_cost, gross_profit, delivery_fee_charged, courier_actual_cost, delivery_profit, order_status, payout_status, reseller_wholesale_cost, reseller_profit, order_source, sale_date, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, 'pending', 'unpaid', ?, ?, 'portal', ?, ?)`,
       [
         tenantId,
         reseller_id || null,
@@ -681,7 +685,10 @@ exports.getAllResellerOrdersForAdmin = async (req, res) => {
     }
 
     const [sales] = await db.query(
-      `SELECT * FROM reseller_sales WHERE tenant_id = ? ORDER BY id DESC`,
+      `SELECT * FROM reseller_sales 
+       WHERE tenant_id = ? 
+         AND (order_source = 'portal' OR (customer_phone IS NOT NULL AND customer_phone != '' AND reseller_profit > 0))
+       ORDER BY id DESC`,
       [tenantId]
     );
 

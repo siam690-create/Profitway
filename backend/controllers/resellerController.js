@@ -75,8 +75,8 @@ exports.createResellerSale = async (req, res) => {
     // 1. Insert Master Reseller Sale Record
     const [result] = await connection.query(
       `INSERT INTO reseller_sales 
-        (tenant_id, reseller_name, customer_name, customer_phone, invoice_no, total_amount, total_cost, gross_profit, delivery_fee_charged, courier_actual_cost, delivery_profit, payment_status, account_id, sale_date, notes)
-       VALUES (?, ?, ?, ?, ?, 0.00, 0.00, 0.00, ?, ?, ?, ?, ?, ?, ?)`,
+        (tenant_id, reseller_name, customer_name, customer_phone, invoice_no, total_amount, total_cost, gross_profit, delivery_fee_charged, courier_actual_cost, delivery_profit, payment_status, account_id, order_source, sale_date, notes)
+       VALUES (?, ?, ?, ?, ?, 0.00, 0.00, 0.00, ?, ?, ?, ?, ?, 'manual', ?, ?)`,
       [
         tenantId,
         reseller_name.trim(),
