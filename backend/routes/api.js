@@ -142,6 +142,7 @@ router.get('/reseller/returns', resellerController.getResellerReturns);
 router.post('/reseller/returns', checkActiveSubscription, resellerController.createResellerReturn);
 
 // Reseller Self-Service Portal, Profiles & Payout Routes
+router.post('/reseller/login', resellerPortalController.resellerLogin);
 router.get('/reseller/profiles', resellerPortalController.getResellerProfiles);
 router.post('/reseller/profiles', checkActiveSubscription, resellerPortalController.createResellerProfile);
 router.put('/reseller/profiles/:id', checkActiveSubscription, resellerPortalController.updateResellerProfile);

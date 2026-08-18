@@ -111,6 +111,7 @@ export const ResellerParcels = () => {
     name: '',
     phone: '',
     email: '',
+    password: '',
     address: '',
     bkash_no: '',
     nagad_no: '',
@@ -121,7 +122,7 @@ export const ResellerParcels = () => {
 
   const handleOpenAddProfileModal = () => {
     setEditingProfile(null);
-    setProfileForm({ name: '', phone: '', email: '', address: '', bkash_no: '', nagad_no: '', bank_info: '', status: 'active' });
+    setProfileForm({ name: '', phone: '', email: '', password: '', address: '', bkash_no: '', nagad_no: '', bank_info: '', status: 'active' });
     setShowProfileModal(true);
   };
 
@@ -131,6 +132,7 @@ export const ResellerParcels = () => {
       name: profile.name || '',
       phone: profile.phone || '',
       email: profile.email || '',
+      password: '',
       address: profile.address || '',
       bkash_no: profile.bkash_no || '',
       nagad_no: profile.nagad_no || '',
@@ -1317,7 +1319,7 @@ export const ResellerParcels = () => {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
                     <label className="form-label">Phone Number</label>
                     <input
@@ -1337,6 +1339,17 @@ export const ResellerParcels = () => {
                       placeholder="reseller@example.com"
                       value={profileForm.email}
                       onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Portal Password *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder={editingProfile ? '(Unchanged)' : 'e.g. Pass123!'}
+                      value={profileForm.password}
+                      onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
                     />
                   </div>
                 </div>

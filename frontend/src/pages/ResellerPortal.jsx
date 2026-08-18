@@ -41,6 +41,41 @@ const ResellerPortal = () => {
   const [catalogSearch, setCatalogSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
 
+  // Reseller Login Modal State
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const handleResellerLoginSubmit = async (e) => {
+    e.preventDefault();
+    if (!loginIdentifier || !loginPassword) {
+      return alert('Please enter Email/Phone and Password.');
+    }
+
+    setIsLoggingIn(true);
+    try {
+      const res = await authFetch('/api/reseller/login', {
+        method: 'POST',
+        body: JSON.stringify({ identifier: loginIdentifier, password: loginPassword })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResellerName(data.reseller.name);
+        setShowLoginModal(false);
+        setLoginIdentifier('');
+        setLoginPassword('');
+        showToast ? showToast('Success', data.message, 'success') : alert(data.message);
+      } else {
+        alert(data.error || 'Login failed.');
+      }
+    } catch (err) {
+      alert(`Error logging in: ${err.message}`);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
   // Submit Order Modal State
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -242,11 +277,14 @@ const ResellerPortal = () => {
             <input
               type="text"
               className="form-input"
-              style={{ width: '140px', padding: '6px 10px', fontSize: '13px', fontWeight: '700', textTransform: 'lowercase', height: '32px' }}
+              style={{ width: '130px', padding: '6px 10px', fontSize: '13px', fontWeight: '700', textTransform: 'lowercase', height: '32px' }}
               value={resellerName}
               onChange={(e) => setResellerName(e.target.value.toLowerCase().trim())}
               placeholder="e.g. sellway"
             />
+            <button onClick={() => setShowLoginModal(true)} className="btn btn-primary btn-sm" style={{ background: '#8b5cf6', borderColor: '#8b5cf6', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <ShieldCheck size={14} /> Login
+            </button>
             <button onClick={fetchWalletAndOrders} className="btn btn-secondary btn-icon btn-sm" title="Refresh Profile Data">
               <RefreshCw size={14} />
             </button>
@@ -682,6 +720,59 @@ const ResellerPortal = () => {
                 <button type="button" onClick={() => setShowOrderModal(false)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" disabled={isSubmitting} className="btn btn-success">
                   {isSubmitting ? 'Submitting Order...' : 'Confirm & Submit Order'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reseller Authentication Login Modal */}
+      {showLoginModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldCheck size={20} color="#8b5cf6" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Reseller Portal Login</h3>
+              </div>
+              <button onClick={() => setShowLoginModal(false)} className="btn btn-secondary btn-icon"><XCircle size={18} /></button>
+            </div>
+            <form onSubmit={handleResellerLoginSubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                  Enter your assigned Email, Phone Number, or Reseller Name and Password to access your reseller profile.
+                </p>
+
+                <div className="form-group">
+                  <label className="form-label">Email / Phone / Reseller Name *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. sellway or reseller@example.com"
+                    value={loginIdentifier}
+                    onChange={(e) => setLoginIdentifier(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Portal Password *</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    required
+                    placeholder="••••••••"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowLoginModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" disabled={isLoggingIn} className="btn btn-primary" style={{ background: '#8b5cf6', borderColor: '#8b5cf6' }}>
+                  {isLoggingIn ? 'Logging in...' : 'Login to Profile'}
                 </button>
               </div>
             </form>

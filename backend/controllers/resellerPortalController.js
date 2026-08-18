@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const bcrypt = require('bcryptjs');
 
 // Helper to ensure database tables & columns exist
 const ensureResellerSchema = async (conn) => {
@@ -11,6 +12,7 @@ const ensureResellerSchema = async (conn) => {
         name VARCHAR(255) NOT NULL,
         phone VARCHAR(50) DEFAULT NULL,
         email VARCHAR(255) DEFAULT NULL,
+        password VARCHAR(255) DEFAULT NULL,
         address TEXT DEFAULT NULL,
         bkash_no VARCHAR(50) DEFAULT NULL,
         nagad_no VARCHAR(50) DEFAULT NULL,
@@ -20,6 +22,12 @@ const ensureResellerSchema = async (conn) => {
         INDEX idx_reseller_tenant (tenant_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    // Migration for password column if missing
+    const [passCols] = await conn.query(`SHOW COLUMNS FROM reseller_profiles LIKE 'password'`);
+    if (passCols.length === 0) {
+      await conn.query(`ALTER TABLE reseller_profiles ADD COLUMN password VARCHAR(255) DEFAULT NULL`);
+    }
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS reseller_payouts (
@@ -486,7 +494,7 @@ exports.getResellerProfiles = async (req, res) => {
 exports.createResellerProfile = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const { name, phone, email, address, bkash_no, nagad_no, bank_info, status } = req.body;
+    const { name, phone, email, password, address, bkash_no, nagad_no, bank_info, status } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Reseller Name is required.' });
@@ -499,14 +507,20 @@ exports.createResellerProfile = async (req, res) => {
       connection.release();
     }
 
+    let hashedPassword = null;
+    if (password) {
+      hashedPassword = await bcrypt.hash(password.trim(), 10);
+    }
+
     const [result] = await db.query(
-      `INSERT INTO reseller_profiles (tenant_id, name, phone, email, address, bkash_no, nagad_no, bank_info, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO reseller_profiles (tenant_id, name, phone, email, password, address, bkash_no, nagad_no, bank_info, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tenantId,
         name.trim(),
         phone ? phone.trim() : null,
         email ? email.trim() : null,
+        hashedPassword,
         address || null,
         bkash_no ? bkash_no.trim() : null,
         nagad_no ? nagad_no.trim() : null,
@@ -516,7 +530,7 @@ exports.createResellerProfile = async (req, res) => {
     );
 
     res.status(201).json({
-      message: `Reseller Profile created for "${name}"!`,
+      message: `Reseller Profile created for "${name}"! Login email: ${email || phone || name}`,
       profileId: result.insertId
     });
   } catch (error) {
@@ -529,24 +543,33 @@ exports.updateResellerProfile = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
-    const { name, phone, email, address, bkash_no, nagad_no, bank_info, status } = req.body;
+    const { name, phone, email, password, address, bkash_no, nagad_no, bank_info, status } = req.body;
+
+    let hashedPasswordSql = '';
+    const params = [
+      name ? name.trim() : 'Reseller',
+      phone ? phone.trim() : null,
+      email ? email.trim() : null,
+      address || null,
+      bkash_no ? bkash_no.trim() : null,
+      nagad_no ? nagad_no.trim() : null,
+      bank_info || null,
+      status || 'active'
+    ];
+
+    if (password && password.trim() !== '') {
+      const hp = await bcrypt.hash(password.trim(), 10);
+      hashedPasswordSql = `, password = ?`;
+      params.push(hp);
+    }
+
+    params.push(id, tenantId);
 
     await db.query(
       `UPDATE reseller_profiles 
-       SET name = ?, phone = ?, email = ?, address = ?, bkash_no = ?, nagad_no = ?, bank_info = ?, status = ?
+       SET name = ?, phone = ?, email = ?, address = ?, bkash_no = ?, nagad_no = ?, bank_info = ?, status = ? ${hashedPasswordSql}
        WHERE id = ? AND tenant_id = ?`,
-      [
-        name ? name.trim() : 'Reseller',
-        phone ? phone.trim() : null,
-        email ? email.trim() : null,
-        address || null,
-        bkash_no ? bkash_no.trim() : null,
-        nagad_no ? nagad_no.trim() : null,
-        bank_info || null,
-        status || 'active',
-        id,
-        tenantId
-      ]
+      params
     );
 
     res.json({ message: 'Reseller profile updated successfully!' });
@@ -564,6 +587,58 @@ exports.deleteResellerProfile = async (req, res) => {
     await db.query('DELETE FROM reseller_profiles WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     res.json({ message: 'Reseller profile deleted successfully!' });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 10. Reseller Dedicated Portal Login
+exports.resellerLogin = async (req, res) => {
+  try {
+    const { identifier, password } = req.body; // identifier can be email, phone, or name
+
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Please enter Email/Phone and Password.' });
+    }
+
+    const connection = await db.getConnection();
+    try {
+      await ensureResellerSchema(connection);
+    } finally {
+      connection.release();
+    }
+
+    const [profiles] = await db.query(
+      `SELECT * FROM reseller_profiles 
+       WHERE (email = ? OR phone = ? OR name = ?) AND status = 'active'
+       LIMIT 1`,
+      [identifier.trim(), identifier.trim(), identifier.trim()]
+    );
+
+    if (profiles.length === 0) {
+      return res.status(401).json({ error: 'Invalid reseller login credentials or account suspended.' });
+    }
+
+    const reseller = profiles[0];
+
+    if (reseller.password) {
+      const isMatch = await bcrypt.compare(password.trim(), reseller.password);
+      if (!isMatch) {
+        return res.status(401).json({ error: 'Incorrect portal password.' });
+      }
+    }
+
+    res.json({
+      message: `Welcome back, ${reseller.name}!`,
+      reseller: {
+        id: reseller.id,
+        name: reseller.name,
+        email: reseller.email,
+        phone: reseller.phone,
+        status: reseller.status
+      }
+    });
+  } catch (error) {
+    console.error('Error logging in reseller:', error);
     res.status(500).json({ error: error.message });
   }
 };
