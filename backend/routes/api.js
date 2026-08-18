@@ -25,6 +25,8 @@ const subscriptionController = require('../controllers/subscriptionController');
 const storeApiKeyController = require('../controllers/storeApiKeyController');
 const externalOrderController = require('../controllers/externalOrderController');
 const taskController = require('../controllers/taskController');
+const resellerController = require('../controllers/resellerController');
+const resellerPortalController = require('../controllers/resellerPortalController');
 
 const { authenticate, requireSuperAdmin, checkActiveSubscription } = require('../middleware/authMiddleware');
 
@@ -63,7 +65,6 @@ router.patch('/super-admin/tenants/:tenant_id', authenticate, requireSuperAdmin,
 // -------------------------------------------------------------
 // PUBLIC RESELLER PORTAL APIS
 // -------------------------------------------------------------
-const resellerPortalController = require('../controllers/resellerPortalController');
 router.post('/reseller/login', resellerPortalController.resellerLogin);
 router.get('/reseller/catalog', resellerPortalController.getResellerCatalog);
 router.post('/reseller/orders/submit', resellerPortalController.submitResellerOrder);
@@ -143,8 +144,6 @@ router.post('/wholesale/sales', checkActiveSubscription, wholesaleController.cre
 router.delete('/wholesale/sales/:id', checkActiveSubscription, wholesaleController.deleteWholesaleSale);
 
 // Reseller Parcels & Reseller Portal APIs
-const resellerController = require('../controllers/resellerController');
-const resellerPortalController = require('../controllers/resellerPortalController');
 router.get('/reseller/sales', resellerController.getResellerSales);
 router.post('/reseller/sales', checkActiveSubscription, resellerController.createResellerSale);
 router.delete('/reseller/sales/:id', checkActiveSubscription, resellerController.deleteResellerSale);
