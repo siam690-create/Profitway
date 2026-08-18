@@ -298,7 +298,7 @@ export const ResellerOrders = () => {
                 <th>Customer Info</th>
                 <th>Ordered Items</th>
                 <th>Total COD</th>
-                <th>Est. Profit</th>
+                <th>Wholesale & Est. Profit</th>
                 <th>Status</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -333,7 +333,7 @@ export const ResellerOrders = () => {
                         <div style={{ fontWeight: '700', fontSize: '13px' }}>{order.customer_name || 'Customer'}</div>
                         <div style={{ fontSize: '12px', color: '#38bdf8', fontWeight: '600' }}>📞 {order.customer_phone}</div>
                         {order.customer_address && (
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: '1.4', wordBreak: 'break-word', maxWidth: '240px' }}>
                             📍 {order.customer_address}
                           </div>
                         )}
@@ -356,11 +356,16 @@ export const ResellerOrders = () => {
                       </td>
 
                       <td>
-                        <strong style={{ fontSize: '14px', color: '#10b981' }}>
-                          +{currency}{profit.toFixed(2)}
-                        </strong>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          Wholesale: <strong style={{ color: 'var(--text-primary)', fontSize: '12px' }}>{currency}{Number(order.reseller_wholesale_cost || order.total_cost || 0).toFixed(2)}</strong>
+                        </div>
+                        <div style={{ marginTop: '2px' }}>
+                          <strong style={{ fontSize: '14px', color: '#10b981' }}>
+                            +{currency}{profit.toFixed(2)}
+                          </strong>
+                        </div>
                         {status === 'returned' && (
-                          <div style={{ fontSize: '10px', color: '#ef4444' }}>
+                          <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '2px' }}>
                             Loss: -{currency}{Number(order.return_loss || 100).toFixed(2)}
                           </div>
                         )}
