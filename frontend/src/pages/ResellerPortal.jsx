@@ -954,7 +954,7 @@ const ResellerPortal = () => {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div className="form-group">
                     <label className="form-label">District / City</label>
                     <input
@@ -976,21 +976,6 @@ const ResellerPortal = () => {
                       onChange={(e) => setThana(e.target.value)}
                     />
                   </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Courier Service</label>
-                    <select
-                      className="form-select"
-                      value={courierName}
-                      onChange={(e) => setCourierName(e.target.value)}
-                    >
-                      <option value="Steadfast">Steadfast Courier</option>
-                      <option value="Pathao">Pathao Courier</option>
-                      <option value="RedX">RedX Express</option>
-                      <option value="Paperfly">Paperfly</option>
-                      <option value="Sundarban">Sundarban Courier</option>
-                    </select>
-                  </div>
                 </div>
 
                 {/* Selected Products Breakdown */}
@@ -1008,31 +993,18 @@ const ResellerPortal = () => {
                   </div>
                 </div>
 
-                {/* Customer Selling Price & Profit Calculation */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Customer Sale Price (কাষ্টমারের মোট দাম) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-input"
-                      required
-                      placeholder="e.g. 800.00"
-                      value={customerSellingPrice}
-                      onChange={(e) => setCustomerSellingPrice(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Delivery Charge ({currency})</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      placeholder="100.00"
-                      value={deliveryFeeCharged}
-                      onChange={(e) => setDeliveryFeeCharged(e.target.value)}
-                    />
-                  </div>
+                {/* Total COD / Customer Sale Price */}
+                <div className="form-group">
+                  <label className="form-label">Customer Sale Price / Total COD (ডিলেভারি চার্জ সহ কাষ্টমারের মোট বিক্রীদাম) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="form-input"
+                    required
+                    placeholder="e.g. 500 (ডিলেভারি চার্জ সহ মোট দাম)"
+                    value={customerSellingPrice}
+                    onChange={(e) => setCustomerSellingPrice(e.target.value)}
+                  />
                 </div>
 
                 {/* Estimated Reseller Profit Display Box */}
