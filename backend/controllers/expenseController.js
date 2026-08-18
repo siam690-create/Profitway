@@ -62,19 +62,37 @@ exports.createExpense = async (req, res) => {
         );
 
         // Insert into account_transactions for passbook ledger
-        await connection.query(
-          `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
-           VALUES (?, ?, ?, ?, 0.00, ?, ?, ?)`,
-          [
-            tenantId,
-            account_id,
-            `⚡ Operating Expense (${category})`,
-            expAmount,
-            `EXP-${Date.now()}`,
-            `Expense: ${title} (${category})${notes ? ' - ' + notes : ''}`,
-            expense_date || new Date().toISOString().slice(0, 19).replace('T', ' ')
-          ]
-        );
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const expDateStr = expense_date ? String(expense_date).slice(0, 10) : todayStr;
+
+        if (expDateStr === todayStr) {
+          await connection.query(
+            `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+             VALUES (?, ?, ?, ?, 0.00, ?, ?, NOW())`,
+            [
+              tenantId,
+              account_id,
+              `⚡ Operating Expense (${category})`,
+              expAmount,
+              `EXP-${Date.now()}`,
+              `Expense: ${title} (${category})${notes ? ' - ' + notes : ''}`
+            ]
+          );
+        } else {
+          await connection.query(
+            `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+             VALUES (?, ?, ?, ?, 0.00, ?, ?, CONCAT(?, ' ', DATE_FORMAT(NOW(), '%H:%i:%s')))`,
+            [
+              tenantId,
+              account_id,
+              `⚡ Operating Expense (${category})`,
+              expAmount,
+              `EXP-${Date.now()}`,
+              `Expense: ${title} (${category})${notes ? ' - ' + notes : ''}`,
+              expDateStr
+            ]
+          );
+        }
       }
     }
 
