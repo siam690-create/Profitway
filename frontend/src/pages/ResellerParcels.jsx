@@ -10,6 +10,7 @@ export const ResellerParcels = () => {
   const [salesList, setSalesList] = useState([]);
   const [returnsList, setReturnsList] = useState([]);
   const [accountsList, setAccountsList] = useState([]);
+  const [profilesList, setProfilesList] = useState([]);
 
   // Modals State
   const [showSaleModal, setShowSaleModal] = useState(false);
