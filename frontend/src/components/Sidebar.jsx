@@ -38,7 +38,6 @@ export const Sidebar = () => {
     { id: 'pos', label: 'POS / New Sale', icon: ShoppingCart, badge: cart.length > 0 ? cart.length : null, badgeType: 'success' },
     { id: 'wholesale', label: 'Wholesale B2B Sales', icon: ShoppingBag },
     { id: 'reseller-parcels', label: 'Reseller Parcels', icon: Package },
-    { id: 'reseller-portal', label: 'Reseller Portal', icon: ShoppingBag, badge: 'NEW', badgeType: 'info' },
     { id: 'inventory', label: 'Inventory / Stock', icon: Package, badge: lowStockCount > 0 ? lowStockCount : null, badgeType: 'warning' },
     { id: 'purchases', label: 'Purchases & Suppliers', icon: Truck },
     { id: 'orders', label: 'Sales & Orders', icon: FileText },

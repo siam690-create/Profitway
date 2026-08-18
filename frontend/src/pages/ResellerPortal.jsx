@@ -24,11 +24,17 @@ import {
 } from 'lucide-react';
 
 const ResellerPortal = () => {
-  const { authFetch, currency, showToast } = useApp();
+  const { authFetch, currency, showToast, resellerSession, logoutReseller } = useApp();
 
   const [resellerName, setResellerName] = useState(() => {
-    return localStorage.getItem('profitway_reseller_name') || 'sellway';
+    return resellerSession?.name || localStorage.getItem('profitway_reseller_name') || 'sellway';
   });
+
+  useEffect(() => {
+    if (resellerSession?.name) {
+      setResellerName(resellerSession.name);
+    }
+  }, [resellerSession]);
   const [resellerId, setResellerId] = useState('');
 
   const [activeTab, setActiveTab] = useState('catalog'); // 'catalog', 'orders', 'wallet'
@@ -274,17 +280,29 @@ const ResellerPortal = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255, 255, 255, 0.05)', padding: '8px 16px', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
             <User size={16} color="var(--accent-primary)" />
             <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)' }}>Reseller Profile:</span>
-            <input
-              type="text"
-              className="form-input"
-              style={{ width: '130px', padding: '6px 10px', fontSize: '13px', fontWeight: '700', textTransform: 'lowercase', height: '32px' }}
-              value={resellerName}
-              onChange={(e) => setResellerName(e.target.value.toLowerCase().trim())}
-              placeholder="e.g. sellway"
-            />
-            <button onClick={() => setShowLoginModal(true)} className="btn btn-primary btn-sm" style={{ background: '#8b5cf6', borderColor: '#8b5cf6', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <ShieldCheck size={14} /> Login
-            </button>
+            {resellerSession ? (
+              <strong style={{ fontSize: '14px', color: '#8b5cf6' }}>{resellerSession.name}</strong>
+            ) : (
+              <input
+                type="text"
+                className="form-input"
+                style={{ width: '130px', padding: '6px 10px', fontSize: '13px', fontWeight: '700', textTransform: 'lowercase', height: '32px' }}
+                value={resellerName}
+                onChange={(e) => setResellerName(e.target.value.toLowerCase().trim())}
+                placeholder="e.g. sellway"
+              />
+            )}
+
+            {resellerSession ? (
+              <button onClick={logoutReseller} className="btn btn-danger btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                Logout
+              </button>
+            ) : (
+              <button onClick={() => setShowLoginModal(true)} className="btn btn-primary btn-sm" style={{ background: '#8b5cf6', borderColor: '#8b5cf6', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <ShieldCheck size={14} /> Login
+              </button>
+            )}
+
             <button onClick={fetchWalletAndOrders} className="btn btn-secondary btn-icon btn-sm" title="Refresh Profile Data">
               <RefreshCw size={14} />
             </button>

@@ -28,16 +28,21 @@ import {
 } from 'lucide-react';
 
 export const LandingPage = () => {
-  const { login, registerTenant } = useApp();
+  const { login, registerTenant, loginReseller } = useApp();
   const [billingCycle, setBillingCycle] = useState('monthly');
   
-  // Auth Modal States: null, 'login', 'signup', 'superadmin', 'pending_notice'
+  // Auth Modal States: null, 'login', 'signup', 'superadmin', 'reseller_login', 'pending_notice'
   const [authModal, setAuthModal] = useState(null);
 
   // Form States
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // Reseller Login Form States
+  const [resellerIdentifier, setResellerIdentifier] = useState('');
+  const [resellerPassword, setResellerPassword] = useState('');
+  const [resellerLoginError, setResellerLoginError] = useState('');
 
   const [signupForm, setSignupForm] = useState({
     shop_name: '',
@@ -71,6 +76,31 @@ export const LandingPage = () => {
       setLoginError(res.error);
     } else {
       setAuthModal(null);
+    }
+  };
+
+  const handleResellerLoginSubmit = async (e) => {
+    e.preventDefault();
+    setResellerLoginError('');
+    setAuthLoading(true);
+
+    try {
+      const res = await fetch('/api/reseller/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: resellerIdentifier, password: resellerPassword })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        loginReseller(data.reseller);
+        setAuthModal(null);
+      } else {
+        setResellerLoginError(data.error || 'Reseller login failed');
+      }
+    } catch (err) {
+      setResellerLoginError(`Error logging in: ${err.message}`);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -128,6 +158,14 @@ export const LandingPage = () => {
 
           {/* Clean General Navigation Header Buttons (Login & Sign Up) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button 
+              onClick={() => { setAuthModal('reseller_login'); setResellerIdentifier(''); setResellerPassword(''); setResellerLoginError(''); }}
+              style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', border: '1px solid rgba(139, 92, 246, 0.4)', padding: '10px 20px', borderRadius: '10px', fontSize: '14px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <ShoppingBag size={15} />
+              <span>Reseller Login</span>
+            </button>
+
             <button 
               onClick={() => { setAuthModal('login'); setLoginEmail(''); setLoginPassword(''); setLoginError(''); }}
               style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '10px 24px', borderRadius: '10px', fontSize: '14px', fontWeight: '800', cursor: 'pointer' }}
@@ -606,6 +644,51 @@ export const LandingPage = () => {
 
                 <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', borderRadius: '10px', fontWeight: '800', background: 'linear-gradient(90deg, #a855f7, #7c3aed)' }} disabled={authLoading}>
                   {authLoading ? 'Authenticating Super Admin...' : 'Login to Super Admin SaaS Controller'}
+                </button>
+              </form>
+            )}
+
+            {/* --- TAB 3.5: RESELLER PORTAL LOGIN --- */}
+            {authModal === 'reseller_login' && (
+              <form onSubmit={handleResellerLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ background: 'rgba(139, 92, 246, 0.12)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '10px 14px', borderRadius: '8px', fontSize: '12px', color: '#a78bfa' }}>
+                  🛍️ <strong>Reseller Dedicated Portal:</strong> Enter your assigned Email, Phone Number, or Reseller Name and Password to access your reseller profile & order catalog.
+                </div>
+
+                {resellerLoginError && (
+                  <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', fontSize: '12px', color: '#f87171' }}>
+                    {resellerLoginError}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Email / Phone / Reseller Name *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. sellway or reseller@example.com"
+                    value={resellerIdentifier}
+                    onChange={(e) => setResellerIdentifier(e.target.value)}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: '#cbd5e1' }}>Portal Password *</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    required
+                    placeholder="••••••••"
+                    value={resellerPassword}
+                    onChange={(e) => setResellerPassword(e.target.value)}
+                    style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', borderRadius: '10px', fontWeight: '800', background: 'linear-gradient(90deg, #8b5cf6, #ec4899)' }} disabled={authLoading}>
+                  {authLoading ? 'Logging into Portal...' : 'Login to Reseller Portal'}
                 </button>
               </form>
             )}

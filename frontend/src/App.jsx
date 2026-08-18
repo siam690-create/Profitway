@@ -76,6 +76,16 @@ function MainApp() {
     );
   }
 
+  if (view === 'reseller-portal') {
+    return (
+      <>
+        <TopProgressBar isLoading={topLoading} progress={topProgress} />
+        <ToastNotification toast={toast} onClose={() => setToast(null)} />
+        <ResellerPortal />
+      </>
+    );
+  }
+
   const role = (user?.role || '').toLowerCase();
   const isSuperAdmin = role === 'super_admin' || role === 'saas_admin' || role === 'admin';
 

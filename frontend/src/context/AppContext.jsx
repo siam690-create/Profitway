@@ -16,9 +16,13 @@ export const AppProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token') || null);
   const [user, setUser] = useState(safeJsonParse('user'));
   const [tenant, setTenant] = useState(safeJsonParse('tenant'));
+  const [resellerSession, setResellerSession] = useState(safeJsonParse('resellerSession'));
 
   // App Navigation View & Tab Persistence
-  const [view, setView] = useState(token ? 'dashboard' : 'landing');
+  const [view, setView] = useState(() => {
+    if (localStorage.getItem('resellerSession')) return 'reseller-portal';
+    return localStorage.getItem('token') ? 'dashboard' : 'landing';
+  });
   const [activeTab, setActiveTabState] = useState(() => {
     return localStorage.getItem('profitway_active_tab') || 'dashboard';
   });
@@ -214,6 +218,19 @@ export const AppProvider = ({ children }) => {
     localStorage.removeItem('tenant');
     localStorage.removeItem('profitway_active_tab');
     setActiveTabState('dashboard');
+    setView('landing');
+  };
+
+  // Reseller Dedicated Portal Login & Logout
+  const loginReseller = (resellerData) => {
+    localStorage.setItem('resellerSession', JSON.stringify(resellerData));
+    setResellerSession(resellerData);
+    setView('reseller-portal');
+  };
+
+  const logoutReseller = () => {
+    localStorage.removeItem('resellerSession');
+    setResellerSession(null);
     setView('landing');
   };
 
@@ -611,6 +628,9 @@ export const AppProvider = ({ children }) => {
         login,
         registerTenant,
         logout,
+        resellerSession,
+        loginReseller,
+        logoutReseller,
         fetchDashboard,
         fetchProducts,
         fetchCategories,
