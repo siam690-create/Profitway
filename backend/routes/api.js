@@ -61,6 +61,16 @@ router.get('/super-admin/tenants', authenticate, requireSuperAdmin, superAdminCo
 router.patch('/super-admin/tenants/:tenant_id', authenticate, requireSuperAdmin, superAdminController.updateTenantSubscription);
 
 // -------------------------------------------------------------
+// PUBLIC RESELLER PORTAL APIS
+// -------------------------------------------------------------
+const resellerPortalController = require('../controllers/resellerPortalController');
+router.post('/reseller/login', resellerPortalController.resellerLogin);
+router.get('/reseller/catalog', resellerPortalController.getResellerCatalog);
+router.post('/reseller/orders/submit', resellerPortalController.submitResellerOrder);
+router.get('/reseller/orders/my-orders', resellerPortalController.getResellerOrders);
+router.get('/reseller/wallet', resellerPortalController.getResellerWallet);
+
+// -------------------------------------------------------------
 // PROTECTED MULTI-TENANT SHOP APIS
 // -------------------------------------------------------------
 router.use(authenticate);
@@ -141,16 +151,11 @@ router.delete('/reseller/sales/:id', checkActiveSubscription, resellerController
 router.get('/reseller/returns', resellerController.getResellerReturns);
 router.post('/reseller/returns', checkActiveSubscription, resellerController.createResellerReturn);
 
-// Reseller Self-Service Portal, Profiles & Payout Routes
-router.post('/reseller/login', resellerPortalController.resellerLogin);
+// Merchant Admin Reseller Profiles & Payout Routes
 router.get('/reseller/profiles', resellerPortalController.getResellerProfiles);
 router.post('/reseller/profiles', checkActiveSubscription, resellerPortalController.createResellerProfile);
 router.put('/reseller/profiles/:id', checkActiveSubscription, resellerPortalController.updateResellerProfile);
 router.delete('/reseller/profiles/:id', checkActiveSubscription, resellerPortalController.deleteResellerProfile);
-router.get('/reseller/catalog', resellerPortalController.getResellerCatalog);
-router.post('/reseller/orders/submit', checkActiveSubscription, resellerPortalController.submitResellerOrder);
-router.get('/reseller/orders/my-orders', resellerPortalController.getResellerOrders);
-router.get('/reseller/wallet', resellerPortalController.getResellerWallet);
 router.post('/reseller/payouts/process', checkActiveSubscription, resellerPortalController.processResellerPayout);
 
 // Supplier Directory APIs

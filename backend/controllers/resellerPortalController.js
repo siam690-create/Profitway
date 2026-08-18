@@ -96,10 +96,32 @@ const ensureResellerSchema = async (conn) => {
   }
 };
 
+// Helper to resolve tenant ID safely for public or authenticated reseller requests
+const resolveTenantId = async (req) => {
+  if (req.user && req.user.tenantId) {
+    return req.user.tenantId;
+  }
+  const resellerName = req.query.reseller_name || req.body.reseller_name || req.body.identifier;
+  if (resellerName) {
+    const [pRows] = await db.query(
+      `SELECT tenant_id FROM reseller_profiles WHERE name = ? OR email = ? OR phone = ? LIMIT 1`,
+      [resellerName, resellerName, resellerName]
+    );
+    if (pRows.length > 0) {
+      return pRows[0].tenant_id;
+    }
+  }
+  const [tRows] = await db.query(`SELECT id FROM tenants LIMIT 1`);
+  if (tRows.length > 0) {
+    return tRows[0].id;
+  }
+  return 1;
+};
+
 // 1. Get Product Catalog with Wholesale Reseller Price
 exports.getResellerCatalog = async (req, res) => {
   try {
-    const tenantId = req.user.tenantId;
+    const tenantId = await resolveTenantId(req);
 
     const connection = await db.getConnection();
     try {
@@ -137,7 +159,7 @@ exports.getResellerCatalog = async (req, res) => {
 exports.submitResellerOrder = async (req, res) => {
   const connection = await db.getConnection();
   try {
-    const tenantId = req.user.tenantId;
+    const tenantId = await resolveTenantId(req);
     await connection.beginTransaction();
 
     await ensureResellerSchema(connection);
@@ -266,7 +288,7 @@ exports.submitResellerOrder = async (req, res) => {
 // 3. Get Reseller Orders List with Statuses
 exports.getResellerOrders = async (req, res) => {
   try {
-    const tenantId = req.user.tenantId;
+    const tenantId = await resolveTenantId(req);
     const { reseller_name, reseller_id } = req.query;
 
     let query = `SELECT * FROM reseller_sales WHERE tenant_id = ?`;
@@ -298,7 +320,7 @@ exports.getResellerOrders = async (req, res) => {
 // 4. Get Reseller Earnings Wallet & P&L Summary
 exports.getResellerWallet = async (req, res) => {
   try {
-    const tenantId = req.user.tenantId;
+    const tenantId = await resolveTenantId(req);
     const { reseller_name, reseller_id } = req.query;
 
     const connection = await db.getConnection();

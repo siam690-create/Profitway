@@ -61,13 +61,18 @@ const ResellerPortal = () => {
 
     setIsLoggingIn(true);
     try {
-      const res = await authFetch('/api/reseller/login', {
+      const res = await fetch('/api/reseller/login', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: loginIdentifier, password: loginPassword })
       });
       const data = await res.json();
       if (res.ok) {
-        setResellerName(data.reseller.name);
+        if (loginReseller) {
+          loginReseller(data.reseller);
+        } else {
+          setResellerName(data.reseller.name);
+        }
         setShowLoginModal(false);
         setLoginIdentifier('');
         setLoginPassword('');
@@ -102,7 +107,7 @@ const ResellerPortal = () => {
   const fetchCatalog = async () => {
     try {
       setLoading(true);
-      const res = await authFetch('/api/reseller/catalog');
+      const res = await fetch('/api/reseller/catalog');
       const data = await res.json();
       if (res.ok) setCatalog(data);
     } catch (e) {
@@ -116,7 +121,7 @@ const ResellerPortal = () => {
   const fetchWalletAndOrders = async () => {
     if (!resellerName) return;
     try {
-      const res = await authFetch(`/api/reseller/wallet?reseller_name=${encodeURIComponent(resellerName)}`);
+      const res = await fetch(`/api/reseller/wallet?reseller_name=${encodeURIComponent(resellerName)}`);
       const data = await res.json();
       if (res.ok) {
         setWalletData(data);
@@ -187,8 +192,9 @@ const ResellerPortal = () => {
 
     setIsSubmitting(true);
     try {
-      const res = await authFetch('/api/reseller/orders/submit', {
+      const res = await fetch('/api/reseller/orders/submit', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reseller_name: resellerName,
           customer_name: customerName,
