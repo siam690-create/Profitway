@@ -256,21 +256,25 @@ exports.submitResellerOrder = async (req, res) => {
     // Insert items into reseller_sale_items
     for (const item of items) {
       const qty = Number(item.quantity || 1);
+      const unitCost = Number(item.unit_cost || 0);
+      const unitPrice = Number(item.unit_price || unitCost);
+      const totalPrice = qty * unitPrice;
+      const itemProfit = qty * (unitPrice - unitCost);
+
       await connection.query(
         `INSERT INTO reseller_sale_items 
-          (tenant_id, reseller_sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, total_cost, item_profit)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (tenant_id, reseller_sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, item_profit)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tenantId,
           saleId,
           item.product_id || null,
           item.product_name || 'Product',
           qty,
-          item.unit_cost,
-          item.unit_price || item.unit_cost,
-          Number(item.unit_price || item.unit_cost) * qty,
-          item.total_cost,
-          (Number(item.unit_price || item.unit_cost) - item.unit_cost) * qty
+          unitCost,
+          unitPrice,
+          totalPrice,
+          itemProfit
         ]
       );
     }

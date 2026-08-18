@@ -351,7 +351,7 @@ export const ResellerOrders = () => {
 
                       <td>
                         <strong style={{ fontSize: '15px', color: 'var(--text-primary)' }}>
-                          {currency}{Number(order.total_price || order.customer_total_price || 0).toFixed(2)}
+                          {currency}{Number(order.total_amount || order.total_price || order.customer_total_price || 0).toFixed(2)}
                         </strong>
                       </td>
 
@@ -571,7 +571,7 @@ export const ResellerOrders = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
                 <div>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Customer Total COD:</div>
-                  <strong style={{ fontSize: '18px', color: 'var(--text-primary)' }}>{currency}{Number(viewingOrder.total_price || 0).toFixed(2)}</strong>
+                  <strong style={{ fontSize: '18px', color: 'var(--text-primary)' }}>{currency}{Number(viewingOrder.total_amount || viewingOrder.total_price || 0).toFixed(2)}</strong>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Estimated Reseller Profit:</div>
