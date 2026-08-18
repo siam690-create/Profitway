@@ -353,11 +353,15 @@ export const Finance = () => {
         method: 'POST',
         body: JSON.stringify(pawnaForm)
       });
+      const data = await res.json();
       if (res.ok) {
         setShowPawnaModal(false);
-        setPawnaForm({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '' });
+        setPawnaForm({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '', created_at: new Date().toISOString().slice(0, 10), account_id: '' });
         fetchFinance();
-        alert('Pawna (Receivable) record created!');
+        refreshAllData();
+        alert(data.message || 'Pawna (Receivable) record created!');
+      } else {
+        alert(`Error: ${data.error}`);
       }
     } catch (err) {
       alert(`Error: ${err.message}`);
@@ -2559,9 +2563,37 @@ export const Finance = () => {
                   <label className="form-label">Customer / Party Name *</label>
                   <input type="text" className="form-input" required placeholder="e.g. Tanvir Ahmed" value={pawnaForm.party_name} onChange={(e) => setPawnaForm({ ...pawnaForm, party_name: e.target.value })} />
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Total Pawna Amount ({currency}) *</label>
+                    <input type="number" step="0.01" className="form-input" required placeholder="4500.00" value={pawnaForm.total_amount} onChange={(e) => setPawnaForm({ ...pawnaForm, total_amount: e.target.value })} />
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">📅 Pawna Date (তারিখ)</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={pawnaForm.created_at || new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setPawnaForm({ ...pawnaForm, created_at: e.target.value })}
+                    />
+                  </div>
+                </div>
+
                 <div className="form-group">
-                  <label className="form-label">Total Pawna Amount ({currency})</label>
-                  <input type="number" step="0.01" className="form-input" required placeholder="4500.00" value={pawnaForm.total_amount} onChange={(e) => setPawnaForm({ ...pawnaForm, total_amount: e.target.value })} />
+                  <label className="form-label">🏦 Deduct from Account (টাকা যে ক্যাশ/ব্যাংক থেকে গেছে - Optional)</label>
+                  <select
+                    className="form-select"
+                    value={pawnaForm.account_id || ''}
+                    onChange={(e) => setPawnaForm({ ...pawnaForm, account_id: e.target.value })}
+                  >
+                    <option value="">No Account Balance Deduction (শুধুমাত্র পাওয়ার হিসাব রাখুন)</option>
+                    {(financeData?.accounts || []).map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        🏦 {acc.name} ({currency}{Number(acc.balance || 0).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="modal-footer">

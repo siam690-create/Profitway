@@ -458,39 +458,99 @@ exports.payLiability = async (req, res) => {
 
 // Create Pawna (Receivable / Due to Collect)
 exports.createReceivable = async (req, res) => {
-  try {
-    const tenantId = req.user.tenantId;
-    const { title, party_type, party_name, total_amount, due_date, notes } = req.body;
+  const { title, party_type, party_name, total_amount, due_date, notes, created_at, date, account_id } = req.body;
 
-    if (!party_name) {
-      return res.status(400).json({ error: 'Party/Customer Name is required.' });
+  if (!party_name) {
+    return res.status(400).json({ error: 'Party/Customer Name is required.' });
+  }
+
+  const amt = Number(total_amount || 0);
+  const tenantId = req.user.tenantId;
+
+  let customDate = null;
+  const rawDate = created_at || date;
+  if (rawDate) {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      const timeStr = String(rawDate).length <= 10 ? ' 12:00:00' : '';
+      customDate = String(rawDate).replace('T', ' ') + timeStr;
+    }
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    let result;
+    if (customDate) {
+      [result] = await connection.query(
+        `INSERT INTO receivables (tenant_id, title, party_type, party_name, total_amount, amount_collected, status, due_date, notes, created_at)
+         VALUES (?, ?, ?, ?, ?, 0.00, 'pending', ?, ?, ?)`,
+        [
+          tenantId,
+          title || `Pawna Profile: ${party_name.trim()}`,
+          party_type || 'customer',
+          party_name.trim(),
+          amt,
+          due_date || null,
+          notes || null,
+          customDate
+        ]
+      );
+    } else {
+      [result] = await connection.query(
+        `INSERT INTO receivables (tenant_id, title, party_type, party_name, total_amount, amount_collected, status, due_date, notes)
+         VALUES (?, ?, ?, ?, ?, 0.00, 'pending', ?, ?)`,
+        [
+          tenantId,
+          title || `Pawna Profile: ${party_name.trim()}`,
+          party_type || 'customer',
+          party_name.trim(),
+          amt,
+          due_date || null,
+          notes || null
+        ]
+      );
     }
 
-    const amt = Number(total_amount || 0);
+    const receivableId = result.insertId;
 
-    const [result] = await db.query(
-      `INSERT INTO receivables (tenant_id, title, party_type, party_name, total_amount, amount_collected, status, due_date, notes)
-       VALUES (?, ?, ?, ?, ?, 0.00, ?, ?, ?)`,
-      [
-        tenantId,
-        title || `Pawna Profile: ${party_name}`,
-        party_type || 'customer',
-        party_name.trim(),
-        amt,
-        'pending',
-        due_date || null,
-        notes || null
-      ]
-    );
+    // Deduct from account if account_id is selected and amt > 0
+    if (account_id && amt > 0) {
+      const [accRows] = await connection.query(
+        'SELECT balance, name FROM finance_accounts WHERE id = ? AND tenant_id = ? FOR UPDATE',
+        [account_id, tenantId]
+      );
+
+      if (accRows.length > 0) {
+        await connection.query(
+          'UPDATE finance_accounts SET balance = balance - ? WHERE id = ? AND tenant_id = ?',
+          [amt, account_id, tenantId]
+        );
+
+        await connection.query(
+          `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+           VALUES (?, ?, 'Pawna/Dhar Given', ?, 0.00, ?, ?, ${customDate ? '?' : 'NOW()'})`,
+          customDate
+            ? [tenantId, account_id, amt, `PAWNA-${receivableId}`, `Pawna/Dhar given to ${party_name.trim()}${notes ? ` - ${notes}` : ''}`, customDate]
+            : [tenantId, account_id, amt, `PAWNA-${receivableId}`, `Pawna/Dhar given to ${party_name.trim()}${notes ? ` - ${notes}` : ''}`]
+        );
+      }
+    }
+
+    await connection.commit();
 
     res.status(201).json({
       message: amt > 0 
         ? `৳${amt.toFixed(2)} Pawna record created for "${party_name}"!`
         : `Pawna Profile created for "${party_name}"!`,
-      receivableId: result.insertId
+      receivableId
     });
   } catch (error) {
+    await connection.rollback();
     res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
   }
 };
 
