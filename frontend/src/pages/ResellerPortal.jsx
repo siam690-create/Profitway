@@ -46,6 +46,8 @@ const ResellerPortal = () => {
   // Search & Filter
   const [catalogSearch, setCatalogSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
+  const [sortBy, setSortBy] = useState('all'); // 'all', 'top_margin', 'low_price', 'high_price', 'in_stock'
+  const [inStockOnly, setInStockOnly] = useState(false);
 
   // Reseller Login Modal State
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -232,10 +234,30 @@ const ResellerPortal = () => {
     }
   };
 
-  const filteredCatalog = catalog.filter(p =>
-    p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-    p.sku.toLowerCase().includes(catalogSearch.toLowerCase())
-  );
+  const filteredCatalog = catalog
+    .filter(p => {
+      const searchMatch = p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+                          p.sku.toLowerCase().includes(catalogSearch.toLowerCase());
+      const stockMatch = inStockOnly ? Number(p.stock_quantity || 0) > 0 : true;
+      return searchMatch && stockMatch;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'top_margin') {
+        const marginA = Number(a.retail_price || 0) - Number(a.reseller_price || 0);
+        const marginB = Number(b.retail_price || 0) - Number(b.reseller_price || 0);
+        return marginB - marginA;
+      }
+      if (sortBy === 'low_price') {
+        return Number(a.reseller_price || 0) - Number(b.reseller_price || 0);
+      }
+      if (sortBy === 'high_price') {
+        return Number(b.reseller_price || 0) - Number(a.reseller_price || 0);
+      }
+      if (sortBy === 'in_stock') {
+        return (Number(b.stock_quantity || 0) > 0 ? 1 : 0) - (Number(a.stock_quantity || 0) > 0 ? 1 : 0);
+      }
+      return 0;
+    });
 
   const filteredOrders = orders.filter(o =>
     (o.invoice_no || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
@@ -449,44 +471,165 @@ const ResellerPortal = () => {
             </div>
           </div>
 
+          {/* Quick Filter Pills & Sort Dropdown Bar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', background: 'rgba(15, 23, 42, 0.65)', padding: '12px 16px', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Filter size={15} color="#8b5cf6" /> Filter:
+              </span>
+              
+              <button
+                type="button"
+                onClick={() => setSortBy('all')}
+                style={{
+                  background: sortBy === 'all' ? 'linear-gradient(135deg, #8b5cf6, #ec4899)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: sortBy === 'all' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                🔥 All Products
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSortBy('top_margin')}
+                style={{
+                  background: sortBy === 'top_margin' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: sortBy === 'top_margin' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                💰 Top Margin (সর্বোচ্চ লাভ)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSortBy('low_price')}
+                style={{
+                  background: sortBy === 'low_price' ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: sortBy === 'low_price' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                🏷️ Low Price (কম দাম)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSortBy('high_price')}
+                style={{
+                  background: sortBy === 'high_price' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: sortBy === 'high_price' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                💎 High Price (বেশি দাম)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setInStockOnly(!inStockOnly)}
+                style={{
+                  background: inStockOnly ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                  color: inStockOnly ? '#34d399' : '#fff',
+                  border: inStockOnly ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                ⚡ In-Stock Only {inStockOnly ? '✓' : ''}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sort by:</span>
+              <select
+                className="form-select"
+                style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '10px', height: '34px', background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="all">🔥 Default (All Items)</option>
+                <option value="top_margin">💰 Top Profit Margin (সর্বোচ্চ লাভ)</option>
+                <option value="low_price">🏷️ Lowest Reseller Price (কম পাইকারি দাম)</option>
+                <option value="high_price">💎 Highest Reseller Price (বেশি পাইকারি দাম)</option>
+                <option value="in_stock">⚡ Available Stock First (স্টকে থাকা প্রোডাক্ট)</option>
+              </select>
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-            {filteredCatalog.map(p => (
-              <div key={p.id} className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px', border: '1px solid var(--border-color)' }}>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <h3 style={{ fontSize: '15px', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>{p.name}</h3>
-                    {p.is_combo && <span className="badge badge-info" style={{ fontSize: '10px' }}>COMBO</span>}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>SKU: {p.sku}</div>
+            {filteredCatalog.map(p => {
+              const estimatedMargin = Math.max(0, p.retail_price - p.reseller_price);
+              return (
+                <div key={p.id} className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px', border: '1px solid var(--border-color)' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <h3 style={{ fontSize: '15px', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>{p.name}</h3>
+                      {p.is_combo && <span className="badge badge-info" style={{ fontSize: '10px' }}>COMBO</span>}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>SKU: {p.sku}</div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
-                    <span className={`badge ${p.stock_quantity > 0 ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px' }}>
-                      In Stock: {p.stock_quantity} {p.unit}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+                      <span className={`badge ${p.stock_quantity > 0 ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px' }}>
+                        In Stock: {p.stock_quantity} {p.unit}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
+                      <span>Retail Selling Price:</span>
+                      <span style={{ textDecoration: 'line-through' }}>{currency}{p.retail_price.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '800' }}>
+                      <span>Wholesale Reseller Price:</span>
+                      <span style={{ color: '#8b5cf6' }}>{currency}{p.reseller_price.toFixed(2)}</span>
+                    </div>
+
+                    {/* Estimated Margin Badge */}
+                    <div style={{ background: 'rgba(16, 185, 129, 0.12)', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#10b981' }}>💰 Est. Margin / Profit:</span>
+                      <strong style={{ fontSize: '13px', fontWeight: '800', color: '#10b981' }}>
+                        +{currency}{estimatedMargin.toFixed(2)}
+                      </strong>
+                    </div>
+
+                    <button
+                      onClick={() => handleOpenOrderModal(p)}
+                      disabled={p.stock_quantity <= 0}
+                      className="btn btn-primary btn-sm"
+                      style={{ width: '100%', marginTop: '4px', justifyContent: 'center' }}
+                    >
+                      <Plus size={14} /> Submit Order for Customer
+                    </button>
                   </div>
                 </div>
-
-                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    <span>Retail Price:</span>
-                    <span style={{ textDecoration: 'line-through' }}>{currency}{p.retail_price.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: '800', color: 'var(--accent-primary)' }}>
-                    <span>Reseller Wholesale Price:</span>
-                    <span style={{ color: '#10b981' }}>{currency}{p.reseller_price.toFixed(2)}</span>
-                  </div>
-
-                  <button
-                    onClick={() => handleOpenOrderModal(p)}
-                    disabled={p.stock_quantity <= 0}
-                    className="btn btn-primary btn-sm"
-                    style={{ width: '100%', marginTop: '6px', justifyContent: 'center' }}
-                  >
-                    <Plus size={14} /> Submit Order for Customer
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
