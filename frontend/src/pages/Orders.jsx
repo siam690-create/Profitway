@@ -71,14 +71,18 @@ export const Orders = () => {
           setEditDate('');
         }
 
-        setEditItems(data.items ? data.items.map(item => ({
+        const parsedItems = data.items ? data.items.map(item => ({
           product_id: item.product_id,
           product_name: item.product_name,
           quantity: Number(item.quantity || 1),
           unit_price: Number(item.unit_price || 0),
           unit_cost: Number(item.unit_cost || 0),
           parcel_count: Number(item.parcel_count || 1)
-        })) : []);
+        })) : [];
+
+        setEditItems(parsedItems);
+        const totalItemParcels = parsedItems.reduce((sum, i) => sum + Number(i.parcel_count || 1), 0);
+        setEditParcelCount(String(totalItemParcels || data.parcel_count || 1));
 
         setSelectedAddProductId('');
       } else {
@@ -95,13 +99,13 @@ export const Orders = () => {
     const found = products.find(p => String(p.id) === String(productId));
     if (!found) return;
 
+    let updated = [];
     const existingIdx = editItems.findIndex(i => String(i.product_id) === String(productId));
     if (existingIdx >= 0) {
-      const updated = [...editItems];
+      updated = [...editItems];
       updated[existingIdx].quantity += 1;
-      setEditItems(updated);
     } else {
-      setEditItems([
+      updated = [
         ...editItems,
         {
           product_id: found.id,
@@ -111,8 +115,11 @@ export const Orders = () => {
           unit_cost: Number(found.cost_price || 0),
           parcel_count: 1
         }
-      ]);
+      ];
     }
+    setEditItems(updated);
+    const sum = updated.reduce((s, i) => s + Number(i.parcel_count || 1), 0);
+    setEditParcelCount(String(sum));
     setSelectedAddProductId('');
   };
 
@@ -135,11 +142,15 @@ export const Orders = () => {
     const updated = [...editItems];
     updated[index].parcel_count = count;
     setEditItems(updated);
+    const sum = updated.reduce((s, i) => s + Number(i.parcel_count || 1), 0);
+    setEditParcelCount(String(sum));
   };
 
   const handleRemoveEditItem = (index) => {
     const updated = editItems.filter((_, idx) => idx !== index);
     setEditItems(updated);
+    const sum = updated.reduce((s, i) => s + Number(i.parcel_count || 1), 0);
+    setEditParcelCount(String(sum));
   };
 
   const handleSaveOrderEdit = async (e) => {
@@ -424,7 +435,7 @@ export const Orders = () => {
                   </div>
 
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label" style={{ fontWeight: '700', color: '#38bdf8' }}>📦 Parcel Count (পার্সেল সংখ্যা)</label>
+                    <label className="form-label" style={{ fontWeight: '700', color: '#38bdf8' }}>📦 Total Parcel Count (পার্সেল মোট যোগফল)</label>
                     <input
                       type="number"
                       min="1"
@@ -432,6 +443,7 @@ export const Orders = () => {
                       style={{ fontWeight: '800', color: '#38bdf8', borderColor: '#38bdf8' }}
                       value={editParcelCount}
                       onChange={(e) => setEditParcelCount(e.target.value)}
+                      title="Sum of product parcels below (automatically calculated)"
                     />
                   </div>
 
