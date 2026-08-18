@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 export const ProductSelectSearch = ({ 
   products = [], 
@@ -13,15 +13,37 @@ export const ProductSelectSearch = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
-  const isTypingRef = useRef(false);
+  const prevSelectedIdRef = useRef(selectedId);
 
-  // Sync selected product label into search input when selectedId changes externally
+  // Sync selected product label into search input ONLY when selectedId changes externally
   useEffect(() => {
-    if (isTypingRef.current) {
-      isTypingRef.current = false;
-      return;
-    }
+    if (prevSelectedIdRef.current !== selectedId) {
+      prevSelectedIdRef.current = selectedId;
 
+      if (selectedId) {
+        if (selectedId === 'all') {
+          setSearchTerm(allOptionLabel);
+        } else {
+          const customOpt = customOptions.find(o => String(o.id) === String(selectedId));
+          if (customOpt) {
+            setSearchTerm(customOpt.name);
+          } else {
+            const found = products.find(p => String(p.id) === String(selectedId));
+            if (found) {
+              setSearchTerm(found.sku ? `${found.name} (${found.sku})` : found.name);
+            } else {
+              setSearchTerm('');
+            }
+          }
+        }
+      } else {
+        setSearchTerm('');
+      }
+    }
+  }, [selectedId, products, allOptionLabel, customOptions]);
+
+  // Initial sync on mount if selectedId exists
+  useEffect(() => {
     if (selectedId) {
       if (selectedId === 'all') {
         setSearchTerm(allOptionLabel);
@@ -33,15 +55,11 @@ export const ProductSelectSearch = ({
           const found = products.find(p => String(p.id) === String(selectedId));
           if (found) {
             setSearchTerm(found.sku ? `${found.name} (${found.sku})` : found.name);
-          } else {
-            setSearchTerm('');
           }
         }
       }
-    } else if (!allowAllOption) {
-      setSearchTerm('');
     }
-  }, [selectedId, products, allOptionLabel, customOptions, allowAllOption]);
+  }, []);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -64,20 +82,26 @@ export const ProductSelectSearch = ({
   });
 
   const handleClear = () => {
-    isTypingRef.current = false;
+    const defaultId = allowAllOption ? 'all' : '';
+    prevSelectedIdRef.current = defaultId;
     setSearchTerm('');
-    onSelect(allowAllOption ? 'all' : '');
+    onSelect(defaultId);
     setIsOpen(true);
   };
 
   const handleInputChange = (e) => {
-    isTypingRef.current = true;
     const val = e.target.value;
     setSearchTerm(val);
-    if (selectedId) {
-      onSelect('');
+    if (!isOpen) {
+      setIsOpen(true);
     }
-    setIsOpen(true);
+  };
+
+  const handleSelectOption = (id, label) => {
+    prevSelectedIdRef.current = id;
+    onSelect(id);
+    setSearchTerm(label);
+    setIsOpen(false);
   };
 
   return (
@@ -142,12 +166,7 @@ export const ProductSelectSearch = ({
           {/* Allow All option if enabled */}
           {allowAllOption && (
             <div
-              onClick={() => {
-                isTypingRef.current = false;
-                onSelect('all');
-                setSearchTerm(allOptionLabel);
-                setIsOpen(false);
-              }}
+              onClick={() => handleSelectOption('all', allOptionLabel)}
               style={{
                 padding: '10px 14px',
                 borderBottom: '1px solid var(--border-color)',
@@ -166,12 +185,7 @@ export const ProductSelectSearch = ({
           {customOptions.map(opt => (
             <div
               key={opt.id}
-              onClick={() => {
-                isTypingRef.current = false;
-                onSelect(opt.id);
-                setSearchTerm(opt.name);
-                setIsOpen(false);
-              }}
+              onClick={() => handleSelectOption(opt.id, opt.name)}
               style={{
                 padding: '10px 14px',
                 borderBottom: '1px solid var(--border-color)',
@@ -189,12 +203,7 @@ export const ProductSelectSearch = ({
           {/* Default General Option for modals */}
           {!allowAllOption && customOptions.length === 0 && (
             <div
-              onClick={() => {
-                isTypingRef.current = false;
-                onSelect('');
-                setSearchTerm('');
-                setIsOpen(false);
-              }}
+              onClick={() => handleSelectOption('', '')}
               style={{
                 padding: '10px 14px',
                 borderBottom: '1px solid var(--border-color)',
@@ -216,12 +225,7 @@ export const ProductSelectSearch = ({
             filteredProducts.slice(0, 50).map(p => (
               <div
                 key={p.id}
-                onClick={() => {
-                  isTypingRef.current = false;
-                  onSelect(p.id);
-                  setSearchTerm(p.sku ? `${p.name} (${p.sku})` : p.name);
-                  setIsOpen(false);
-                }}
+                onClick={() => handleSelectOption(p.id, p.sku ? `${p.name} (${p.sku})` : p.name)}
                 style={{
                   padding: '10px 14px',
                   borderBottom: '1px solid var(--border-color)',
