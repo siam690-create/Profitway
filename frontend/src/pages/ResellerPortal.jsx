@@ -20,7 +20,8 @@ import {
   MapPin,
   Tag,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  Pin
 } from 'lucide-react';
 
 const ResellerPortal = () => {
@@ -46,8 +47,43 @@ const ResellerPortal = () => {
   // Search & Filter
   const [catalogSearch, setCatalogSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
-  const [sortBy, setSortBy] = useState('all'); // 'all', 'top_margin', 'low_price', 'high_price', 'in_stock'
+  const [sortBy, setSortBy] = useState('all'); // 'all', 'pinned', 'top_margin', 'low_price', 'high_price', 'in_stock'
   const [inStockOnly, setInStockOnly] = useState(false);
+
+  // Pinned Products Per Reseller
+  const [pinnedProductIds, setPinnedProductIds] = useState(() => {
+    try {
+      const key = `profitway_pinned_${resellerName || 'default'}`;
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const key = `profitway_pinned_${resellerName || 'default'}`;
+      const saved = localStorage.getItem(key);
+      setPinnedProductIds(saved ? JSON.parse(saved) : []);
+    } catch (e) {}
+  }, [resellerName]);
+
+  const togglePinProduct = (productId) => {
+    setPinnedProductIds(prev => {
+      let updated;
+      if (prev.includes(productId)) {
+        updated = prev.filter(id => id !== productId);
+        showToast ? showToast('Unpinned', 'Product removed from pinned list', 'info') : null;
+      } else {
+        updated = [...prev, productId];
+        showToast ? showToast('Pinned 📌', 'Product pinned to top of catalog!', 'success') : null;
+      }
+      const key = `profitway_pinned_${resellerName || 'default'}`;
+      localStorage.setItem(key, JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   // Reseller Login Modal State
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -239,9 +275,19 @@ const ResellerPortal = () => {
       const searchMatch = p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
                           p.sku.toLowerCase().includes(catalogSearch.toLowerCase());
       const stockMatch = inStockOnly ? Number(p.stock_quantity || 0) > 0 : true;
-      return searchMatch && stockMatch;
+      const pinnedMatch = sortBy === 'pinned' ? pinnedProductIds.includes(p.id) : true;
+      return searchMatch && stockMatch && pinnedMatch;
     })
     .sort((a, b) => {
+      const isAPinned = pinnedProductIds.includes(a.id);
+      const isBPinned = pinnedProductIds.includes(b.id);
+
+      // Under 'all' mode, pinned products always float to top!
+      if (sortBy === 'all' || sortBy === 'pinned') {
+        if (isAPinned && !isBPinned) return -1;
+        if (!isAPinned && isBPinned) return 1;
+      }
+
       if (sortBy === 'top_margin') {
         const marginA = Number(a.retail_price || 0) - Number(a.reseller_price || 0);
         const marginB = Number(b.retail_price || 0) - Number(b.reseller_price || 0);
@@ -497,6 +543,26 @@ const ResellerPortal = () => {
 
               <button
                 type="button"
+                onClick={() => setSortBy('pinned')}
+                style={{
+                  background: sortBy === 'pinned' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: sortBy === 'pinned' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                📌 Pinned Items ({pinnedProductIds.length})
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setSortBy('top_margin')}
                 style={{
                   background: sortBy === 'top_margin' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255, 255, 255, 0.06)',
@@ -584,14 +650,57 @@ const ResellerPortal = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
             {filteredCatalog.map(p => {
               const estimatedMargin = Math.max(0, p.retail_price - p.reseller_price);
+              const isPinned = pinnedProductIds.includes(p.id);
+
               return (
-                <div key={p.id} className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px', border: '1px solid var(--border-color)' }}>
+                <div
+                  key={p.id}
+                  className="card"
+                  style={{
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justify: 'space-between',
+                    gap: '12px',
+                    border: isPinned ? '1.5px solid #f59e0b' : '1px solid var(--border-color)',
+                    background: isPinned ? 'rgba(245, 158, 11, 0.04)' : undefined,
+                    boxShadow: isPinned ? '0 4px 16px rgba(245, 158, 11, 0.15)' : undefined,
+                    position: 'relative'
+                  }}
+                >
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <h3 style={{ fontSize: '15px', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>{p.name}</h3>
-                      {p.is_combo && <span className="badge badge-info" style={{ fontSize: '10px' }}>COMBO</span>}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                      <div>
+                        <h3 style={{ fontSize: '15px', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>{p.name}</h3>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>SKU: {p.sku}</div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                        {p.is_combo && <span className="badge badge-info" style={{ fontSize: '10px' }}>COMBO</span>}
+                        <button
+                          type="button"
+                          onClick={() => togglePinProduct(p.id)}
+                          style={{
+                            background: isPinned ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                            border: isPinned ? '1px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.15)',
+                            color: isPinned ? '#f59e0b' : '#94a3b8',
+                            borderRadius: '8px',
+                            padding: '4px 8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            transition: 'all 0.2s ease'
+                          }}
+                          title={isPinned ? 'Unpin Product' : 'Pin Product to Top'}
+                        >
+                          <Pin size={13} fill={isPinned ? '#f59e0b' : 'transparent'} />
+                          <span>{isPinned ? 'Pinned' : 'Pin'}</span>
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>SKU: {p.sku}</div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
                       <span className={`badge ${p.stock_quantity > 0 ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px' }}>
