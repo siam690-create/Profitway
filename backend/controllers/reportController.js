@@ -118,6 +118,7 @@ exports.getProfitLossReport = async (req, res) => {
 
     const grossDeliveryProfit = Number(salesResult[0].gross_delivery_profit || 0);
     const returnedDeliveryProfitReversal = Number(returnedDeliverySummary[0].returned_delivery_profit_reversal || 0);
+    const netDeliveryProfit = grossDeliveryProfit - returnedDeliveryProfitReversal;
 
     // 8. Wholesale B2B Sales Gross Profit & Revenue
     let wholesaleWhere = 'WHERE tenant_id = ?';
