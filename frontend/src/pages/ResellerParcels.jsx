@@ -58,44 +58,63 @@ export const ResellerParcels = () => {
   const [payoutNotes, setPayoutNotes] = useState('');
   const [isProcessingPayout, setIsProcessingPayout] = useState(false);
 
-  // Delivery Charge Rates State
-  const [deliveryRates, setDeliveryRates] = useState({ inside_dhaka: 60, sub_dhaka: 100, outside_dhaka: 130 });
+  // Delivery Charge Rates & Dynamic Zones State
+  const [deliveryZones, setDeliveryZones] = useState([
+    { id: 1, zone_name: 'ঢাকার বাইরে', charge: 120 },
+    { id: 2, zone_name: 'ঢাকার ভেতরে', charge: 70 }
+  ]);
   const [savingRates, setSavingRates] = useState(false);
 
   const fetchDeliveryRates = async () => {
     try {
       const res = await fetch('/api/reseller/delivery-rates');
       const data = await res.json();
-      if (data && data.inside_dhaka !== undefined) {
-        setDeliveryRates(data);
+      if (data && Array.isArray(data.zones)) {
+        setDeliveryZones(data.zones);
       }
     } catch (e) {
       console.error(e);
     }
   };
 
+  const handleAddZoneRow = () => {
+    setDeliveryZones([
+      ...deliveryZones,
+      { id: Date.now(), zone_name: '', charge: 60 }
+    ]);
+  };
+
+  const handleRemoveZoneRow = (index) => {
+    if (deliveryZones.length <= 1) {
+      return alert('At least 1 delivery zone is required.');
+    }
+    setDeliveryZones(deliveryZones.filter((_, i) => i !== index));
+  };
+
+  const handleZoneRowChange = (index, field, value) => {
+    const updated = [...deliveryZones];
+    updated[index][field] = value;
+    setDeliveryZones(updated);
+  };
+
   const handleSaveDeliveryRates = async (e) => {
     e.preventDefault();
     setSavingRates(true);
     try {
-      const res = await authFetch('/api/settings', {
-        method: 'PUT',
-        body: JSON.stringify({
-          delivery_inside_dhaka: Number(deliveryRates.inside_dhaka),
-          delivery_sub_dhaka: Number(deliveryRates.sub_dhaka),
-          delivery_outside_dhaka: Number(deliveryRates.outside_dhaka)
-        })
+      const res = await authFetch('/api/reseller/delivery-rates', {
+        method: 'POST',
+        body: JSON.stringify({ zones: deliveryZones })
       });
       const data = await res.json();
       if (res.ok) {
-        alert('Reseller Delivery Charge Rates saved successfully!');
-        fetchDeliveryRates();
+        alert(data.message || 'Reseller Delivery Zones saved successfully!');
+        if (Array.isArray(data.zones)) setDeliveryZones(data.zones);
         refreshAllData();
       } else {
         alert(`Error: ${data.error}`);
       }
     } catch (err) {
-      alert(`Error saving delivery rates: ${err.message}`);
+      alert(`Error saving delivery zones: ${err.message}`);
     } finally {
       setSavingRates(false);
     }
@@ -822,87 +841,106 @@ export const ResellerParcels = () => {
 
       {/* --- SUB TAB 4: DELIVERY CHARGE RATES SETTINGS --- */}
       {activeTab === 'delivery-rates' && (
-        <form onSubmit={handleSaveDeliveryRates} className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <form onSubmit={handleSaveDeliveryRates} className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div>
             <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🚚 Reseller Delivery Charge Rates (কুরিয়ার এলাকা ও চার্জ সেটিং)
+              🚚 Reseller Delivery Zone System (এলাকা ভিত্তিক ডেলিভারি চার্জ সেটিং)
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              B2B রিসেলার সেলফ-সার্ভিস পোর্টালে রিসেলাররা কাস্টমার অর্ডার সাবমিট করার সময় যে কুরিয়ার ডেলিভারি এলাকা সিলেক্ট করবে, তার ডিফল্ট ডেলিভারি চার্জ রেট এখান থেকে সেট করে রাখুন।
+              এখান থেকে আপনি যতগুলো ইচ্ছা ডেলিভারি জোন (Zone) তৈরি ও নাম দিতে পারবেন। আপনার লেখা জোনের নাম ও চার্জ ই পোর্টাল থেকে অর্ডারের সময় রিসেলার সিলেক্ট করতে পারবে।
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
-            <div className="card" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
-              <label className="form-label" style={{ fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>
-                🚚 Inside Dhaka (ঢাকা সিটির ভেতরে)
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-muted)' }}>{currency}</span>
-                <input
-                  type="number"
-                  step="1"
-                  className="form-input"
-                  required
-                  style={{ fontSize: '16px', fontWeight: '700' }}
-                  placeholder="e.g. 60"
-                  value={deliveryRates.inside_dhaka}
-                  onChange={(e) => setDeliveryRates({ ...deliveryRates, inside_dhaka: e.target.value })}
-                />
+          {/* Delivery Type Selection Bar */}
+          <div>
+            <label className="form-label" style={{ fontWeight: '700', fontSize: '13.5px', marginBottom: '8px', display: 'block' }}>
+              ডেলিভারি টাইপ
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+              <div style={{ background: 'rgba(99, 102, 241, 0.12)', border: '2px solid #6366f1', borderRadius: '12px', padding: '14px 16px', textAlign: 'center', cursor: 'pointer' }}>
+                <strong style={{ display: 'block', color: '#818cf8', fontSize: '14px' }}>Zone-based</strong>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>(এলাকা ভিত্তিক)</span>
               </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                ঢাকা সিটির মূল এলাকার ভেতরের শিপিং চার্জ
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '14px 16px', textAlign: 'center', opacity: 0.6, cursor: 'not-allowed' }}>
+                <strong style={{ display: 'block', color: 'var(--text-muted)', fontSize: '14px' }}>Flat</strong>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>(সারা দেশে একই)</span>
               </div>
-            </div>
-
-            <div className="card" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
-              <label className="form-label" style={{ fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>
-                🚚 Sub Dhaka (ঢাকা সাব-আরবান)
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-muted)' }}>{currency}</span>
-                <input
-                  type="number"
-                  step="1"
-                  className="form-input"
-                  required
-                  style={{ fontSize: '16px', fontWeight: '700' }}
-                  placeholder="e.g. 100"
-                  value={deliveryRates.sub_dhaka}
-                  onChange={(e) => setDeliveryRates({ ...deliveryRates, sub_dhaka: e.target.value })}
-                />
-              </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                সাভার, গাজীপুর, কেরানীগঞ্জ, নারায়ণগঞ্জ ইত্যাদি এলাকা
-              </div>
-            </div>
-
-            <div className="card" style={{ padding: '20px', borderLeft: '4px solid #8b5cf6' }}>
-              <label className="form-label" style={{ fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>
-                🚚 Outside Dhaka (ঢাকার বাইরে সারা বাংলাদেশ)
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-muted)' }}>{currency}</span>
-                <input
-                  type="number"
-                  step="1"
-                  className="form-input"
-                  required
-                  style={{ fontSize: '16px', fontWeight: '700' }}
-                  placeholder="e.g. 130"
-                  value={deliveryRates.outside_dhaka}
-                  onChange={(e) => setDeliveryRates({ ...deliveryRates, outside_dhaka: e.target.value })}
-                />
-              </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                ঢাকার বাইরের সকল বিভাগীয় ও জেলা শহর
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '14px 16px', textAlign: 'center', opacity: 0.6, cursor: 'not-allowed' }}>
+                <strong style={{ display: 'block', color: 'var(--text-muted)', fontSize: '14px' }}>Weight-based</strong>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>(ওজন ভিত্তিক)</span>
               </div>
             </div>
           </div>
 
+          {/* Dynamic Zone Rows */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {deliveryZones.map((zone, idx) => (
+              <div key={idx} style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'grid', gridTemplateColumns: '3fr 1.2fr auto', gap: '16px', alignItems: 'center' }}>
+                <div>
+                  <label className="form-label" style={{ fontWeight: '700', fontSize: '13px', marginBottom: '6px', display: 'block' }}>
+                    জোন {idx + 1} লেবেল (জোনের নাম) *
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. ঢাকার বাইরে / ঢাকার ভেতরে / চট্টগ্রাম সিটি..."
+                    value={zone.zone_name}
+                    onChange={(e) => handleZoneRowChange(idx, 'zone_name', e.target.value)}
+                    style={{ background: 'var(--bg-primary)', fontSize: '14px', fontWeight: '600' }}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: '700', fontSize: '13px', marginBottom: '6px', display: 'block' }}>
+                    চার্জ (৳) *
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    className="form-input"
+                    required
+                    placeholder="120"
+                    value={zone.charge}
+                    onChange={(e) => handleZoneRowChange(idx, 'charge', e.target.value)}
+                    style={{ background: 'var(--bg-primary)', fontSize: '15px', fontWeight: '700' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-end', height: '100%', paddingTop: '22px' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveZoneRow(idx)}
+                    className="btn btn-danger btn-icon"
+                    title="Remove Zone"
+                    style={{ padding: '10px', borderRadius: '10px' }}
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Add Zone Row Button */}
+            <button
+              type="button"
+              onClick={handleAddZoneRow}
+              className="btn btn-secondary"
+              style={{ padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', width: '100%', fontSize: '14px', fontWeight: '700', borderRadius: '12px', border: '1px dashed var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+            >
+              <Plus size={18} />
+              <span>+ জোন যোগ করুন</span>
+            </button>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-            <button type="submit" className="btn btn-primary" disabled={savingRates} style={{ background: '#38bdf8', borderColor: '#38bdf8', color: '#fff', padding: '10px 24px', fontSize: '14px', fontWeight: '700' }}>
-              {savingRates ? 'Saving Rates...' : '💾 Save Delivery Rates Settings'}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={savingRates}
+              style={{ background: '#38bdf8', borderColor: '#38bdf8', color: '#fff', padding: '12px 28px', fontSize: '14px', fontWeight: '800', borderRadius: '12px' }}
+            >
+              {savingRates ? 'Saving Rates...' : '💾 Save Delivery Zones'}
             </button>
           </div>
         </form>

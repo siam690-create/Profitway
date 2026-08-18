@@ -44,6 +44,17 @@ const ensureResellerSchema = async (conn) => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_payout_tenant (tenant_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS reseller_delivery_zones (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        zone_name VARCHAR(255) NOT NULL,
+        charge DECIMAL(10,2) NOT NULL DEFAULT 60.00,
+        display_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_zone_tenant (tenant_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
     // Add reseller columns to reseller_sales table if missing
@@ -794,22 +805,105 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
   }
 };
 
-// 13. Public/Authenticated: Get Current Reseller Delivery Rates
+// 13. Public/Authenticated: Get Current Reseller Delivery Rates & Zones
 exports.getDeliveryRates = async (req, res) => {
   try {
-    const [rows] = await db.query(
-      'SELECT delivery_inside_dhaka, delivery_sub_dhaka, delivery_outside_dhaka FROM shop_settings LIMIT 1'
+    await ensureResellerSchema(db);
+    const tenantId = req.user ? req.user.tenantId : (req.query.tenant_id || 1);
+
+    let [zones] = await db.query(
+      'SELECT id, zone_name, charge, display_order FROM reseller_delivery_zones WHERE tenant_id = ? ORDER BY display_order ASC, id ASC',
+      [tenantId]
     );
-    if (rows.length > 0) {
-      res.json({
-        inside_dhaka: Number(rows[0].delivery_inside_dhaka || 60),
-        sub_dhaka: Number(rows[0].delivery_sub_dhaka || 100),
-        outside_dhaka: Number(rows[0].delivery_outside_dhaka || 130)
-      });
-    } else {
-      res.json({ inside_dhaka: 60, sub_dhaka: 100, outside_dhaka: 130 });
+
+    // Seed defaults if empty for tenant
+    if (zones.length === 0) {
+      const defaultZones = [
+        { name: 'ঢাকার ভেতরে', charge: 60.00, order: 1 },
+        { name: 'সাব ঢাকা (সাভার, গাজীপুর, কেরানীগঞ্জ...)', charge: 100.00, order: 2 },
+        { name: 'ঢাকার বাইরে সারা বাংলাদেশ', charge: 120.00, order: 3 }
+      ];
+      for (const dz of defaultZones) {
+        await db.query(
+          'INSERT INTO reseller_delivery_zones (tenant_id, zone_name, charge, display_order) VALUES (?, ?, ?, ?)',
+          [tenantId, dz.name, dz.charge, dz.order]
+        );
+      }
+      [zones] = await db.query(
+        'SELECT id, zone_name, charge, display_order FROM reseller_delivery_zones WHERE tenant_id = ? ORDER BY display_order ASC, id ASC',
+        [tenantId]
+      );
     }
+
+    const inside = zones.find(z => z.zone_name.includes('ভেতরে'))?.charge || zones[0]?.charge || 60;
+    const sub = zones.find(z => z.zone_name.includes('সাব'))?.charge || 100;
+    const outside = zones.find(z => z.zone_name.includes('বাইরে'))?.charge || 120;
+
+    res.json({
+      zones: zones.map(z => ({ id: z.id, zone_name: z.zone_name, charge: Number(z.charge) })),
+      inside_dhaka: Number(inside),
+      sub_dhaka: Number(sub),
+      outside_dhaka: Number(outside)
+    });
   } catch (err) {
-    res.json({ inside_dhaka: 60, sub_dhaka: 100, outside_dhaka: 130 });
+    console.error('Error fetching delivery rates:', err);
+    res.json({
+      zones: [
+        { id: 1, zone_name: 'ঢাকার ভেতরে', charge: 60 },
+        { id: 2, zone_name: 'সাব ঢাকা (সাভার, গাজীপুর, কেরানীগঞ্জ...)', charge: 100 },
+        { id: 3, zone_name: 'ঢাকার বাইরে সারা বাংলাদেশ', charge: 120 }
+      ],
+      inside_dhaka: 60,
+      sub_dhaka: 100,
+      outside_dhaka: 120
+    });
+  }
+};
+
+// 14. Merchant Admin: Save Custom Reseller Delivery Zones
+exports.saveDeliveryRates = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    await ensureResellerSchema(connection);
+
+    const tenantId = req.user.tenantId;
+    const { zones } = req.body;
+
+    if (!Array.isArray(zones) || zones.length === 0) {
+      return res.status(400).json({ error: 'Please provide at least 1 delivery zone.' });
+    }
+
+    // Delete existing zones for this tenant
+    await connection.query('DELETE FROM reseller_delivery_zones WHERE tenant_id = ?', [tenantId]);
+
+    // Insert new dynamic zones
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
+      const name = z.zone_name ? String(z.zone_name).trim() : `Zone ${i + 1}`;
+      const charge = !isNaN(Number(z.charge)) ? Number(z.charge) : 60.00;
+      await connection.query(
+        'INSERT INTO reseller_delivery_zones (tenant_id, zone_name, charge, display_order) VALUES (?, ?, ?, ?)',
+        [tenantId, name, charge, i + 1]
+      );
+    }
+
+    await connection.commit();
+
+    const [updatedZones] = await db.query(
+      'SELECT id, zone_name, charge FROM reseller_delivery_zones WHERE tenant_id = ? ORDER BY display_order ASC, id ASC',
+      [tenantId]
+    );
+
+    res.json({
+      message: 'Reseller Delivery Zones updated successfully!',
+      zones: updatedZones.map(z => ({ id: z.id, zone_name: z.zone_name, charge: Number(z.charge) }))
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error saving delivery zones:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
   }
 };

@@ -85,15 +85,21 @@ const ResellerPortal = () => {
     });
   };
 
-  // Reseller Delivery Charge Rates
-  const [deliveryArea, setDeliveryArea] = useState('inside_dhaka'); // 'inside_dhaka', 'sub_dhaka', 'outside_dhaka'
-  const [deliveryRates, setDeliveryRates] = useState({ inside_dhaka: 60, sub_dhaka: 100, outside_dhaka: 130 });
+  // Reseller Delivery Charge Rates & Dynamic Zones
+  const [deliveryArea, setDeliveryArea] = useState('');
+  const [deliveryZones, setDeliveryZones] = useState([
+    { id: 1, zone_name: 'ঢাকার বাইরে', charge: 120 },
+    { id: 2, zone_name: 'ঢাকার ভেতরে', charge: 70 }
+  ]);
 
   useEffect(() => {
     fetch('/api/reseller/delivery-rates')
       .then(res => res.json())
       .then(data => {
-        if (data && data.inside_dhaka !== undefined) setDeliveryRates(data);
+        if (data && Array.isArray(data.zones) && data.zones.length > 0) {
+          setDeliveryZones(data.zones);
+          setDeliveryArea(data.zones[0].zone_name);
+        }
       })
       .catch(() => {});
   }, []);
@@ -228,7 +234,8 @@ const ResellerPortal = () => {
     }
   };
 
-  const selectedDeliveryFee = Number(deliveryRates[deliveryArea] || 60);
+  const selectedZone = deliveryZones.find(z => z.zone_name === deliveryArea) || deliveryZones[0];
+  const selectedDeliveryFee = selectedZone ? Number(selectedZone.charge) : 60;
   const totalWholesaleCost = orderItems.reduce((sum, item) => sum + (item.total_reseller_cost || 0), 0);
   const customerProductSalePrice = Number(customerSellingPrice || 0);
   const totalCOD = customerProductSalePrice > 0 ? (customerProductSalePrice + selectedDeliveryFee) : 0;
@@ -256,8 +263,8 @@ const ResellerPortal = () => {
           customer_name: customerName,
           customer_phone: customerPhone,
           customer_address: customerAddress,
-          district: deliveryArea === 'inside_dhaka' ? 'Inside Dhaka' : (deliveryArea === 'sub_dhaka' ? 'Sub Dhaka' : 'Outside Dhaka'),
-          thana: deliveryArea,
+          district: selectedZone ? selectedZone.zone_name : 'Dhaka',
+          thana: selectedZone ? selectedZone.zone_name : '',
           courier_name: courierName,
           items: orderItems,
           customer_total_price: totalCOD,
@@ -1010,9 +1017,11 @@ const ResellerPortal = () => {
                     onChange={(e) => setDeliveryArea(e.target.value)}
                     style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 14px', borderRadius: '8px', width: '100%', fontSize: '13.5px', fontWeight: '600' }}
                   >
-                    <option value="inside_dhaka">🚚 Inside Dhaka (ঢাকা সিটির ভেতরে - {currency}{Number(deliveryRates.inside_dhaka || 60).toFixed(2)})</option>
-                    <option value="sub_dhaka">🚚 Sub Dhaka (ঢাকা সাব-আরবান / সাভার, গাজীপুর, কেরানীগঞ্জ... - {currency}{Number(deliveryRates.sub_dhaka || 100).toFixed(2)})</option>
-                    <option value="outside_dhaka">🚚 Outside Dhaka (ঢাকার বাইরে সারা বাংলাদেশ - {currency}{Number(deliveryRates.outside_dhaka || 130).toFixed(2)})</option>
+                    {deliveryZones.map((z, idx) => (
+                      <option key={idx} value={z.zone_name}>
+                        🚚 {z.zone_name} ({currency}{Number(z.charge).toFixed(2)})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1023,7 +1032,7 @@ const ResellerPortal = () => {
                     <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{currency}{customerProductSalePrice.toFixed(2)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#38bdf8' }}>
-                    <span>Delivery Charge ({deliveryArea === 'inside_dhaka' ? 'Inside Dhaka' : (deliveryArea === 'sub_dhaka' ? 'Sub Dhaka' : 'Outside Dhaka')}):</span>
+                    <span>Delivery Charge ({selectedZone ? selectedZone.zone_name : 'Delivery'}):</span>
                     <span style={{ fontWeight: '700' }}>+{currency}{selectedDeliveryFee.toFixed(2)}</span>
                   </div>
                   <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '800' }}>
