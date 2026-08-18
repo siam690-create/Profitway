@@ -322,11 +322,20 @@ exports.createLiability = async (req, res) => {
 // Pay Dena (Liability Repayment)
 exports.payLiability = async (req, res) => {
   const { id } = req.params;
-  const { payment_amount, account_id, notes, party_name } = req.body;
+  const { payment_amount, account_id, notes, party_name, payment_date } = req.body;
 
   let payAmt = Number(payment_amount);
   if (isNaN(payAmt) || payAmt <= 0) {
     return res.status(400).json({ error: 'Valid payment amount is required.' });
+  }
+
+  let customPayDate = null;
+  if (payment_date) {
+    const d = new Date(payment_date);
+    if (!isNaN(d.getTime())) {
+      const timeStr = String(payment_date).length <= 10 ? ' 12:00:00' : '';
+      customPayDate = String(payment_date).replace('T', ' ') + timeStr;
+    }
   }
 
   const connection = await db.getConnection();
@@ -414,8 +423,10 @@ exports.payLiability = async (req, res) => {
       // Insert payment log
       await connection.query(
         `INSERT INTO liability_payments (tenant_id, liability_id, amount, account_id, notes, payment_date)
-         VALUES (?, ?, ?, ?, ?, NOW())`,
-        [tenantId, l.id, allocation, account_id || null, notes || null]
+         VALUES (?, ?, ?, ?, ?, ${customPayDate ? '?' : 'NOW()'})`,
+        customPayDate
+          ? [tenantId, l.id, allocation, account_id || null, notes || null, customPayDate]
+          : [tenantId, l.id, allocation, account_id || null, notes || null]
       );
 
       remainingToPay -= allocation;
@@ -425,8 +436,10 @@ exports.payLiability = async (req, res) => {
     if (account_id) {
       await connection.query(
         `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
-         VALUES (?, ?, 'Dena Repayment', ?, 0.00, ?, ?, NOW())`,
-        [tenantId, account_id, payAmt, voucherNo, `Dena Repayment to ${party}${notes ? ` - ${notes}` : ''}`]
+         VALUES (?, ?, 'Dena Repayment', ?, 0.00, ?, ?, ${customPayDate ? '?' : 'NOW()'})`,
+        customPayDate
+          ? [tenantId, account_id, payAmt, voucherNo, `Dena Repayment to ${party}${notes ? ` - ${notes}` : ''}`, customPayDate]
+          : [tenantId, account_id, payAmt, voucherNo, `Dena Repayment to ${party}${notes ? ` - ${notes}` : ''}`]
       );
     }
 
@@ -557,11 +570,20 @@ exports.createReceivable = async (req, res) => {
 // Collect Pawna (Receivable Collection) by ID or Party Name
 exports.collectReceivable = async (req, res) => {
   const { id } = req.params;
-  const { collection_amount, account_id, notes, party_name } = req.body;
+  const { collection_amount, account_id, notes, party_name, collection_date } = req.body;
 
   let collectAmt = Number(collection_amount);
   if (isNaN(collectAmt) || collectAmt <= 0) {
     return res.status(400).json({ error: 'Valid collection amount is required.' });
+  }
+
+  let customCollectDate = null;
+  if (collection_date) {
+    const d = new Date(collection_date);
+    if (!isNaN(d.getTime())) {
+      const timeStr = String(collection_date).length <= 10 ? ' 12:00:00' : '';
+      customCollectDate = String(collection_date).replace('T', ' ') + timeStr;
+    }
   }
 
   const connection = await db.getConnection();
@@ -596,6 +618,14 @@ exports.collectReceivable = async (req, res) => {
         'UPDATE finance_accounts SET balance = balance + ? WHERE id = ? AND tenant_id = ?',
         [collectAmt, account_id, tenantId]
       );
+
+      await connection.query(
+        `INSERT INTO account_transactions (tenant_id, account_id, type, debit, credit, reference_no, notes, transaction_date)
+         VALUES (?, ?, 'Pawna Collection', 0.00, ?, ?, ?, ${customCollectDate ? '?' : 'NOW()'})`,
+        customCollectDate
+          ? [tenantId, account_id, collectAmt, `PAWNA-COLL-${Date.now()}`, `Pawna collection from ${party_name || pendingReceivables[0].party_name}${notes ? ` - ${notes}` : ''}`, customCollectDate]
+          : [tenantId, account_id, collectAmt, `PAWNA-COLL-${Date.now()}`, `Pawna collection from ${party_name || pendingReceivables[0].party_name}${notes ? ` - ${notes}` : ''}`]
+      );
     }
 
     // 2. Distribute collection across pending receivables
@@ -619,8 +649,10 @@ exports.collectReceivable = async (req, res) => {
       // Insert collection log
       await connection.query(
         `INSERT INTO receivable_collections (tenant_id, receivable_id, amount, account_id, notes, collection_date)
-         VALUES (?, ?, ?, ?, ?, NOW())`,
-        [tenantId, r.id, allocation, account_id || null, notes || null]
+         VALUES (?, ?, ?, ?, ?, ${customCollectDate ? '?' : 'NOW()'})`,
+        customCollectDate
+          ? [tenantId, r.id, allocation, account_id || null, notes || null, customCollectDate]
+          : [tenantId, r.id, allocation, account_id || null, notes || null]
       );
 
       remainingToCollect -= allocation;

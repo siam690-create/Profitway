@@ -102,8 +102,10 @@ export const Finance = () => {
   const [addPawnaForm, setAddPawnaForm] = useState({ title: '', party_type: 'customer', party_name: '', total_amount: '', due_date: '', notes: '' });
   const [payDenaAmt, setPayDenaAmt] = useState('');
   const [payDenaAccId, setPayDenaAccId] = useState('');
+  const [payDenaDate, setPayDenaDate] = useState(new Date().toISOString().slice(0, 10));
   const [collectPawnaAmt, setCollectPawnaAmt] = useState('');
   const [collectPawnaAccId, setCollectPawnaAccId] = useState('');
+  const [collectPawnaDate, setCollectPawnaDate] = useState(new Date().toISOString().slice(0, 10));
 
   // Investment Forms
   const [investForm, setInvestForm] = useState({ investor_name: '', phone: '', email: '', invested_amount: '', account_id: '', notes: '' });
@@ -403,7 +405,8 @@ export const Finance = () => {
         body: JSON.stringify({
           payment_amount: payDenaAmt,
           account_id: payDenaAccId,
-          party_name: showPayDenaModal.party_name
+          party_name: showPayDenaModal.party_name,
+          payment_date: payDenaDate
         })
       });
       const data = await res.json();
@@ -411,7 +414,9 @@ export const Finance = () => {
         setShowPayDenaModal(null);
         setPayDenaAmt('');
         setPayDenaAccId('');
+        setPayDenaDate(new Date().toISOString().slice(0, 10));
         fetchFinance();
+        refreshAllData();
         if (data.receipt) {
           setDenaReceiptModalData(data.receipt);
         } else {
@@ -434,7 +439,8 @@ export const Finance = () => {
         body: JSON.stringify({
           collection_amount: collectPawnaAmt,
           account_id: collectPawnaAccId,
-          party_name: showCollectPawnaModal.party_name
+          party_name: showCollectPawnaModal.party_name,
+          collection_date: collectPawnaDate
         })
       });
       const data = await res.json();
@@ -442,7 +448,9 @@ export const Finance = () => {
         setShowCollectPawnaModal(null);
         setCollectPawnaAmt('');
         setCollectPawnaAccId('');
+        setCollectPawnaDate(new Date().toISOString().slice(0, 10));
         fetchFinance();
+        refreshAllData();
         alert(data.message || 'Pawna collection recorded & account balance updated!');
       } else {
         alert(`Error: ${data.error}`);
@@ -2880,9 +2888,20 @@ export const Finance = () => {
             <form onSubmit={handlePayDenaSubmit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
-                  <label className="form-label">Payment Amount ({currency})</label>
+                  <label className="form-label">Payment Amount ({currency}) *</label>
                   <input type="number" step="0.01" className="form-input" required value={payDenaAmt} onChange={(e) => setPayDenaAmt(e.target.value)} />
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">📅 Payment Date (তারিখ)</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={payDenaDate || new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setPayDenaDate(e.target.value)}
+                  />
+                </div>
+
                 <div className="form-group">
                   <label className="form-label">Paid From Account</label>
                   <select className="form-select" value={payDenaAccId} onChange={(e) => setPayDenaAccId(e.target.value)}>
@@ -2911,9 +2930,20 @@ export const Finance = () => {
             <form onSubmit={handleCollectPawnaSubmit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
-                  <label className="form-label">Collection Amount ({currency})</label>
+                  <label className="form-label">Collection Amount ({currency}) *</label>
                   <input type="number" step="0.01" className="form-input" required value={collectPawnaAmt} onChange={(e) => setCollectPawnaAmt(e.target.value)} />
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">📅 Collection Date (তারিখ)</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={collectPawnaDate || new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setCollectPawnaDate(e.target.value)}
+                  />
+                </div>
+
                 <div className="form-group">
                   <label className="form-label">Deposit into Account</label>
                   <select className="form-select" value={collectPawnaAccId} onChange={(e) => setCollectPawnaAccId(e.target.value)}>
