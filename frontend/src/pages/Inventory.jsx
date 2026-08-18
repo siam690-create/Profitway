@@ -819,6 +819,34 @@ export const Inventory = () => {
                       <span style={{ fontSize: '13px', fontWeight: '600' }}>Auto-Calculated Combined Cost Price:</span>
                       <strong style={{ fontSize: '16px', color: 'var(--success)' }}>{formatCurrency(calculatedComboCost)}</strong>
                     </div>
+
+                    {/* Combo Pricing Inputs */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Bundle Selling Price (বিক্রিদাম) *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-input"
+                          required
+                          placeholder="1200.00"
+                          value={sellingPrice}
+                          onChange={(e) => setSellingPrice(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">🏷️ Bundle Reseller Price (Wholesale)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-input"
+                          placeholder="900.00"
+                          value={resellerPrice}
+                          onChange={(e) => setResellerPrice(e.target.value)}
+                        />
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   /* Standard Product Pricing */
