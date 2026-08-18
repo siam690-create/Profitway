@@ -58,6 +58,49 @@ export const ResellerParcels = () => {
   const [payoutNotes, setPayoutNotes] = useState('');
   const [isProcessingPayout, setIsProcessingPayout] = useState(false);
 
+  // Delivery Charge Rates State
+  const [deliveryRates, setDeliveryRates] = useState({ inside_dhaka: 60, sub_dhaka: 100, outside_dhaka: 130 });
+  const [savingRates, setSavingRates] = useState(false);
+
+  const fetchDeliveryRates = async () => {
+    try {
+      const res = await fetch('/api/reseller/delivery-rates');
+      const data = await res.json();
+      if (data && data.inside_dhaka !== undefined) {
+        setDeliveryRates(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveDeliveryRates = async (e) => {
+    e.preventDefault();
+    setSavingRates(true);
+    try {
+      const res = await authFetch('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          delivery_inside_dhaka: Number(deliveryRates.inside_dhaka),
+          delivery_sub_dhaka: Number(deliveryRates.sub_dhaka),
+          delivery_outside_dhaka: Number(deliveryRates.outside_dhaka)
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('Reseller Delivery Charge Rates saved successfully!');
+        fetchDeliveryRates();
+        refreshAllData();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error saving delivery rates: ${err.message}`);
+    } finally {
+      setSavingRates(false);
+    }
+  };
+
   const handleProcessPayoutSubmit = async (e) => {
     e.preventDefault();
     if (!payoutResellerName || !payoutAmount || Number(payoutAmount) <= 0) {
@@ -211,6 +254,7 @@ export const ResellerParcels = () => {
 
   useEffect(() => {
     fetchData();
+    fetchDeliveryRates();
   }, []);
 
   // --- Add Item to Reseller Sale Cart ---
@@ -423,11 +467,11 @@ export const ResellerParcels = () => {
       <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Package size={24} color="#ec4899" />
-            <h2 style={{ fontSize: '20px', fontWeight: '800' }}>Reseller Parcels Accounting & Tracker</h2>
+            <Users size={24} color="#ec4899" />
+            <h2 style={{ fontSize: '20px', fontWeight: '800' }}>Reseller Management & Accounting</h2>
           </div>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Record reseller orders, auto-deduct/restock stock, and track reseller profits directly in P&L Statement
+            Manage reseller profiles, B2B wholesale pricing, courier delivery charge settings, returns, and profit payouts
           </p>
         </div>
 
@@ -458,7 +502,7 @@ export const ResellerParcels = () => {
       </div>
 
       {/* Sub Tabs Navigation */}
-      <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+      <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', flexWrap: 'wrap' }}>
         <button
           onClick={() => setActiveTab('sales')}
           className={`btn ${activeTab === 'sales' ? 'btn-primary' : 'btn-secondary'}`}
@@ -479,6 +523,13 @@ export const ResellerParcels = () => {
           style={activeTab === 'profiles' ? { background: '#8b5cf6', borderColor: '#8b5cf6' } : {}}
         >
           👥 Reseller Profiles ({profilesList.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('delivery-rates')}
+          className={`btn ${activeTab === 'delivery-rates' ? 'btn-primary' : 'btn-secondary'}`}
+          style={activeTab === 'delivery-rates' ? { background: '#38bdf8', borderColor: '#38bdf8', color: '#fff' } : {}}
+        >
+          🚚 Delivery Charge Rates (কুরিয়ার সেটিং)
         </button>
       </div>
 
@@ -767,6 +818,94 @@ export const ResellerParcels = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {/* --- SUB TAB 4: DELIVERY CHARGE RATES SETTINGS --- */}
+      {activeTab === 'delivery-rates' && (
+        <form onSubmit={handleSaveDeliveryRates} className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🚚 Reseller Delivery Charge Rates (কুরিয়ার এলাকা ও চার্জ সেটিং)
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              B2B রিসেলার সেলফ-সার্ভিস পোর্টালে রিসেলাররা কাস্টমার অর্ডার সাবমিট করার সময় যে কুরিয়ার ডেলিভারি এলাকা সিলেক্ট করবে, তার ডিফল্ট ডেলিভারি চার্জ রেট এখান থেকে সেট করে রাখুন।
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
+            <div className="card" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
+              <label className="form-label" style={{ fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>
+                🚚 Inside Dhaka (ঢাকা সিটির ভেতরে)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-muted)' }}>{currency}</span>
+                <input
+                  type="number"
+                  step="1"
+                  className="form-input"
+                  required
+                  style={{ fontSize: '16px', fontWeight: '700' }}
+                  placeholder="e.g. 60"
+                  value={deliveryRates.inside_dhaka}
+                  onChange={(e) => setDeliveryRates({ ...deliveryRates, inside_dhaka: e.target.value })}
+                />
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                ঢাকা সিটির মূল এলাকার ভেতরের শিপিং চার্জ
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
+              <label className="form-label" style={{ fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>
+                🚚 Sub Dhaka (ঢাকা সাব-আরবান)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-muted)' }}>{currency}</span>
+                <input
+                  type="number"
+                  step="1"
+                  className="form-input"
+                  required
+                  style={{ fontSize: '16px', fontWeight: '700' }}
+                  placeholder="e.g. 100"
+                  value={deliveryRates.sub_dhaka}
+                  onChange={(e) => setDeliveryRates({ ...deliveryRates, sub_dhaka: e.target.value })}
+                />
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                সাভার, গাজীপুর, কেরানীগঞ্জ, নারায়ণগঞ্জ ইত্যাদি এলাকা
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '20px', borderLeft: '4px solid #8b5cf6' }}>
+              <label className="form-label" style={{ fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>
+                🚚 Outside Dhaka (ঢাকার বাইরে সারা বাংলাদেশ)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-muted)' }}>{currency}</span>
+                <input
+                  type="number"
+                  step="1"
+                  className="form-input"
+                  required
+                  style={{ fontSize: '16px', fontWeight: '700' }}
+                  placeholder="e.g. 130"
+                  value={deliveryRates.outside_dhaka}
+                  onChange={(e) => setDeliveryRates({ ...deliveryRates, outside_dhaka: e.target.value })}
+                />
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                ঢাকার বাইরের সকল বিভাগীয় ও জেলা শহর
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+            <button type="submit" className="btn btn-primary" disabled={savingRates} style={{ background: '#38bdf8', borderColor: '#38bdf8', color: '#fff', padding: '10px 24px', fontSize: '14px', fontWeight: '700' }}>
+              {savingRates ? 'Saving Rates...' : '💾 Save Delivery Rates Settings'}
+            </button>
+          </div>
+        </form>
       )}
 
       {/* --- CREATE RESELLER SALE MODAL --- */}
