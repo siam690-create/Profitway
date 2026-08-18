@@ -208,6 +208,10 @@ router.delete('/expenses/:id', checkActiveSubscription, expenseController.delete
 // Reports API
 router.get('/reports/profit-loss', reportController.getProfitLossReport);
 
+// Admin Reseller Submitted Orders Management APIs
+router.get('/admin/reseller-orders', resellerPortalController.getAllResellerOrdersForAdmin);
+router.put('/admin/reseller-orders/:id/status', checkActiveSubscription, resellerPortalController.updateResellerOrderStatusByAdmin);
+
 // Staff / Users APIs
 router.get('/staff', staffController.getStaff);
 router.post('/staff', checkActiveSubscription, staffController.createStaff);

@@ -19,6 +19,7 @@ import { Finance } from './pages/Finance';
 import { StaffManager } from './pages/StaffManager';
 import { TaskManager } from './pages/TaskManager';
 import { ResellerParcels } from './pages/ResellerParcels';
+import { ResellerOrders } from './pages/ResellerOrders';
 import ResellerPortal from './pages/ResellerPortal';
 import { Settings } from './pages/Settings';
 import { Subscription } from './pages/Subscription';
@@ -145,6 +146,7 @@ function MainApp() {
       case 'finance': return <Finance />;
       case 'staff': return <StaffManager />;
       case 'tasks': return <TaskManager />;
+      case 'reseller-orders': return <ResellerOrders />;
       case 'reseller-parcels': return <ResellerParcels />;
       case 'reseller-portal': return <ResellerPortal />;
       case 'settings': return <Settings />;

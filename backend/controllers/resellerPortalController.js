@@ -668,3 +668,117 @@ exports.resellerLogin = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// 11. Admin: Get All Reseller Submitted Orders across Profiles for Tenant
+exports.getAllResellerOrdersForAdmin = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const connection = await db.getConnection();
+    try {
+      await ensureResellerSchema(connection);
+    } finally {
+      connection.release();
+    }
+
+    const [sales] = await db.query(
+      `SELECT * FROM reseller_sales WHERE tenant_id = ? ORDER BY id DESC`,
+      [tenantId]
+    );
+
+    for (let s of sales) {
+      const [items] = await db.query(
+        'SELECT * FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?',
+        [s.id, tenantId]
+      );
+      s.items = items;
+    }
+
+    res.json(sales);
+  } catch (error) {
+    console.error('Error fetching admin reseller orders:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 12. Admin: Update Reseller Order Status (Approve, Ship, Deliver, Return, Cancel)
+exports.updateResellerOrderStatusByAdmin = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+    const { order_status, return_loss, notes } = req.body;
+
+    if (!order_status) {
+      return res.status(400).json({ error: 'order_status is required.' });
+    }
+
+    await connection.beginTransaction();
+
+    const [saleRows] = await connection.query(
+      'SELECT * FROM reseller_sales WHERE id = ? AND tenant_id = ? FOR UPDATE',
+      [id, tenantId]
+    );
+
+    if (saleRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Reseller order not found.' });
+    }
+
+    const sale = saleRows[0];
+    const prevStatus = (sale.order_status || 'pending').toLowerCase();
+    const newStatus = order_status.toLowerCase();
+
+    const [items] = await connection.query(
+      'SELECT * FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?',
+      [id, tenantId]
+    );
+
+    // Stock management logic:
+    // If going from 'pending'/'cancelled' -> 'processing'/'shipped'/'delivered': deduct stock if not already deducted!
+    // If going to 'returned' or 'cancelled' from an active status: restore stock!
+
+    if ((prevStatus === 'pending' || prevStatus === 'cancelled') && (newStatus === 'processing' || newStatus === 'shipped' || newStatus === 'delivered')) {
+      // Deduct stock for ordered items
+      for (const item of items) {
+        if (item.product_id) {
+          await connection.query(
+            'UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ? AND tenant_id = ?',
+            [item.quantity, item.product_id, tenantId]
+          );
+        }
+      }
+    } else if ((prevStatus === 'processing' || prevStatus === 'shipped' || prevStatus === 'delivered') && (newStatus === 'returned' || newStatus === 'cancelled')) {
+      // Restore stock for items
+      for (const item of items) {
+        if (item.product_id) {
+          await connection.query(
+            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?',
+            [item.quantity, item.product_id, tenantId]
+          );
+        }
+      }
+    }
+
+    const returnLossAmt = newStatus === 'returned' ? Number(return_loss || 100) : 0;
+
+    await connection.query(
+      `UPDATE reseller_sales 
+       SET order_status = ?, return_loss = ?, notes = COALESCE(?, notes)
+       WHERE id = ? AND tenant_id = ?`,
+      [newStatus, returnLossAmt, notes || null, id, tenantId]
+    );
+
+    await connection.commit();
+
+    res.json({
+      message: `Reseller Order #${sale.invoice_no} status updated to "${newStatus.toUpperCase()}" successfully!`
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating reseller order status:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
