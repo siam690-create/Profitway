@@ -712,7 +712,7 @@ const ResellerPortal = () => {
                   <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
                       <span>Retail Selling Price:</span>
-                      <span style={{ textDecoration: 'line-through' }}>{currency}{p.retail_price.toFixed(2)}</span>
+                      <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{currency}{p.retail_price.toFixed(2)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '800' }}>
                       <span>Wholesale Reseller Price:</span>
