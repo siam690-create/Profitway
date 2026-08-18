@@ -90,7 +90,16 @@ export const LandingPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: resellerIdentifier, password: resellerPassword })
       });
-      const data = await res.json();
+
+      let data = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        data = { error: `Server response error (${res.status}). Please hard refresh your browser (Ctrl+Shift+R).` };
+      }
+
       if (res.ok) {
         loginReseller(data.reseller);
         setAuthModal(null);
