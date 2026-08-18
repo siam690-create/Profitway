@@ -298,6 +298,7 @@ exports.getSaleById = async (req, res) => {
 exports.updateSale = async (req, res) => {
   const connection = await db.getConnection();
   try {
+    await ensureSalesColumns(connection);
     const tenantId = req.user.tenantId;
     const userRole = req.user.role;
     const { id } = req.params;
