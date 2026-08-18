@@ -76,7 +76,8 @@ export const Orders = () => {
           product_name: item.product_name,
           quantity: Number(item.quantity || 1),
           unit_price: Number(item.unit_price || 0),
-          unit_cost: Number(item.unit_cost || 0)
+          unit_cost: Number(item.unit_cost || 0),
+          parcel_count: Number(item.parcel_count || 1)
         })) : []);
 
         setSelectedAddProductId('');
@@ -107,7 +108,8 @@ export const Orders = () => {
           product_name: found.name,
           quantity: 1,
           unit_price: Number(found.selling_price || 0),
-          unit_cost: Number(found.cost_price || 0)
+          unit_cost: Number(found.cost_price || 0),
+          parcel_count: 1
         }
       ]);
     }
@@ -128,6 +130,13 @@ export const Orders = () => {
     setEditItems(updated);
   };
 
+  const handleUpdateEditItemParcelCount = (index, newCount) => {
+    const count = Math.max(1, parseInt(newCount || 1, 10));
+    const updated = [...editItems];
+    updated[index].parcel_count = count;
+    setEditItems(updated);
+  };
+
   const handleRemoveEditItem = (index) => {
     const updated = editItems.filter((_, idx) => idx !== index);
     setEditItems(updated);
@@ -143,6 +152,7 @@ export const Orders = () => {
 
     setIsSubmittingEdit(true);
     try {
+      const calcTotalParcels = editItems.reduce((sum, i) => sum + Number(i.parcel_count || 1), 0);
       const payload = {
         customer_name: editCustomerName,
         payment_method: editPaymentMethod,
@@ -150,11 +160,12 @@ export const Orders = () => {
         customer_delivery_fee: Number(editDeliveryFee || 0),
         courier_fee: Number(editCourierFee || 0),
         sale_date: editDate || undefined,
-        parcel_count: Number(editParcelCount || 1),
+        parcel_count: calcTotalParcels,
         items: editItems.map(i => ({
           product_id: i.product_id,
           quantity: i.quantity,
-          unit_price: i.unit_price
+          unit_price: i.unit_price,
+          parcel_count: i.parcel_count || 1
         }))
       };
 
@@ -502,8 +513,9 @@ export const Orders = () => {
                       <thead>
                         <tr>
                           <th>Product Name</th>
-                          <th style={{ width: '110px' }}>Unit Price</th>
-                          <th style={{ width: '130px', textAlign: 'center' }}>Quantity (Pcs)</th>
+                          <th style={{ width: '100px' }}>Unit Price</th>
+                          <th style={{ width: '120px', textAlign: 'center' }}>Quantity (Pcs)</th>
+                          <th style={{ width: '90px', textAlign: 'center', color: '#38bdf8' }}>📦 Parcels</th>
                           <th style={{ textAlign: 'right' }}>Total</th>
                           <th style={{ width: '40px' }}></th>
                         </tr>
@@ -511,7 +523,7 @@ export const Orders = () => {
                       <tbody>
                         {editItems.length === 0 ? (
                           <tr>
-                            <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                            <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
                               No products in this order. Search above to add products.
                             </td>
                           </tr>
@@ -556,6 +568,17 @@ export const Orders = () => {
                                     +
                                   </button>
                                 </div>
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  className="form-input"
+                                  style={{ width: '55px', textAlign: 'center', padding: '4px 4px', fontSize: '12px', fontWeight: '800', borderColor: '#38bdf8', color: '#38bdf8' }}
+                                  value={item.parcel_count || 1}
+                                  onChange={(e) => handleUpdateEditItemParcelCount(idx, e.target.value)}
+                                  title="Product-wise parcel count"
+                                />
                               </td>
                               <td style={{ textAlign: 'right', fontWeight: '800', color: 'var(--success)' }}>
                                 {currency}{(item.unit_price * item.quantity).toFixed(2)}

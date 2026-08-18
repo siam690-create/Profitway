@@ -345,6 +345,7 @@ export const AppProvider = ({ children }) => {
         return [...prev, {
           ...product,
           qty: 1,
+          parcel_count: 1,
           selling_price: sellPrice,
           cost_price: costPrice,
           unit_price: sellPrice,
@@ -372,6 +373,22 @@ export const AppProvider = ({ children }) => {
             return { ...item, qty: item.stock_quantity, quantity: item.stock_quantity };
           }
           return { ...item, qty: qtyVal, quantity: qtyVal };
+        }
+        return item;
+      });
+    });
+  };
+
+  const updateCartItemParcelCount = (productId, targetCount) => {
+    setCart(prev => {
+      return prev.map(item => {
+        const id = item.id || item.product_id;
+        if (id === productId) {
+          if (targetCount === '' || targetCount === null || targetCount === undefined) {
+            return { ...item, parcel_count: '' };
+          }
+          const parsed = parseInt(targetCount, 10);
+          return { ...item, parcel_count: isNaN(parsed) ? '' : Math.max(1, parsed) };
         }
         return item;
       });
@@ -416,7 +433,8 @@ export const AppProvider = ({ children }) => {
         items: cart.map(item => ({
           product_id: item.id,
           quantity: item.qty || item.quantity || 1,
-          unit_price: Number(item.selling_price || item.unit_price || 0)
+          unit_price: Number(item.selling_price || item.unit_price || 0),
+          parcel_count: Number(item.parcel_count || 1)
         }))
       };
 
@@ -601,6 +619,7 @@ export const AppProvider = ({ children }) => {
         refreshAllData,
         addToCart,
         updateCartQty,
+        updateCartItemParcelCount,
         updateCartPrice,
         removeFromCart,
         clearCart,

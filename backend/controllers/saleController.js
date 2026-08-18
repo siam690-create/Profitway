@@ -19,11 +19,19 @@ const ensureSalesColumns = async (conn) => {
       // ignore safety
     }
   }
+
+  try {
+    const [siColCheck] = await conn.query(`SHOW COLUMNS FROM sale_items LIKE 'parcel_count'`);
+    if (siColCheck.length === 0) {
+      await conn.query(`ALTER TABLE sale_items ADD COLUMN \`parcel_count\` INT DEFAULT 1`);
+    }
+  } catch (e) {
+    // ignore safety
+  }
 };
 
 exports.createSale = async (req, res) => {
   const { items, customer_name, payment_method, notes, customer_delivery_fee, courier_fee, sale_date, parcel_count } = req.body;
-  const parcelCountNum = Math.max(1, parseInt(parcel_count || 1, 10));
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Cart must contain at least one product.' });
@@ -39,6 +47,7 @@ exports.createSale = async (req, res) => {
     let total_amount = 0;
     let total_cost = 0;
     let preparedItems = [];
+    let calculatedTotalParcels = 0;
 
     for (const item of items) {
       const [productRows] = await connection.query(
@@ -59,6 +68,7 @@ exports.createSale = async (req, res) => {
       const unit_cost = Number(product.cost_price);
       const unit_price = Number(item.unit_price || product.selling_price);
       const qty = Number(item.quantity);
+      const itemParcelCount = Math.max(1, parseInt(item.parcel_count || 1, 10));
 
       const item_total_price = unit_price * qty;
       const item_total_cost = unit_cost * qty;
@@ -66,6 +76,7 @@ exports.createSale = async (req, res) => {
 
       total_amount += item_total_price;
       total_cost += item_total_cost;
+      calculatedTotalParcels += itemParcelCount;
 
       preparedItems.push({
         product_id: product.id,
@@ -76,10 +87,12 @@ exports.createSale = async (req, res) => {
         total_price: item_total_price,
         total_cost: item_total_cost,
         item_profit,
+        parcel_count: itemParcelCount,
         is_combo: product.is_combo
       });
     }
 
+    const finalOrderParcelCount = parcel_count !== undefined ? Math.max(1, parseInt(parcel_count, 10)) : Math.max(1, calculatedTotalParcels);
     const gross_profit = total_amount - total_cost;
     const deliveryFeeCharged = Number(customer_delivery_fee || 0);
     const courierActualCost = Number(courier_fee || 0);
@@ -115,7 +128,7 @@ exports.createSale = async (req, res) => {
           deliveryFeeCharged,
           courierActualCost,
           deliveryProfit,
-          parcelCountNum,
+          finalOrderParcelCount,
           customSaleDate
         ]
       );
@@ -135,7 +148,7 @@ exports.createSale = async (req, res) => {
           deliveryFeeCharged,
           courierActualCost,
           deliveryProfit,
-          parcelCountNum
+          finalOrderParcelCount
         ]
       );
     }
@@ -144,10 +157,22 @@ exports.createSale = async (req, res) => {
 
     for (const pItem of preparedItems) {
       await connection.query(
-        `INSERT INTO sale_items (tenant_id, sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, total_cost, item_profit)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sale_items (tenant_id, sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, total_cost, item_profit, parcel_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tenantId,
+          sale_id,
+          pItem.product_id,
+          pItem.product_name,
+          pItem.quantity,
+          pItem.unit_cost,
+          pItem.unit_price,
+          pItem.total_price,
+          pItem.total_cost,
+          pItem.item_profit,
+          pItem.parcel_count
+        ]
+      );
           sale_id,
           pItem.product_id,
           pItem.product_name,
@@ -367,9 +392,11 @@ exports.updateSale = async (req, res) => {
         total_amount += item_total_price;
         total_cost += item_total_cost;
 
+        const itemParcelCount = item.parcel_count !== undefined ? Math.max(1, parseInt(item.parcel_count, 10)) : 1;
+
         await connection.query(
-          `INSERT INTO sale_items (tenant_id, sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, total_cost, item_profit)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO sale_items (tenant_id, sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, total_cost, item_profit, parcel_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             tenantId,
             id,
@@ -380,7 +407,8 @@ exports.updateSale = async (req, res) => {
             unit_price,
             item_total_price,
             item_total_cost,
-            item_profit
+            item_profit,
+            itemParcelCount
           ]
         );
 

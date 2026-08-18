@@ -4,7 +4,7 @@ import { Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle, Truck } from 'lu
 import { ReceiptModal } from '../components/ReceiptModal';
 
 export const POS = () => {
-  const { products, categories, cart, currency, addToCart, updateCartQty, updateCartPrice, removeFromCart, clearCart, checkoutSale } = useApp();
+  const { products, categories, cart, currency, addToCart, updateCartQty, updateCartItemParcelCount, updateCartPrice, removeFromCart, clearCart, checkoutSale } = useApp();
   
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -16,7 +16,6 @@ export const POS = () => {
   const [customerDeliveryFee, setCustomerDeliveryFee] = useState('120');
   const [courierFee, setCourierFee] = useState('120');
   const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 10));
-  const [parcelCount, setParcelCount] = useState('1');
 
   const [completedSale, setCompletedSale] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,6 +46,7 @@ export const POS = () => {
   const cartGrossProfit = cartSubtotal - cartTotalCost;
 
   const totalProductPcs = cart.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0);
+  const totalCartParcels = cart.reduce((sum, item) => sum + Number(item.parcel_count || 1), 0);
 
   // Delivery Profit Calculation
   const delivFeeNum = Number(customerDeliveryFee || 0);
@@ -57,10 +57,9 @@ export const POS = () => {
     if (cart.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const result = await checkoutSale(customerName, paymentMethod, notes, customerDeliveryFee, courierFee, saleDate, parcelCount);
+      const result = await checkoutSale(customerName, paymentMethod, notes, customerDeliveryFee, courierFee, saleDate, totalCartParcels);
       if (result.success) {
         setCompletedSale(result.sale);
-        setParcelCount('1');
       } else {
         alert(`Checkout failed: ${result.error}`);
       }
@@ -186,7 +185,7 @@ export const POS = () => {
           <div style={{ background: 'var(--bg-primary)', padding: '12px 14px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
             {/* Real-time Order & Parcel Count Summary */}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px', background: 'rgba(56, 189, 248, 0.1)', padding: '6px 10px', borderRadius: '6px', color: '#38bdf8', fontWeight: '700' }}>
-              <span>📦 Orders / Parcels: <strong>{parcelCount || 1} Parcel(s)</strong></span>
+              <span>📦 Orders / Parcels: <strong>{totalCartParcels} Parcel(s)</strong></span>
               <span>🔢 Product Pcs: <strong>{totalProductPcs} Pcs ({cart.length} Items)</strong></span>
             </div>
 
@@ -256,7 +255,7 @@ export const POS = () => {
             </div>
           </div>
 
-          {/* Customer Name & Sale Date */}
+          {/* Customer Name, Sale Date & Payment Method */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontSize: '11px' }}>Customer Name</label>
@@ -281,38 +280,19 @@ export const POS = () => {
             </div>
           </div>
 
-          {/* Parcel Count & Payment Method */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800' }}>
-                📦 Parcel Count (পার্সেল সংখ্যা) *
-              </label>
-              <input
-                type="number"
-                min="1"
-                className="form-input"
-                style={{ padding: '6px 10px', fontSize: '13px', fontWeight: '800', borderColor: '#38bdf8', color: '#38bdf8' }}
-                value={parcelCount}
-                onChange={(e) => setParcelCount(e.target.value)}
-                placeholder="e.g. 5"
-                title="Manual number of customer parcels for this sale (default: 1)"
-              />
-            </div>
-
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ fontSize: '11px' }}>Payment Method</label>
-              <select
-                className="form-select"
-                style={{ padding: '6px 10px', fontSize: '13px' }}
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-              >
-                <option value="Cash">Cash</option>
-                <option value="bKash">bKash Mobile Banking</option>
-                <option value="Nagad">Nagad Mobile Banking</option>
-                <option value="Card">Credit / Debit Card</option>
-              </select>
-            </div>
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label" style={{ fontSize: '11px' }}>Payment Method</label>
+            <select
+              className="form-select"
+              style={{ padding: '6px 10px', fontSize: '13px' }}
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+            >
+              <option value="Cash">Cash</option>
+              <option value="bKash">bKash Mobile Banking</option>
+              <option value="Nagad">Nagad Mobile Banking</option>
+              <option value="Card">Credit / Debit Card</option>
+            </select>
           </div>
 
         </div>
@@ -352,31 +332,60 @@ export const POS = () => {
                       <div style={{ flex: 1, paddingRight: '8px' }}>
                         <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-primary)' }}>{pName}</strong>
                         
-                        {/* Editable Unit Selling Price Input */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Unit Price ({currency}):</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={item.selling_price === undefined ? '' : item.selling_price}
-                            onChange={(e) => updateCartPrice(pId, e.target.value)}
-                            onBlur={(e) => {
-                              if (e.target.value === '' || isNaN(Number(e.target.value))) {
-                                updateCartPrice(pId, Number(item.price || item.unit_price || 0));
-                              }
-                            }}
-                            style={{
-                              width: '75px',
-                              padding: '2px 6px',
-                              fontSize: '12px',
-                              fontWeight: '800',
-                              borderRadius: '4px',
-                              border: '1px solid var(--border-color)',
-                              background: 'var(--bg-primary)',
-                              color: 'var(--accent-primary)'
-                            }}
-                            title="Click to change custom selling price"
-                          />
+                        {/* Editable Unit Selling Price & Product-wise Parcel Count */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Unit Price ({currency}):</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={item.selling_price === undefined ? '' : item.selling_price}
+                              onChange={(e) => updateCartPrice(pId, e.target.value)}
+                              onBlur={(e) => {
+                                if (e.target.value === '' || isNaN(Number(e.target.value))) {
+                                  updateCartPrice(pId, Number(item.price || item.unit_price || 0));
+                                }
+                              }}
+                              style={{
+                                width: '70px',
+                                padding: '2px 6px',
+                                fontSize: '12px',
+                                fontWeight: '800',
+                                borderRadius: '4px',
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-primary)',
+                                color: 'var(--accent-primary)'
+                              }}
+                              title="Click to change custom selling price"
+                            />
+                          </div>
+
+                          {/* PRODUCT-WISE PARCEL COUNT INPUT (RED BOX IN SCREENSHOT) */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800' }}>📦 Parcels:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.parcel_count === undefined ? 1 : item.parcel_count}
+                              onChange={(e) => updateCartItemParcelCount(pId, e.target.value)}
+                              onBlur={(e) => {
+                                if (e.target.value === '' || isNaN(Number(e.target.value))) {
+                                  updateCartItemParcelCount(pId, 1);
+                                }
+                              }}
+                              style={{
+                                width: '55px',
+                                padding: '2px 6px',
+                                fontSize: '12px',
+                                fontWeight: '800',
+                                borderRadius: '4px',
+                                border: '1px solid #38bdf8',
+                                background: 'var(--bg-primary)',
+                                color: '#38bdf8'
+                              }}
+                              title="Product-wise parcel/customer count (default: 1)"
+                            />
+                          </div>
                         </div>
                       </div>
 

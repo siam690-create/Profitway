@@ -259,7 +259,7 @@ exports.getProductAnalytics = async (req, res) => {
       const [rows] = await db.query(
         `SELECT 
            si.product_id,
-           COALESCE(SUM(COALESCE(s.parcel_count, 1)), COUNT(DISTINCT s.id)) as customer_parcels_count,
+           COALESCE(SUM(COALESCE(si.parcel_count, s.parcel_count, 1)), COUNT(DISTINCT s.id)) as customer_parcels_count,
            SUM(si.quantity) as units_sold,
            SUM(si.total_price) as gross_revenue,
            SUM(si.total_cost) as cogs,
