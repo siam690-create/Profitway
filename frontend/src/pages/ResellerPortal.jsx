@@ -1008,11 +1008,16 @@ const ResellerPortal = () => {
                 </div>
 
                 {/* Estimated Reseller Profit Display Box */}
-                <div style={{ background: estimatedProfit >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)', padding: '12px 16px', borderRadius: '10px', border: `1px solid ${estimatedProfit >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '600' }}>Estimated Profit on this Order:</span>
-                  <strong style={{ fontSize: '18px', fontWeight: '800', color: estimatedProfit >= 0 ? '#10b981' : '#ef4444' }}>
-                    +{currency}{estimatedProfit.toFixed(2)}
-                  </strong>
+                <div style={{ background: estimatedProfit >= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)', padding: '12px 16px', borderRadius: '10px', border: `1px solid ${estimatedProfit >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '600' }}>Estimated Profit on this Order:</span>
+                    <strong style={{ fontSize: '18px', fontWeight: '800', color: estimatedProfit >= 0 ? '#10b981' : '#ef4444' }}>
+                      +{currency}{estimatedProfit.toFixed(2)}
+                    </strong>
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#94a3b8', fontStyle: 'italic', marginTop: '2px' }}>
+                    *(এই Estimated Profit থেকে পরবর্তীতে Delivery Charge এবং Packaging Cost বাদ যাবে)
+                  </div>
                 </div>
 
                 <div className="form-group">
