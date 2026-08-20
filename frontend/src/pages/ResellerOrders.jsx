@@ -20,7 +20,8 @@ import {
   DollarSign,
   AlertCircle,
   Filter,
-  Trash2
+  Trash2,
+  ExternalLink
 } from 'lucide-react';
 
 export const ResellerOrders = () => {
@@ -327,6 +328,21 @@ export const ResellerOrders = () => {
     showToast ? showToast('Copied 📋', 'Customer shipping details copied to clipboard!', 'info') : alert('Copied to clipboard!');
   };
 
+  const getTrackingUrl = (courierName = '', trackingCode = '') => {
+    if (!trackingCode) return '#';
+    const c = String(courierName).toLowerCase();
+    if (c.includes('steadfast')) {
+      return `https://steadfast.com.bd/t/${trackingCode}`;
+    } else if (c.includes('pathao')) {
+      return `https://pathao.com/courier/tracking?consignment_id=${trackingCode}`;
+    } else if (c.includes('redx')) {
+      return `https://redx.com.bd/track-order?trackingId=${trackingCode}`;
+    } else if (c.includes('paperfly')) {
+      return `https://www.paperfly.com.bd/tracking?tracking_id=${trackingCode}`;
+    }
+    return `https://steadfast.com.bd/t/${trackingCode}`;
+  };
+
   // Calculate summary metrics
   const pendingOrders = orders.filter(o => (o.order_status || 'pending').toLowerCase() === 'pending');
   const deliveredOrders = orders.filter(o => (o.order_status || '').toLowerCase() === 'delivered');
@@ -556,6 +572,7 @@ export const ResellerOrders = () => {
                 <th>Reseller Name</th>
                 <th>Customer Info</th>
                 <th>Ordered Items</th>
+                <th>Courier</th>
                 <th>Pricing & COD Breakdown</th>
                 <th>Status</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
@@ -564,7 +581,7 @@ export const ResellerOrders = () => {
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                  <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                     No reseller portal orders found matching filter criteria.
                   </td>
                 </tr>
@@ -619,6 +636,32 @@ export const ResellerOrders = () => {
                             </div>
                           ))}
                         </div>
+                      </td>
+
+                      <td>
+                        {order.tracking_code ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <strong style={{ fontSize: '13px', color: 'var(--text-primary)', letterSpacing: '0.02em', wordBreak: 'break-all' }}>
+                                {order.tracking_code}
+                              </strong>
+                              <a
+                                href={getTrackingUrl(order.courier_name, order.tracking_code)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: '#8b5cf6', display: 'inline-flex', alignItems: 'center', transition: 'color 0.2s ease' }}
+                                title="Track Parcel on Courier Website"
+                              >
+                                <ExternalLink size={14} />
+                              </a>
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {order.courier_name || 'Courier'}
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>—</span>
+                        )}
                       </td>
 
                       <td>
