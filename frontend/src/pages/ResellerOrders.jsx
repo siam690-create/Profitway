@@ -34,7 +34,47 @@ export const ResellerOrders = () => {
   const [bulkStatus, setBulkStatus] = useState('');
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
-  // Filtered list
+  // Filters & Search States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'processing', 'shipped', 'delivered', 'returned', 'cancelled'
+  const [selectedResellerFilter, setSelectedResellerFilter] = useState('all');
+
+  // Return Loss Modal States
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [selectedOrderForReturn, setSelectedOrderForReturn] = useState(null);
+  const [returnLossAmount, setReturnLossAmount] = useState('100');
+  const [returnNotes, setReturnNotes] = useState('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Order Details Modal States
+  const [viewingOrder, setViewingOrder] = useState(null);
+
+  const fetchResellerOrders = async () => {
+    setLoading(true);
+    try {
+      const res = await authFetch('/api/admin/reseller-orders');
+      const data = await res.json();
+      if (res.ok) {
+        setOrders(Array.isArray(data) ? data : []);
+      }
+
+      const pRes = await authFetch('/api/reseller/profiles');
+      const pData = await pRes.json();
+      if (pRes.ok) {
+        setProfiles(Array.isArray(pData) ? pData : []);
+      }
+    } catch (err) {
+      console.error('Error fetching admin reseller orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchResellerOrders();
+  }, []);
+
+  // Filtered list (Declared after all states & hooks!)
   const filteredOrders = orders.filter(o => {
     const status = (o.order_status || 'pending').toLowerCase();
     if (statusFilter !== 'all') {
