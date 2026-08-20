@@ -495,8 +495,9 @@ const ResellerPortal = () => {
 
   const filteredCatalog = catalog
     .filter(p => {
-      const searchMatch = p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-                          p.sku.toLowerCase().includes(catalogSearch.toLowerCase());
+      const pName = String(p.name || '').toLowerCase();
+      const pSku = String(p.sku || '').toLowerCase();
+      const searchMatch = pName.includes(catalogSearch.toLowerCase()) || pSku.includes(catalogSearch.toLowerCase());
       const stockMatch = inStockOnly ? Number(p.stock_quantity || 0) > 0 : true;
       const pinnedMatch = sortBy === 'pinned' ? pinnedProductIds.includes(p.id) : true;
       return searchMatch && stockMatch && pinnedMatch;

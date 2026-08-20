@@ -164,8 +164,8 @@ exports.getResellerCatalog = async (req, res) => {
 
     const catalog = products.map(p => ({
       id: p.id,
-      name: p.name,
-      sku: p.sku,
+      name: p.name || 'Unnamed Product',
+      sku: p.sku || `SKU-${p.id}`,
       stock_quantity: Number(p.stock_quantity || 0),
       unit: p.unit || 'Pcs',
       retail_price: Number(p.selling_price || 0),
