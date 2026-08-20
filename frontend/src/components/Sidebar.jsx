@@ -23,7 +23,8 @@ import {
   HelpCircle,
   CreditCard,
   Zap,
-  MessageSquare
+  MessageSquare,
+  Key
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -48,8 +49,9 @@ export const Sidebar = () => {
     { id: 'reports', label: 'Profit & Loss', icon: TrendingUp },
     { id: 'finance', label: 'Finance & Dena-Pawna', icon: Landmark },
     { id: 'analytics', label: 'Analytics Breakdown', icon: BarChart3 },
-    { id: 'staff', label: 'Staff & HR OS', icon: Users },
+    {id: 'staff', label: 'Staff & HR OS', icon: Users },
     { id: 'tasks', label: 'Staff Task Manager', icon: CheckSquare },
+    { id: 'api-management', label: 'API Management', icon: Key },
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'subscription', label: 'Subscription Plan', icon: CreditCard },
     { id: 'support', label: 'Support & Help Desk', icon: HelpCircle },

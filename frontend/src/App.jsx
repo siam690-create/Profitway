@@ -22,6 +22,7 @@ import { ResellerParcels } from './pages/ResellerParcels';
 import { ResellerOrders } from './pages/ResellerOrders';
 import ResellerPortal from './pages/ResellerPortal';
 import { Settings } from './pages/Settings';
+import { ApiManagement } from './pages/ApiManagement';
 import { Subscription } from './pages/Subscription';
 import { Support } from './pages/Support';
 
@@ -150,6 +151,7 @@ function MainApp() {
       case 'reseller-parcels': return <ResellerParcels />;
       case 'reseller-portal': return <ResellerPortal />;
       case 'settings': return <Settings />;
+      case 'api-management': return <ApiManagement />;
       case 'subscription': return <Subscription />;
       case 'support': return <Support />;
       default: return <Dashboard />;

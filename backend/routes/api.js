@@ -27,6 +27,7 @@ const externalOrderController = require('../controllers/externalOrderController'
 const taskController = require('../controllers/taskController');
 const resellerController = require('../controllers/resellerController');
 const resellerPortalController = require('../controllers/resellerPortalController');
+const apiIntegrationController = require('../controllers/apiIntegrationController');
 
 const { authenticate, requireSuperAdmin, checkActiveSubscription } = require('../middleware/authMiddleware');
 
@@ -95,6 +96,10 @@ router.get('/analytics/products', analyticsController.getProductAnalytics);
 // Shop Settings & Print Customization APIs
 router.get('/settings', settingController.getSettings);
 router.put('/settings', checkActiveSubscription, settingController.updateSettings);
+
+// API Management & Integrations APIs
+router.get('/api-integrations', apiIntegrationController.getApiIntegrations);
+router.put('/api-integrations', checkActiveSubscription, apiIntegrationController.updateApiIntegrations);
 
 // Store API Keys Management APIs (External Order Ingestion Setup)
 router.get('/store-api-keys', storeApiKeyController.getStoreApiKeys);
