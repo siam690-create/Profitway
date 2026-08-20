@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 
 const ResellerPortal = () => {
-  const { authFetch, currency, showToast, resellerSession, logoutReseller } = useApp();
+  const { authFetch, currency, showToast, resellerSession, logoutReseller, products: contextProducts } = useApp();
 
   const [resellerName, setResellerName] = useState(() => {
     return resellerSession?.name || localStorage.getItem('profitway_reseller_name') || 'sellway';
@@ -169,11 +169,16 @@ const ResellerPortal = () => {
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+
   // Fetch Catalog
   const fetchCatalog = async () => {
     try {
-      setLoading(true);
-      const res = await fetch(`/api/reseller/catalog?_t=${Date.now()}`);
+      setIsLoadingCatalog(true);
+      const url = resellerName 
+        ? `/api/reseller/catalog?reseller_name=${encodeURIComponent(resellerName)}&_t=${Date.now()}`
+        : `/api/reseller/catalog?_t=${Date.now()}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (Array.isArray(data)) {
         setCatalog(data);
@@ -181,7 +186,7 @@ const ResellerPortal = () => {
     } catch (e) {
       console.error('Error fetching reseller catalog:', e);
     } finally {
-      setLoading(false);
+      setIsLoadingCatalog(false);
     }
   };
 
@@ -496,7 +501,18 @@ const ResellerPortal = () => {
     }
   };
 
-  const filteredCatalog = catalog
+  const rawCatalog = (catalog && catalog.length > 0) ? catalog : (contextProducts && contextProducts.length > 0 ? contextProducts.map(p => ({
+    id: p.id,
+    name: p.name || 'Unnamed Product',
+    sku: p.sku || `SKU-${p.id}`,
+    stock_quantity: Number(p.stock_quantity || 0),
+    unit: p.unit || 'Pcs',
+    retail_price: Number(p.selling_price || p.retail_price || 0),
+    reseller_price: Number(p.reseller_price || p.cost_price || 0),
+    is_combo: Boolean(p.is_combo)
+  })) : []);
+
+  const filteredCatalog = rawCatalog
     .filter(p => {
       const pName = String(p.name || '').toLowerCase();
       const pSku = String(p.sku || '').toLowerCase();
@@ -729,7 +745,7 @@ const ResellerPortal = () => {
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           <ShoppingBag size={16} />
-          <span>🛍️ Wholesale Catalog ({catalog.length})</span>
+          <span>🛍️ Wholesale Catalog ({rawCatalog.length})</span>
         </button>
 
         <button
@@ -779,7 +795,7 @@ const ResellerPortal = () => {
                 <Search size={20} color="#8b5cf6" style={{ flexShrink: 0 }} />
                 <input
                   type="text"
-                  placeholder={`🔍 Search products by name, SKU, or keyword (${catalog.length} items)...`}
+                  placeholder={`🔍 Search products by name, SKU, or keyword (${rawCatalog.length} items)...`}
                   value={catalogSearch}
                   onChange={(e) => setCatalogSearch(e.target.value)}
                   style={{
@@ -806,7 +822,7 @@ const ResellerPortal = () => {
             </div>
 
             <div style={{ background: 'rgba(139, 92, 246, 0.12)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', color: '#c084fc' }}>
-              Showing {filteredCatalog.length} of {catalog.length} products available
+              Showing {filteredCatalog.length} of {rawCatalog.length} products available
             </div>
           </div>
 
