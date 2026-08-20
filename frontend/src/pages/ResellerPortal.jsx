@@ -30,7 +30,9 @@ import {
   FileSpreadsheet,
   Sun,
   Moon,
-  Calendar
+  Calendar,
+  Trash2,
+  Minus
 } from 'lucide-react';
 
 const ResellerPortal = () => {
@@ -295,11 +297,46 @@ const ResellerPortal = () => {
         {
           product_id: product.id,
           product_name: product.name,
+          sku: product.sku || '',
           quantity: 1,
           unit_reseller_price: Number(product.reseller_price || 0),
           total_reseller_cost: Number(product.reseller_price || 0)
         }
       ]);
+    }
+  };
+
+  const updateItemQty = (index, delta) => {
+    const updated = [...orderItems];
+    if (!updated[index]) return;
+    const newQty = Math.max(1, (updated[index].quantity || 1) + delta);
+    updated[index].quantity = newQty;
+    updated[index].total_reseller_cost = newQty * Number(updated[index].unit_reseller_price || 0);
+    setOrderItems(updated);
+  };
+
+  const setItemQty = (index, val) => {
+    const updated = [...orderItems];
+    if (!updated[index]) return;
+    const newQty = Math.max(1, Number(val) || 1);
+    updated[index].quantity = newQty;
+    updated[index].total_reseller_cost = newQty * Number(updated[index].unit_reseller_price || 0);
+    setOrderItems(updated);
+  };
+
+  const removeItemFromOrder = (index) => {
+    if (orderItems.length <= 1) {
+      alert('অর্ডারে কমপক্ষে ১টি প্রোডাক্ট থাকতে হবে।');
+      return;
+    }
+    setOrderItems(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSelectProductToAdd = (prodId) => {
+    if (!prodId) return;
+    const prod = catalog.find(p => p.id === Number(prodId) || String(p.id) === String(prodId));
+    if (prod) {
+      handleAddProductToOrder(prod);
     }
   };
 
@@ -1942,18 +1979,169 @@ const ResellerPortal = () => {
 
 
 
-                {/* Selected Products Breakdown */}
-                <div style={{ background: 'var(--bg-secondary)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-                  <label className="form-label" style={{ marginBottom: '8px' }}>Selected Product(s) & Quantities</label>
-                  {orderItems.map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '13px' }}>
-                      <span>{item.product_name} x {item.quantity}</span>
-                      <span style={{ fontWeight: '700' }}>Wholesale Cost: {currency}{item.total_reseller_cost.toFixed(2)}</span>
-                    </div>
-                  ))}
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '6px', marginTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '700' }}>
+                {/* Selected Products Breakdown & Multi-Product Selector */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="form-label" style={{ marginBottom: 0, fontWeight: '700', fontSize: '13px' }}>
+                      🛍️ Selected Product(s) ({orderItems.length})
+                    </label>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Wholesale Unit Rates
+                    </span>
+                  </div>
+
+                  {/* List of current items */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {orderItems.map((item, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: '8px',
+                          padding: '10px 12px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '10px',
+                          flexWrap: 'wrap'
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: '150px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', lineHeight: '1.3' }}>
+                            {item.product_name}
+                          </div>
+                          <div style={{ fontSize: '11.5px', color: '#c084fc', marginTop: '2px' }}>
+                            Unit Wholesale: {currency}{Number(item.unit_reseller_price || 0).toFixed(2)}
+                          </div>
+                        </div>
+
+                        {/* Quantity Controls */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => updateItemQty(idx, -1)}
+                            disabled={item.quantity <= 1}
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              cursor: item.quantity <= 1 ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              opacity: item.quantity <= 1 ? 0.4 : 1
+                            }}
+                          >
+                            <Minus size={14} />
+                          </button>
+
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => setItemQty(idx, e.target.value)}
+                            style={{
+                              width: '46px',
+                              height: '28px',
+                              textAlign: 'center',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              fontWeight: '700',
+                              fontSize: '13px'
+                            }}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => updateItemQty(idx, 1)}
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+
+                        {/* Subtotal & Delete */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', minWidth: '70px', textAlign: 'right' }}>
+                            {currency}{(item.total_reseller_cost || 0).toFixed(2)}
+                          </div>
+                          {orderItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeItemFromOrder(idx)}
+                              title="Remove item"
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                color: '#ef4444',
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add Product Dropdown */}
+                  <div style={{ marginTop: '4px' }}>
+                    <select
+                      className="form-select"
+                      defaultValue=""
+                      onChange={(e) => {
+                        handleSelectProductToAdd(e.target.value);
+                        e.target.value = '';
+                      }}
+                      style={{
+                        background: 'rgba(139, 92, 246, 0.08)',
+                        border: '1px dashed rgba(139, 92, 246, 0.4)',
+                        color: '#c084fc',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        width: '100%',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="" disabled>➕ আরেকটি প্রোডাক্ট যোগ করুন (Add More Products)...</option>
+                      {catalog.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.sku ? `[${p.sku}] ` : ''}{p.name} — Wholesale: {currency}{Number(p.reseller_price || p.retail_price || 0).toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Total Reseller Wholesale Cost */}
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13.5px', fontWeight: '700' }}>
                     <span>Total Reseller Wholesale Cost:</span>
-                    <span style={{ color: 'var(--accent-primary)' }}>{currency}{totalWholesaleCost.toFixed(2)}</span>
+                    <span style={{ color: 'var(--accent-primary)', fontSize: '15px', fontWeight: '800' }}>{currency}{totalWholesaleCost.toFixed(2)}</span>
                   </div>
                 </div>
 
