@@ -312,11 +312,11 @@ export const ResellerOrders = () => {
               ) : (
                 filteredOrders.map(order => {
                   const status = (order.order_status || 'pending').toLowerCase();
-                  const profit = Number(order.reseller_profit || 0);
                   const totalCOD = Number(order.total_amount || order.total_price || order.customer_total_price || 0);
                   const deliveryCharge = Number(order.delivery_fee_charged || order.delivery_fee || 0);
                   const wholesaleCost = Number(order.reseller_wholesale_cost || order.total_cost || 0);
                   const salePrice = Math.max(0, totalCOD - deliveryCharge);
+                  const profit = Math.max(0, salePrice - wholesaleCost);
 
                   return (
                     <tr key={order.id}>
