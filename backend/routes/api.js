@@ -214,6 +214,8 @@ router.get('/reports/profit-loss', reportController.getProfitLossReport);
 router.get('/admin/reseller-orders', resellerPortalController.getAllResellerOrdersForAdmin);
 router.put('/admin/reseller-orders/:id/status', checkActiveSubscription, resellerPortalController.updateResellerOrderStatusByAdmin);
 router.delete('/admin/reseller-orders/:id', checkActiveSubscription, resellerPortalController.deleteResellerOrderForAdmin);
+router.post('/admin/reseller-orders/bulk-status', checkActiveSubscription, resellerPortalController.bulkUpdateResellerOrdersStatus);
+router.post('/admin/reseller-orders/bulk-delete', checkActiveSubscription, resellerPortalController.bulkDeleteResellerOrders);
 
 // Staff / Users APIs
 router.get('/staff', staffController.getStaff);

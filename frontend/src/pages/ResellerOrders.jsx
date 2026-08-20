@@ -29,79 +29,123 @@ export const ResellerOrders = () => {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Filters & Search
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'processing', 'shipped', 'delivered', 'returned', 'cancelled'
-  const [selectedResellerFilter, setSelectedResellerFilter] = useState('all');
+  // Bulk Selection States
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
-  // Return Loss Modal
-  const [showReturnModal, setShowReturnModal] = useState(false);
-  const [selectedOrderForReturn, setSelectedOrderForReturn] = useState(null);
-  const [returnLossAmount, setReturnLossAmount] = useState('100');
-  const [returnNotes, setReturnNotes] = useState('');
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const toggleSelectOrder = (id) => {
+    setSelectedOrderIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
 
-  // Order Details Modal
-  const [viewingOrder, setViewingOrder] = useState(null);
+  const isAllSelected = filteredOrders.length > 0 && filteredOrders.every(o => selectedOrderIds.includes(o.id));
 
-  const fetchResellerOrders = async () => {
-    setLoading(true);
-    try {
-      const res = await authFetch('/api/admin/reseller-orders');
-      const data = await res.json();
-      if (res.ok) {
-        setOrders(Array.isArray(data) ? data : []);
-      }
-
-      const pRes = await authFetch('/api/reseller/profiles');
-      const pData = await pRes.json();
-      if (pRes.ok) {
-        setProfiles(Array.isArray(pData) ? pData : []);
-      }
-    } catch (err) {
-      console.error('Error fetching admin reseller orders:', err);
-    } finally {
-      setLoading(false);
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(filteredOrders.map(o => o.id));
     }
   };
 
-  useEffect(() => {
-    fetchResellerOrders();
-  }, []);
+  const clearSelection = () => {
+    setSelectedOrderIds([]);
+    setBulkStatus('');
+  };
 
-  const handleUpdateStatus = async (orderId, newStatus, returnLoss = 0, notes = '') => {
-    setIsUpdatingStatus(true);
+  const handleBulkStatusUpdate = async () => {
+    if (!bulkStatus || selectedOrderIds.length === 0) return;
+    setIsBulkProcessing(true);
     try {
-      const res = await authFetch(`/api/admin/reseller-orders/${orderId}/status`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          order_status: newStatus,
-          return_loss: returnLoss,
-          notes
-        })
+      const res = await authFetch('/api/admin/reseller-orders/bulk-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: selectedOrderIds, order_status: bulkStatus })
       });
-
       const data = await res.json();
       if (res.ok) {
-        showToast ? showToast('Success', data.message, 'success') : alert(data.message);
-        setShowReturnModal(false);
-        setSelectedOrderForReturn(null);
+        showToast ? showToast('Updated ✅', data.message, 'success') : alert(data.message);
+        clearSelection();
         fetchResellerOrders();
       } else {
         alert(`Error: ${data.error}`);
       }
     } catch (err) {
-      alert(`Error updating order status: ${err.message}`);
+      alert(`Error bulk updating status: ${err.message}`);
     } finally {
-      setIsUpdatingStatus(false);
+      setIsBulkProcessing(false);
     }
   };
 
-  const handleOpenReturnModal = (order) => {
-    setSelectedOrderForReturn(order);
-    setReturnLossAmount('100');
-    setReturnNotes('');
-    setShowReturnModal(true);
+  const handleBulkDelete = async () => {
+    if (selectedOrderIds.length === 0) return;
+    if (!window.confirm(`Are you sure you want to DELETE ${selectedOrderIds.length} selected orders? This action cannot be undone.`)) {
+      return;
+    }
+    setIsBulkProcessing(true);
+    try {
+      const res = await authFetch('/api/admin/reseller-orders/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: selectedOrderIds })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast ? showToast('Deleted 🗑️', data.message, 'success') : alert(data.message);
+        clearSelection();
+        fetchResellerOrders();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error bulk deleting orders: ${err.message}`);
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkPrint = () => {
+    if (selectedOrderIds.length === 0) return;
+    const selectedOrders = orders.filter(o => selectedOrderIds.includes(o.id));
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Bulk Print Shipping Labels (${selectedOrders.length} Parcels)</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #000; }
+            .label-card { border: 2px solid #000; border-radius: 8px; padding: 16px; margin-bottom: 20px; page-break-inside: avoid; }
+            .label-header { border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+            .label-title { font-size: 20px; font-weight: bold; }
+            .label-row { font-size: 14px; margin-bottom: 6px; }
+            .label-row strong { font-size: 15px; }
+            .cod-box { font-size: 22px; font-weight: bold; margin-top: 10px; border-top: 1px dashed #000; padding-top: 8px; }
+          </style>
+        </head>
+        <body>
+          <h2>🚚 Customer Courier Shipping Labels (${selectedOrders.length} Parcels)</h2>
+          ${selectedOrders.map(o => `
+            <div class="label-card">
+              <div class="label-header">
+                <span class="label-title">Invoice #${o.invoice_no}</span>
+                <span>Reseller: ${o.reseller_name}</span>
+              </div>
+              <div class="label-row">👤 <strong>Customer:</strong> ${o.customer_name || 'N/A'}</div>
+              <div class="label-row">📞 <strong>Phone:</strong> ${o.customer_phone || 'N/A'}</div>
+              <div class="label-row">📍 <strong>Address:</strong> ${o.customer_address || 'N/A'} (${o.district || ''}, ${o.thana || ''})</div>
+              <div class="label-row">📦 <strong>Items:</strong> ${(o.items || []).map(i => `${i.product_name} x${i.quantity}`).join(', ')}</div>
+              <div class="cod-box">💰 Total COD Amount: ৳${Number(o.total_price || o.total_amount || 0).toFixed(2)}</div>
+            </div>
+          `).join('')}
+          <script>window.print();</script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   // Status Configuration for Workflow
@@ -304,11 +348,104 @@ export const ResellerOrders = () => {
           </div>
         </div>
 
+        {/* Sticky Bulk Action Bar (Rendered when 1 or more orders are checked) */}
+        {selectedOrderIds.length > 0 && (
+          <div
+            style={{
+              padding: '12px 20px',
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.15))',
+              border: '1px solid rgba(139, 92, 246, 0.4)',
+              borderRadius: '12px',
+              margin: '16px 16px 0 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+              {/* Selected Count Badge */}
+              <div style={{ background: '#8b5cf6', color: '#fff', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle size={15} />
+                <span>{selectedOrderIds.length} Selected</span>
+              </div>
+
+              {/* Bulk Status Select + Apply */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <select
+                  className="form-select"
+                  value={bulkStatus}
+                  onChange={(e) => setBulkStatus(e.target.value)}
+                  style={{ padding: '6px 12px', fontSize: '13px', borderRadius: '8px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+                >
+                  <option value="">Change status to...</option>
+                  {ALL_STATUSES.filter(s => s.key !== 'all').map(s => (
+                    <option key={s.key} value={s.key}>{s.icon} {s.label}</option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleBulkStatusUpdate}
+                  disabled={!bulkStatus || isBulkProcessing}
+                  className="btn btn-primary btn-sm"
+                  style={{ padding: '6px 16px' }}
+                >
+                  {isBulkProcessing ? 'Applying...' : 'Apply'}
+                </button>
+              </div>
+
+              {/* Bulk Print Button */}
+              <button
+                type="button"
+                onClick={handleBulkPrint}
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Printer size={14} />
+                <span>Print Labels</span>
+              </button>
+
+              {/* Bulk Delete Button */}
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={isBulkProcessing}
+                className="btn btn-danger btn-sm"
+                style={{ background: '#ef4444', borderColor: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Trash2 size={14} />
+                <span>Delete All</span>
+              </button>
+            </div>
+
+            {/* Clear Selection Button */}
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: '12px' }}
+            >
+              ✕ Clear Selection
+            </button>
+          </div>
+        )}
+
         {/* Orders Table */}
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={toggleSelectAll}
+                    style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#8b5cf6' }}
+                    title="Select / Deselect All Filtered Orders"
+                  />
+                </th>
                 <th>Invoice #</th>
                 <th>Reseller Name</th>
                 <th>Customer Info</th>
@@ -321,7 +458,7 @@ export const ResellerOrders = () => {
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                     No reseller portal orders found matching filter criteria.
                   </td>
                 </tr>
@@ -333,9 +470,19 @@ export const ResellerOrders = () => {
                   const wholesaleCost = Number(order.reseller_wholesale_cost || order.total_cost || 0);
                   const salePrice = Math.max(0, totalCOD - deliveryCharge);
                   const profit = Math.max(0, salePrice - wholesaleCost);
+                  const isChecked = selectedOrderIds.includes(order.id);
 
                   return (
-                    <tr key={order.id}>
+                    <tr key={order.id} style={isChecked ? { background: 'rgba(139, 92, 246, 0.08)' } : {}}>
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleSelectOrder(order.id)}
+                          style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#8b5cf6' }}
+                        />
+                      </td>
+
                       <td>
                         <strong style={{ color: 'var(--accent-primary)', fontSize: '14px' }}>#{order.invoice_no}</strong>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>

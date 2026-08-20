@@ -837,6 +837,86 @@ exports.deleteResellerOrderForAdmin = async (req, res) => {
   }
 };
 
+// 14. Admin: Bulk Update Reseller Orders Status
+exports.bulkUpdateResellerOrdersStatus = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { orderIds, order_status } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0 || !order_status) {
+      return res.status(400).json({ error: 'orderIds array and order_status are required.' });
+    }
+
+    const newStatus = order_status.toLowerCase();
+    await connection.beginTransaction();
+
+    for (const id of orderIds) {
+      const [saleRows] = await connection.query('SELECT * FROM reseller_sales WHERE id = ? AND tenant_id = ? FOR UPDATE', [id, tenantId]);
+      if (saleRows.length === 0) continue;
+
+      const sale = saleRows[0];
+      const prevStatus = (sale.order_status || 'pending').toLowerCase();
+      const [items] = await connection.query('SELECT * FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
+
+      // Stock logic
+      if ((prevStatus === 'pending' || prevStatus === 'cancelled') && (newStatus === 'processing' || newStatus === 'shipped' || newStatus === 'delivered' || newStatus === 'in_courier')) {
+        for (const item of items) {
+          if (item.product_id) {
+            await connection.query('UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ? AND tenant_id = ?', [item.quantity, item.product_id, tenantId]);
+          }
+        }
+      } else if ((prevStatus === 'processing' || prevStatus === 'shipped' || prevStatus === 'delivered' || prevStatus === 'in_courier') && (newStatus === 'returned' || newStatus === 'cancelled')) {
+        for (const item of items) {
+          if (item.product_id) {
+            await connection.query('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?', [item.quantity, item.product_id, tenantId]);
+          }
+        }
+      }
+
+      await connection.query('UPDATE reseller_sales SET order_status = ? WHERE id = ? AND tenant_id = ?', [newStatus, id, tenantId]);
+    }
+
+    await connection.commit();
+    res.json({ message: `Successfully updated status for ${orderIds.length} orders to "${newStatus.toUpperCase()}"!` });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error bulk updating reseller orders status:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
+// 15. Admin: Bulk Delete Reseller Orders
+exports.bulkDeleteResellerOrders = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { orderIds } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'orderIds array is required.' });
+    }
+
+    await connection.beginTransaction();
+
+    for (const id of orderIds) {
+      await connection.query('DELETE FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
+      await connection.query('DELETE FROM reseller_sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    }
+
+    await connection.commit();
+    res.json({ message: `Successfully deleted ${orderIds.length} reseller orders!` });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error bulk deleting reseller orders:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
 // 13. Public/Authenticated: Get Current Reseller Delivery Rates & Zones
 exports.getDeliveryRates = async (req, res) => {
   try {
