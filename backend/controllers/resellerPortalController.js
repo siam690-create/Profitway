@@ -678,6 +678,22 @@ exports.getResellerWallet = async (req, res) => {
 
     const [payouts] = await db.query(payoutQuery, payoutParams);
 
+    // Fetch Invoices for this Reseller
+    let invoiceQuery = `SELECT ri.* FROM reseller_invoices ri
+                        LEFT JOIN reseller_profiles rp ON ri.reseller_id = rp.id AND rp.tenant_id = ri.tenant_id
+                        WHERE ri.tenant_id = ?`;
+    const invoiceParams = [tenantId];
+    if (reseller_id) {
+      invoiceQuery += ` AND ri.reseller_id = ?`;
+      invoiceParams.push(reseller_id);
+    } else if (reseller_name) {
+      invoiceQuery += ` AND (ri.reseller_name = ? OR rp.name = ?)`;
+      invoiceParams.push(reseller_name, reseller_name);
+    }
+    invoiceQuery += ` ORDER BY ri.id DESC`;
+
+    const [invoices] = await db.query(invoiceQuery, invoiceParams);
+
     const paidAmount = payouts.reduce((sum, p) => sum + Number(p.amount || 0), 0);
     const availableBalance = Math.max(0, netProfit - paidAmount);
 
@@ -694,6 +710,7 @@ exports.getResellerWallet = async (req, res) => {
         returned_count: returnedCount
       },
       payouts,
+      invoices,
       orders: sales
     });
 
@@ -1530,7 +1547,7 @@ exports.getResellerInvoices = async (req, res) => {
 // 16. Admin: Get Single Reseller Invoice Details (with all orders)
 exports.getResellerInvoiceById = async (req, res) => {
   try {
-    const tenantId = req.user.tenantId;
+    const tenantId = req.user ? req.user.tenantId : await resolveTenantId(req);
     const { id } = req.params;
 
     const [invoices] = await db.query(
