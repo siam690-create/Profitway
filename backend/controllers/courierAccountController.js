@@ -447,3 +447,269 @@ exports.dispatchOrderToCourier = async (req, res) => {
     res.status(500).json({ error: `Courier dispatch system error: ${error.message}` });
   }
 };
+
+// Helper to update reseller order status & recalculate profit/loss
+const applyResellerOrderStatusUpdate = async (sale, newStatus, collectedAmount = 0, customerPaidReturn = 0) => {
+  const statusLower = String(newStatus).toLowerCase();
+  const isPartial = statusLower.includes('partial');
+  const isDelivered = statusLower === 'delivered' || statusLower === 'completed';
+  const isReturned = statusLower === 'returned' || statusLower.includes('return');
+  const isCancelled = statusLower === 'cancelled' || statusLower === 'deleted';
+
+  let finalProfit = 0;
+  let finalLoss = 0;
+  const totalCOD = Number(sale.total_amount || 0);
+  const wholesaleCost = Number(sale.reseller_wholesale_cost || sale.total_cost || 0);
+  const delivFee = Number(sale.delivery_fee_charged || 0);
+  let finalCollected = collectedAmount > 0 ? collectedAmount : Number(sale.collected_amount || sale.total_amount || 0);
+
+  if (isDelivered) {
+    finalProfit = Math.max(0, totalCOD - (wholesaleCost + delivFee));
+    finalLoss = 0;
+  } else if (isPartial) {
+    const partialNet = finalCollected - (wholesaleCost + delivFee);
+    if (partialNet < 0) {
+      finalLoss = Math.abs(partialNet);
+      finalProfit = 0;
+    } else {
+      finalLoss = 0;
+      finalProfit = partialNet;
+    }
+  } else if (isReturned) {
+    const netReturn = customerPaidReturn - delivFee;
+    if (netReturn < 0) {
+      finalLoss = Math.abs(netReturn);
+      finalProfit = 0;
+    } else {
+      finalLoss = 0;
+      finalProfit = netReturn;
+    }
+  } else if (isCancelled) {
+    finalProfit = 0;
+    finalLoss = 0;
+  } else {
+    finalProfit = Math.max(0, totalCOD - (wholesaleCost + delivFee));
+    finalLoss = 0;
+  }
+
+  await db.query(
+    `UPDATE reseller_sales 
+     SET order_status = ?, reseller_profit = ?, return_loss = ?, collected_amount = ?
+     WHERE id = ? AND tenant_id = ?`,
+    [statusLower, finalProfit, finalLoss, finalCollected, sale.id, sale.tenant_id]
+  );
+
+  return { status: statusLower, profit: finalProfit, loss: finalLoss };
+};
+
+// Sync Live Courier Statuses for Active Orders
+exports.syncCourierOrderStatus = async (req, res) => {
+  try {
+    await ensureTableExists();
+    const tenantId = req.user ? req.user.tenantId : null;
+
+    // Fetch active courier accounts
+    let accQuery = 'SELECT * FROM courier_accounts WHERE is_active = 1';
+    const accParams = [];
+    if (tenantId) {
+      accQuery += ' AND tenant_id = ?';
+      accParams.push(tenantId);
+    }
+
+    const [accounts] = await db.query(accQuery, accParams);
+    if (accounts.length === 0) {
+      if (res) return res.json({ message: 'No active courier accounts configured for syncing.', updated_count: 0 });
+      return;
+    }
+
+    // Fetch orders in transit/courier state with a tracking code
+    let ordersQuery = `
+      SELECT * FROM reseller_sales 
+      WHERE (order_status IN ('in_courier', 'shipped', 'processing', 'pending', 'new', 'partial_delivery', 'partially_delivered') OR order_status IS NULL)
+        AND tracking_code IS NOT NULL AND tracking_code != ''
+    `;
+    const orderParams = [];
+    if (tenantId) {
+      ordersQuery += ' AND tenant_id = ?';
+      orderParams.push(tenantId);
+    }
+    ordersQuery += ' ORDER BY id DESC LIMIT 100';
+
+    const [orders] = await db.query(ordersQuery, orderParams);
+    if (orders.length === 0) {
+      if (res) return res.json({ message: 'No active courier parcels to sync.', updated_count: 0 });
+      return;
+    }
+
+    let updatedCount = 0;
+    let statusLog = [];
+
+    for (const sale of orders) {
+      const provider = String(sale.provider_code || '').toLowerCase();
+      const trackingCode = String(sale.tracking_code).trim();
+      const invoiceNo = sale.invoice_no;
+
+      // Find matching courier account for this order
+      const acc = accounts.find(a => a.tenant_id === sale.tenant_id && (a.provider_code.toLowerCase() === provider || provider.includes(a.provider_code.toLowerCase()))) ||
+                  accounts.find(a => a.tenant_id === sale.tenant_id);
+
+      if (!acc) continue;
+
+      const apiKey = acc.client_id_key ? acc.client_id_key.trim() : '';
+      const secretKey = acc.client_secret_key ? acc.client_secret_key.trim() : '';
+      let baseUrl = acc.base_url ? acc.base_url.trim() : '';
+
+      if (provider === 'steadfast' || acc.provider_code === 'steadfast') {
+        if (!baseUrl) baseUrl = 'https://portal.steadfast.com.bd/api/v1';
+        if (!apiKey || !secretKey) continue;
+
+        try {
+          // Steadfast status check API
+          const sfRes = await fetch(`${baseUrl}/status_by_trackingcode/${trackingCode}`, {
+            headers: {
+              'Api-Key': apiKey,
+              'Secret-Key': secretKey,
+              'Content-Type': 'application/json'
+            }
+          });
+          const sfData = await sfRes.json();
+
+          if (sfRes.ok && (sfData.status === 200 || sfData.delivery_status)) {
+            const rawStatus = String(sfData.delivery_status || sfData.status || '').toLowerCase();
+            let newStatus = null;
+            let collectedAmount = Number(sfData.cod_amount || sfData.amount || 0);
+
+            if (rawStatus.includes('delivered') && !rawStatus.includes('partial')) {
+              newStatus = 'delivered';
+            } else if (rawStatus.includes('partial')) {
+              newStatus = 'partially_delivered';
+            } else if (rawStatus.includes('return')) {
+              newStatus = 'returned';
+            } else if (rawStatus.includes('cancel')) {
+              newStatus = 'cancelled';
+            }
+
+            if (newStatus && newStatus !== sale.order_status) {
+              await applyResellerOrderStatusUpdate(sale, newStatus, collectedAmount);
+              updatedCount++;
+              statusLog.push(`Order #${invoiceNo} -> ${newStatus.toUpperCase()}`);
+            }
+          }
+        } catch (e) {
+          console.error(`Error checking Steadfast status for #${invoiceNo}:`, e.message);
+        }
+      } else if (provider === 'pathao' || acc.provider_code === 'pathao') {
+        if (!baseUrl) baseUrl = 'https://api-hermes.pathao.com';
+        const merchantEmail = acc.store_name ? acc.store_name.trim() : '';
+        const merchantPassword = acc.merchant_password ? acc.merchant_password.trim() : '';
+        if (!apiKey || !secretKey || !merchantEmail || !merchantPassword) continue;
+
+        try {
+          // Pathao issue token
+          const tokenRes = await fetch(`${baseUrl}/aladdin/api/v1/issue-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_id: apiKey,
+              client_secret: secretKey,
+              username: merchantEmail,
+              password: merchantPassword,
+              grant_type: 'password'
+            })
+          });
+          const tokenData = await tokenRes.json();
+
+          if (tokenRes.ok && tokenData.access_token) {
+            const infoRes = await fetch(`${baseUrl}/aladdin/api/v1/orders/${trackingCode}/info`, {
+              headers: {
+                'Authorization': `Bearer ${tokenData.access_token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            const infoData = await infoRes.json();
+
+            if (infoRes.ok && infoData.data) {
+              const rawStatus = String(infoData.data.order_status || infoData.data.order_status_slug || '').toLowerCase();
+              let newStatus = null;
+              let collectedAmount = Number(infoData.data.amount_to_collect || 0);
+
+              if (rawStatus.includes('delivered') && !rawStatus.includes('partial')) {
+                newStatus = 'delivered';
+              } else if (rawStatus.includes('partial')) {
+                newStatus = 'partially_delivered';
+              } else if (rawStatus.includes('return')) {
+                newStatus = 'returned';
+              } else if (rawStatus.includes('cancel')) {
+                newStatus = 'cancelled';
+              }
+
+              if (newStatus && newStatus !== sale.order_status) {
+                await applyResellerOrderStatusUpdate(sale, newStatus, collectedAmount);
+                updatedCount++;
+                statusLog.push(`Order #${invoiceNo} -> ${newStatus.toUpperCase()}`);
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`Error checking Pathao status for #${invoiceNo}:`, e.message);
+        }
+      }
+    }
+
+    const message = updatedCount > 0
+      ? `Successfully synced ${orders.length} active parcels! ${updatedCount} orders updated to live courier status.`
+      : `Courier Status Sync Completed. All ${orders.length} active parcels are up to date!`;
+
+    if (res) {
+      return res.json({ message, updated_count: updatedCount, log: statusLog });
+    }
+  } catch (error) {
+    console.error('Error in syncCourierOrderStatus:', error);
+    if (res) res.status(500).json({ error: error.message });
+  }
+};
+
+// Webhook Listener for Real-Time Status Updates from Courier
+exports.handleCourierWebhook = async (req, res) => {
+  try {
+    const payload = req.body;
+    console.log('Courier Webhook received payload:', payload);
+
+    const invoiceNo = payload.invoice || payload.merchant_order_id;
+    const trackingCode = payload.tracking_code || payload.consignment_id;
+    const rawStatus = String(payload.status || payload.delivery_status || payload.order_status || '').toLowerCase();
+    const collectedAmount = Number(payload.cod_amount || payload.amount_to_collect || 0);
+
+    if (invoiceNo || trackingCode) {
+      const [sales] = await db.query(
+        'SELECT * FROM reseller_sales WHERE invoice_no = ? OR tracking_code = ? LIMIT 1',
+        [invoiceNo, trackingCode]
+      );
+
+      if (sales.length > 0) {
+        const sale = sales[0];
+        let newStatus = null;
+
+        if (rawStatus.includes('delivered') && !rawStatus.includes('partial')) {
+          newStatus = 'delivered';
+        } else if (rawStatus.includes('partial')) {
+          newStatus = 'partially_delivered';
+        } else if (rawStatus.includes('return')) {
+          newStatus = 'returned';
+        } else if (rawStatus.includes('cancel')) {
+          newStatus = 'cancelled';
+        }
+
+        if (newStatus) {
+          await applyResellerOrderStatusUpdate(sale, newStatus, collectedAmount);
+          console.log(`Webhook updated Order #${sale.invoice_no} to ${newStatus}`);
+        }
+      }
+    }
+
+    res.json({ status: 'ok', message: 'Webhook processed successfully' });
+  } catch (e) {
+    console.error('Webhook error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+};

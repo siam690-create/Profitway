@@ -36,8 +36,28 @@ app.use((err, req, res, next) => {
 });
 
 const autoMigrate = require('./config/initDb');
+const { syncCourierOrderStatus } = require('./controllers/courierAccountController');
 
 app.listen(PORT, async () => {
   console.log(`🚀 Stock & Profit Management API running on http://localhost:${PORT}`);
   await autoMigrate();
+
+  // Run initial sync after 10s and then every 15 minutes automatically
+  setTimeout(async () => {
+    try {
+      console.log('⏰ Running initial automatic Courier Status Sync...');
+      await syncCourierOrderStatus(null, null);
+    } catch (e) {
+      console.error('Initial courier sync error:', e.message);
+    }
+  }, 10000);
+
+  setInterval(async () => {
+    try {
+      console.log('⏰ Running periodic background Courier Status Sync...');
+      await syncCourierOrderStatus(null, null);
+    } catch (e) {
+      console.error('Background courier sync error:', e.message);
+    }
+  }, 15 * 60 * 1000);
 });

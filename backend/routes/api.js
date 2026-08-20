@@ -232,6 +232,10 @@ router.delete('/admin/reseller-orders/:id', checkActiveSubscription, resellerPor
 router.post('/admin/reseller-orders/bulk-status', checkActiveSubscription, resellerPortalController.bulkUpdateResellerOrdersStatus);
 router.post('/admin/reseller-orders/bulk-delete', checkActiveSubscription, resellerPortalController.bulkDeleteResellerOrders);
 
+// Automatic Courier Status Sync & Webhooks APIs
+router.post('/courier-accounts/sync-status', checkActiveSubscription, courierAccountController.syncCourierOrderStatus);
+router.post('/courier/webhook', courierAccountController.handleCourierWebhook);
+
 // Staff / Users APIs
 router.get('/staff', staffController.getStaff);
 router.post('/staff', checkActiveSubscription, staffController.createStaff);

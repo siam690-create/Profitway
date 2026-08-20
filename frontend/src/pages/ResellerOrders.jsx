@@ -57,6 +57,27 @@ export const ResellerOrders = () => {
   const [dispatchOrder, setDispatchOrder] = useState(null);
   const [selectedCourierAccountId, setSelectedCourierAccountId] = useState('');
   const [isDispatching, setIsDispatching] = useState(false);
+  const [isSyncingCourier, setIsSyncingCourier] = useState(false);
+
+  const handleSyncCourierStatuses = async () => {
+    setIsSyncingCourier(true);
+    try {
+      const res = await authFetch('/api/courier-accounts/sync-status', {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast ? showToast('Courier Synced 🔄', data.message, 'success') : alert(data.message);
+        fetchResellerOrders();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error syncing courier statuses: ${err.message}`);
+    } finally {
+      setIsSyncingCourier(false);
+    }
+  };
 
   const fetchResellerOrders = async () => {
     setLoading(true);
@@ -405,10 +426,23 @@ export const ResellerOrders = () => {
           </p>
         </div>
 
-        <button onClick={fetchResellerOrders} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <RefreshCw size={15} />
-          <span>Refresh Orders</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleSyncCourierStatuses}
+            disabled={isSyncingCourier}
+            className="btn btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', borderColor: '#06b6d4' }}
+            title="Fetch live parcel statuses from Steadfast & Pathao APIs"
+          >
+            <RefreshCw size={15} className={isSyncingCourier ? 'spin' : ''} />
+            <span>{isSyncingCourier ? 'Syncing Courier...' : '🔄 Sync Courier Statuses'}</span>
+          </button>
+
+          <button onClick={fetchResellerOrders} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <RefreshCw size={15} />
+            <span>Refresh Orders</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Table Card */}
