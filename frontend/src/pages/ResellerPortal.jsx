@@ -148,11 +148,13 @@ const ResellerPortal = () => {
   const [deliveryArea, setDeliveryArea] = useState('');
   const [deliveryZones, setDeliveryZones] = useState([
     { id: 1, zone_name: 'ঢাকার বাইরে', charge: 120 },
-    { id: 2, zone_name: 'ঢাকার ভেতরে', charge: 70 }
+    { id: 2, zone_name: 'ঢাকার ভেতরে', charge: 70 },
+    { id: 3, zone_name: 'সাব ঢাকা', charge: 100 }
   ]);
 
   useEffect(() => {
-    fetch('/api/reseller/delivery-rates')
+    const queryParam = resellerName ? `?reseller_name=${encodeURIComponent(resellerName)}` : '';
+    fetch(`/api/reseller/delivery-rates${queryParam}`)
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.zones) && data.zones.length > 0) {
@@ -161,7 +163,7 @@ const ResellerPortal = () => {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [resellerName]);
 
   // Reseller Login Modal State
   const [showLoginModal, setShowLoginModal] = useState(false);

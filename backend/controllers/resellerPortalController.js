@@ -1232,14 +1232,12 @@ exports.bulkDeleteResellerOrders = async (req, res) => {
 exports.getDeliveryRates = async (req, res) => {
   try {
     await ensureResellerSchema(db);
-    let tenantId = req.user ? req.user.tenantId : null;
+    let tenantId = await resolveTenantId(req);
 
-    if (!tenantId && req.query.reseller_name) {
-      const [rRows] = await db.query('SELECT tenant_id FROM reseller_profiles WHERE name = ? LIMIT 1', [req.query.reseller_name]);
-      if (rRows.length > 0) tenantId = rRows[0].tenant_id;
+    if (!tenantId) {
+      const [tRows] = await db.query('SELECT tenant_id FROM reseller_delivery_zones WHERE tenant_id IS NOT NULL GROUP BY tenant_id ORDER BY COUNT(*) DESC LIMIT 1');
+      tenantId = tRows.length > 0 ? tRows[0].tenant_id : (req.query.tenant_id || 2);
     }
-
-    if (!tenantId) tenantId = req.query.tenant_id || 1;
 
     let [zones] = await db.query(
       'SELECT id, zone_name, charge, display_order FROM reseller_delivery_zones WHERE tenant_id = ? ORDER BY display_order ASC, id ASC',
