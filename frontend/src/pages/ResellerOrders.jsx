@@ -50,6 +50,13 @@ export const ResellerOrders = () => {
   // Order Details Modal States
   const [viewingOrder, setViewingOrder] = useState(null);
 
+  // Dispatch to Courier Modal States
+  const [courierAccounts, setCourierAccounts] = useState([]);
+  const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [dispatchOrder, setDispatchOrder] = useState(null);
+  const [selectedCourierAccountId, setSelectedCourierAccountId] = useState('');
+  const [isDispatching, setIsDispatching] = useState(false);
+
   const fetchResellerOrders = async () => {
     setLoading(true);
     try {
@@ -63,6 +70,12 @@ export const ResellerOrders = () => {
       const pData = await pRes.json();
       if (pRes.ok) {
         setProfiles(Array.isArray(pData) ? pData : []);
+      }
+
+      const cRes = await authFetch('/api/courier-accounts');
+      const cData = await cRes.json();
+      if (cRes.ok && Array.isArray(cData)) {
+        setCourierAccounts(cData);
       }
     } catch (err) {
       console.error('Error fetching admin reseller orders:', err);
@@ -253,6 +266,44 @@ export const ResellerOrders = () => {
       }
     } catch (err) {
       alert(`Error deleting order: ${err.message}`);
+    }
+  };
+
+  const handleOpenDispatchModal = (order) => {
+    setDispatchOrder(order);
+    if (courierAccounts && courierAccounts.length > 0) {
+      const active = courierAccounts.find(a => a.is_active) || courierAccounts[0];
+      setSelectedCourierAccountId(active.id);
+    }
+    setShowDispatchModal(true);
+  };
+
+  const handleConfirmDispatch = async () => {
+    if (!dispatchOrder || !selectedCourierAccountId) return;
+    setIsDispatching(true);
+    try {
+      const res = await authFetch('/api/courier-accounts/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: dispatchOrder.id,
+          orderType: 'reseller',
+          courierAccountId: selectedCourierAccountId
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast ? showToast('Dispatched 🚚', data.message, 'success') : alert(data.message);
+        setShowDispatchModal(false);
+        setDispatchOrder(null);
+        fetchResellerOrders();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error dispatching to courier: ${err.message}`);
+    } finally {
+      setIsDispatching(false);
     }
   };
 
@@ -594,6 +645,8 @@ export const ResellerOrders = () => {
                                 const newSt = e.target.value;
                                 if (newSt === 'returned') {
                                   handleOpenReturnModal(order);
+                                } else if (newSt === 'in_courier' || newSt === 'shipped') {
+                                  handleOpenDispatchModal(order);
                                 } else {
                                   handleUpdateStatus(order.id, newSt);
                                 }
@@ -807,6 +860,72 @@ export const ResellerOrders = () => {
                 <Copy size={14} /> Copy Courier Details
               </button>
               <button type="button" onClick={() => setViewingOrder(null)} className="btn btn-primary">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Order to Courier Dispatch Modal */}
+      {showDispatchModal && dispatchOrder && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Truck size={22} color="var(--accent-primary)" />
+                <h3 style={{ fontSize: '18px', fontWeight: '800' }}>Send Order #{dispatchOrder.invoice_no} to Courier</h3>
+              </div>
+              <button onClick={() => setShowDispatchModal(false)} className="btn btn-secondary btn-icon"><XCircle size={18} /></button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Order Info Summary */}
+              <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid var(--border-color)' }}>
+                <div>👤 Customer: <strong>{dispatchOrder.customer_name || 'N/A'}</strong> ({dispatchOrder.customer_phone})</div>
+                <div>📍 Address: {dispatchOrder.customer_address}</div>
+                <div>💰 Total COD: <strong style={{ color: '#f59e0b', fontSize: '15px' }}>{currency}{Number(dispatchOrder.total_amount || dispatchOrder.total_price || 0).toFixed(2)}</strong></div>
+              </div>
+
+              {/* Select Courier Account */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontWeight: '700' }}>Select Courier Account / Store</label>
+                {courierAccounts.length === 0 ? (
+                  <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', borderRadius: '8px', fontSize: '12px' }}>
+                    ⚠️ No active Courier Account found. Please setup accounts in <strong>API Management</strong> first.
+                  </div>
+                ) : (
+                  <select
+                    className="form-select"
+                    value={selectedCourierAccountId}
+                    onChange={(e) => setSelectedCourierAccountId(e.target.value)}
+                    style={{ padding: '10px 14px', fontSize: '14px', fontWeight: '600', background: 'var(--bg-secondary)', color: 'var(--text-primary)', borderRadius: '10px' }}
+                  >
+                    {courierAccounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.provider_code.toUpperCase()} — {acc.account_label} ({acc.is_active ? 'Active ✓' : 'Disabled'})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  এই কুরিয়ার অ্যাকাউন্টের মাধ্যমে রিয়েল-টাইম কুরিয়ার এপিআই-তে পার্সেল বুক হবে।
+                </span>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" onClick={() => setShowDispatchModal(false)} className="btn btn-secondary">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDispatch}
+                disabled={!selectedCourierAccountId || isDispatching}
+                className="btn btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <Truck size={16} />
+                <span>{isDispatching ? 'Dispatching to Courier...' : '🚚 Dispatch Order to Courier'}</span>
+              </button>
             </div>
           </div>
         </div>
