@@ -333,6 +333,23 @@ exports.dispatchOrderToCourier = async (req, res) => {
           if (tokenRes.ok && tokenData.access_token) {
             const accessToken = tokenData.access_token;
 
+            // Fetch Merchant's Real Pathao Store ID
+            let realStoreId = null;
+            try {
+              const storeRes = await fetch(`${baseUrl}/aladdin/api/v1/stores`, {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              const storeData = await storeRes.json();
+              if (storeRes.ok && storeData.data?.data && storeData.data.data.length > 0) {
+                realStoreId = storeData.data.data[0].store_id;
+              }
+            } catch(sErr) {}
+
+            const finalStoreId = realStoreId || (courierAcc.store_name && !isNaN(courierAcc.store_name) ? Number(courierAcc.store_name) : 1);
+
             // Pathao Create Order API Request
             const orderRes = await fetch(`${baseUrl}/aladdin/api/v1/orders`, {
               method: 'POST',
@@ -342,7 +359,7 @@ exports.dispatchOrderToCourier = async (req, res) => {
                 'Accept': 'application/json'
               },
               body: JSON.stringify({
-                store_id: 1,
+                store_id: finalStoreId,
                 merchant_order_id: invoiceNo,
                 recipient_name: customerName,
                 recipient_phone: customerPhone,
@@ -363,11 +380,23 @@ exports.dispatchOrderToCourier = async (req, res) => {
               trackingCode = orderDataRes.data?.consignment_id || orderDataRes.consignment_id;
               apiSuccess = true;
             } else {
-              const orderErr = orderDataRes.message || (orderDataRes.errors ? JSON.stringify(orderDataRes.errors) : 'Pathao order creation failed');
+              let detailErr = '';
+              if (orderDataRes.errors && typeof orderDataRes.errors === 'object') {
+                detailErr = Object.entries(orderDataRes.errors)
+                  .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+                  .join(' | ');
+              }
+              const orderErr = detailErr || orderDataRes.message || 'Pathao order creation failed';
               errors.push(`Order #${invoiceNo} (Pathao Order Error): ${orderErr}`);
             }
           } else {
-            const authErr = tokenData.message || (tokenData.errors ? JSON.stringify(tokenData.errors) : 'Invalid Pathao Client ID, Secret, Email, or Password');
+            let authDetailErr = '';
+            if (tokenData.errors && typeof tokenData.errors === 'object') {
+              authDetailErr = Object.entries(tokenData.errors)
+                .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+                .join(' | ');
+            }
+            const authErr = authDetailErr || tokenData.message || 'Invalid Pathao Client ID, Secret, Email, or Password';
             errors.push(`Order #${invoiceNo} (Pathao Auth Error): ${authErr}`);
           }
         } catch (pErr) {
