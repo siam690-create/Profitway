@@ -70,6 +70,7 @@ router.patch('/super-admin/tenants/:tenant_id', authenticate, requireSuperAdmin,
 router.post('/reseller/login', resellerPortalController.resellerLogin);
 router.get('/reseller/catalog', resellerPortalController.getResellerCatalog);
 router.post('/reseller/orders/submit', resellerPortalController.submitResellerOrder);
+router.post('/reseller/orders/bulk-submit', resellerPortalController.bulkSubmitResellerOrders);
 router.get('/reseller/orders/my-orders', resellerPortalController.getResellerOrders);
 router.get('/reseller/wallet', resellerPortalController.getResellerWallet);
 

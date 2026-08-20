@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import * as XLSX from 'xlsx';
 import {
   ShoppingBag,
   PackageCheck,
@@ -22,7 +23,10 @@ import {
   ShieldCheck,
   AlertCircle,
   Pin,
-  ExternalLink
+  ExternalLink,
+  Upload,
+  Download,
+  FileSpreadsheet
 } from 'lucide-react';
 
 const ResellerPortal = () => {
@@ -43,7 +47,11 @@ const ResellerPortal = () => {
   const [catalog, setCatalog] = useState([]);
   const [walletData, setWalletData] = useState(null);
   const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // Bulk Order Excel Upload States
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [parsedRows, setParsedRows] = useState([]);
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
+  const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
 
   // Search & Filter
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -291,6 +299,197 @@ const ResellerPortal = () => {
       alert(`Error submitting order: ${err.message}`);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Download Demo Template (.xlsx)
+  const handleDownloadDemoTemplate = () => {
+    try {
+      const templateData = [
+        {
+          'Customer Name': 'Siam Ahmed',
+          'Customer Phone': '01884999488',
+          'Customer Address': 'House 44, Road 2/A, Dhanmondi',
+          'District': 'Dhaka',
+          'Thana': 'Dhanmondi',
+          'Product SKU': catalog[0]?.sku || 'SKU-001',
+          'Quantity': 1,
+          'Customer Sale Price (COD)': 500,
+          'Delivery Charge': 100,
+          'Courier Name': 'Steadfast',
+          'Notes': 'Handle with care'
+        },
+        {
+          'Customer Name': 'Rahim Khan',
+          'Customer Phone': '01711223344',
+          'Customer Address': 'Station Road, Agrabad',
+          'District': 'Chittagong',
+          'Thana': 'Double Mooring',
+          'Product SKU': catalog[1]?.sku || catalog[0]?.sku || 'SKU-002',
+          'Quantity': 2,
+          'Customer Sale Price (COD)': 1200,
+          'Delivery Charge': 120,
+          'Courier Name': 'Pathao',
+          'Notes': 'Deliver before 5 PM'
+        }
+      ];
+
+      const ws = XLSX.utils.json_to_sheet(templateData);
+
+      ws['!cols'] = [
+        { wch: 18 }, { wch: 16 }, { wch: 30 }, { wch: 14 },
+        { wch: 16 }, { wch: 18 }, { wch: 10 }, { wch: 24 },
+        { wch: 16 }, { wch: 14 }, { wch: 20 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Bulk Orders Demo');
+
+      XLSX.writeFile(wb, 'Profitway_Bulk_Order_Demo_Template.xlsx');
+    } catch (err) {
+      alert(`Error generating Excel template: ${err.message}`);
+    }
+  };
+
+  // Process Uploaded Excel/CSV File
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsParsingExcel(true);
+    const reader = new FileReader();
+
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+        const validated = data.map((row, idx) => {
+          const name = String(row['Customer Name'] || row['CustomerName'] || row['Name'] || '').trim();
+          const phone = String(row['Customer Phone'] || row['CustomerPhone'] || row['Phone'] || '').trim();
+          const address = String(row['Customer Address'] || row['CustomerAddress'] || row['Address'] || '').trim();
+          const district = String(row['District'] || 'Dhaka').trim();
+          const thana = String(row['Thana'] || '').trim();
+          const sku = String(row['Product SKU'] || row['SKU'] || row['Product Code'] || row['Product'] || '').trim();
+          const qty = Number(row['Quantity'] || row['Qty'] || 1);
+          const codPrice = Number(row['Customer Sale Price (COD)'] || row['COD'] || row['Selling Price'] || 0);
+          const delivFee = Number(row['Delivery Charge'] || row['Delivery Fee'] || 100);
+          const courier = String(row['Courier Name'] || row['Courier'] || 'Steadfast').trim();
+          const notes = String(row['Notes'] || '').trim();
+
+          let errors = [];
+          if (!name) errors.push('Customer Name missing');
+          if (!phone || phone.length < 10) errors.push('Invalid phone number');
+          if (!address) errors.push('Address missing');
+          if (!sku) errors.push('Product SKU missing');
+          if (codPrice <= 0) errors.push('Invalid COD Price');
+
+          // Match product against live catalog
+          const matchedProd = catalog.find(p => 
+            (p.sku && p.sku.toLowerCase() === sku.toLowerCase()) || 
+            (p.name && p.name.toLowerCase() === sku.toLowerCase())
+          );
+
+          let wholesale = 0;
+          if (matchedProd) {
+            wholesale = Number(matchedProd.reseller_price || matchedProd.retail_price || 0) * qty;
+          } else if (sku) {
+            errors.push(`SKU '${sku}' not found in catalog`);
+          }
+
+          const estProfit = Math.max(0, codPrice - (wholesale + delivFee));
+
+          return {
+            id: idx + 1,
+            selected: errors.length === 0,
+            isValid: errors.length === 0,
+            errors,
+            name,
+            phone,
+            address,
+            district,
+            thana,
+            sku,
+            quantity: qty,
+            codPrice,
+            delivFee,
+            courier,
+            notes,
+            matchedProduct: matchedProd,
+            wholesale,
+            estProfit
+          };
+        });
+
+        setParsedRows(validated);
+      } catch (err) {
+        alert(`Error parsing Excel file: ${err.message}`);
+      } finally {
+        setIsParsingExcel(false);
+      }
+    };
+
+    reader.readAsBinaryString(file);
+  };
+
+  // Submit Bulk Orders
+  const handleSubmitBulkOrders = async () => {
+    const selectedRows = parsedRows.filter(r => r.selected && r.isValid);
+    if (selectedRows.length === 0) {
+      alert('Please select at least 1 valid order row to submit.');
+      return;
+    }
+
+    setIsSubmittingBulk(true);
+    try {
+      const payloadOrders = selectedRows.map(r => ({
+        customer_name: r.name,
+        customer_phone: r.phone,
+        customer_address: r.address,
+        district: r.district,
+        thana: r.thana,
+        courier_name: r.courier,
+        customer_total_price: r.codPrice,
+        delivery_fee_charged: r.delivFee,
+        notes: r.notes,
+        items: [
+          {
+            product_id: r.matchedProduct?.id,
+            sku: r.sku,
+            product_name: r.matchedProduct?.name || r.sku,
+            quantity: r.quantity,
+            unit_reseller_price: r.matchedProduct?.reseller_price || 0
+          }
+        ]
+      }));
+
+      const res = await fetch('/api/reseller/orders/bulk-submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reseller_name: resellerName,
+          reseller_id: resellerId || null,
+          orders: payloadOrders
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        showToast ? showToast('Bulk Orders Submitted! 🎉', data.message, 'success') : alert(data.message);
+        setShowBulkModal(false);
+        setParsedRows([]);
+        fetchWalletAndOrders();
+        setActiveTab('orders');
+      } else {
+        alert(`Error submitting bulk orders: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Bulk order submission error: ${err.message}`);
+    } finally {
+      setIsSubmittingBulk(false);
     }
   };
 
@@ -545,6 +744,15 @@ const ResellerPortal = () => {
         >
           <DollarSign size={16} />
           <span>💰 Earnings & Payout Statements</span>
+        </button>
+
+        <button
+          onClick={() => setShowBulkModal(true)}
+          className="btn btn-secondary"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)', marginLeft: 'auto' }}
+        >
+          <Upload size={16} />
+          <span>📥 Bulk Excel Upload</span>
         </button>
       </div>
 
@@ -1278,6 +1486,164 @@ const ResellerPortal = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* BULK ORDER EXCEL UPLOAD MODAL */}
+      {showBulkModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '950px', maxHeight: '90vh', overflowY: 'auto', padding: '28px', borderRadius: '20px', border: '1.5px solid rgba(16, 185, 129, 0.4)', background: 'linear-gradient(135deg, #0f172a, #1e293b)' }}>
+            
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', marginBottom: '20px' }}>
+              <div>
+                <h2 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <FileSpreadsheet color="#10b981" size={24} />
+                  <span>📥 Bulk Reseller Order Submit (Excel / CSV)</span>
+                </h2>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                  Download demo template, fill order data using Product SKUs, and upload to submit multiple orders instantly.
+                </p>
+              </div>
+              <button onClick={() => setShowBulkModal(false)} className="btn btn-secondary btn-icon" style={{ borderRadius: '50%' }}>
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            {/* Step 1 & Step 2 Actions */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+              
+              {/* Step 1: Download Demo Template */}
+              <div style={{ background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '14px', padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+                <div>
+                  <div style={{ fontWeight: '700', fontSize: '14px', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Download size={18} /> Step 1: Download Demo Excel Template
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', lineHeight: '1.4' }}>
+                    Get pre-populated demo sheet containing correct column headers and sample catalog SKUs.
+                  </div>
+                </div>
+                <button onClick={handleDownloadDemoTemplate} className="btn btn-primary" style={{ background: '#8b5cf6', borderColor: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px' }}>
+                  <Download size={16} /> <span>Download Demo Sheet (.xlsx)</span>
+                </button>
+              </div>
+
+              {/* Step 2: Upload Excel File */}
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px dashed rgba(16, 185, 129, 0.5)', borderRadius: '14px', padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px', textAlign: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: '700', fontSize: '14px', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <Upload size={18} /> Step 2: Upload Filled Excel File
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                    Select or drag-and-drop your completed `.xlsx` or `.csv` file here.
+                  </div>
+                </div>
+                <label className="btn btn-success" style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', cursor: 'pointer' }}>
+                  <Upload size={16} />
+                  <span>{isParsingExcel ? 'Parsing File...' : 'Choose Excel / CSV File'}</span>
+                  <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} style={{ display: 'none' }} disabled={isParsingExcel} />
+                </label>
+              </div>
+            </div>
+
+            {/* Step 3: Live Preview & Validation Table */}
+            {parsedRows.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: 'rgba(15, 23, 42, 0.8)', padding: '12px 18px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#fff' }}>
+                    Preview & Validation Results ({parsedRows.length} Rows Found)
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
+                    <span style={{ color: '#10b981', fontWeight: '700' }}>
+                      ✓ Valid: {parsedRows.filter(r => r.isValid).length}
+                    </span>
+                    <span style={{ color: '#ef4444', fontWeight: '700' }}>
+                      ⚠️ Errors: {parsedRows.filter(r => !r.isValid).length}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto', maxHeight: '350px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
+                  <table className="data-table" style={{ fontSize: '12px' }}>
+                    <thead>
+                      <tr>
+                        <th>Select</th>
+                        <th>Status</th>
+                        <th>Customer Info</th>
+                        <th>Address & Location</th>
+                        <th>Product SKU & Qty</th>
+                        <th>COD Price</th>
+                        <th>Est Profit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parsedRows.map((r, idx) => (
+                        <tr key={idx} style={{ background: !r.isValid ? 'rgba(239, 68, 68, 0.08)' : 'transparent' }}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={r.selected}
+                              disabled={!r.isValid}
+                              onChange={(e) => {
+                                const val = e.target.checked;
+                                setParsedRows(prev => prev.map(item => item.id === r.id ? { ...item, selected: val } : item));
+                              }}
+                              style={{ accentColor: '#10b981', cursor: 'pointer', width: '16px', height: '16px' }}
+                            />
+                          </td>
+                          <td>
+                            {r.isValid ? (
+                              <span className="badge badge-success" style={{ fontSize: '11px' }}>Valid ✓</span>
+                            ) : (
+                              <div style={{ color: '#ef4444', fontSize: '11px', fontWeight: '700' }}>
+                                ⚠️ {r.errors.join(', ')}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{r.name || 'N/A'}</div>
+                            <div style={{ fontSize: '11px', color: '#ec4899' }}>📱 {r.phone || 'N/A'}</div>
+                          </td>
+                          <td>
+                            <div>{r.address || 'N/A'}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>📍 {r.district} {r.thana ? `, ${r.thana}` : ''}</div>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: '700', color: '#c084fc' }}>{r.sku} x{r.quantity}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.matchedProduct ? r.matchedProduct.name : 'Unknown Product'}</div>
+                          </td>
+                          <td style={{ fontWeight: '700' }}>{currency}{r.codPrice.toFixed(2)}</td>
+                          <td style={{ fontWeight: '800', color: '#10b981' }}>+{currency}{r.estProfit.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Confirm & Submit Button */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                    Ready to submit <strong>{parsedRows.filter(r => r.selected && r.isValid).length}</strong> valid orders
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button onClick={() => setShowBulkModal(false)} className="btn btn-secondary">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSubmitBulkOrders}
+                      disabled={isSubmittingBulk || parsedRows.filter(r => r.selected && r.isValid).length === 0}
+                      className="btn btn-success"
+                      style={{ background: '#10b981', borderColor: '#10b981', padding: '10px 24px', fontWeight: '800' }}
+                    >
+                      {isSubmittingBulk ? 'Submitting Orders...' : `Submit ${parsedRows.filter(r => r.selected && r.isValid).length} Valid Orders 🚀`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}

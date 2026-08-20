@@ -314,6 +314,146 @@ exports.submitResellerOrder = async (req, res) => {
   }
 };
 
+// 2b. Bulk Submit Reseller Orders via Excel/Batch
+exports.bulkSubmitResellerOrders = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = await resolveTenantId(req);
+    await connection.beginTransaction();
+
+    await ensureResellerSchema(connection);
+
+    const { reseller_name, reseller_id, orders } = req.body;
+
+    if (!reseller_name || !orders || !Array.isArray(orders) || orders.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Reseller Name and an array of valid order rows are required.' });
+    }
+
+    let createdCount = 0;
+    let errors = [];
+
+    for (let i = 0; i < orders.length; i++) {
+      const order = orders[i];
+      const customerName = (order.customer_name || 'Customer').trim();
+      const customerPhone = (order.customer_phone || order.phone || '').trim();
+      const customerAddress = (order.customer_address || order.address || '').trim();
+      const district = order.district || 'Dhaka';
+      const thana = order.thana || '';
+      const courierName = order.courier_name || 'Steadfast';
+      const items = order.items || [];
+      const customerTotalPrice = Number(order.customer_total_price || order.total_amount || 0);
+      const deliveryFeeCharged = Number(order.delivery_fee_charged || 100);
+      const notes = order.notes || '';
+
+      if (!customerPhone || items.length === 0) {
+        errors.push(`Row ${i + 1}: Missing customer phone or product item.`);
+        continue;
+      }
+
+      let calculatedResellerWholesaleCost = 0;
+
+      for (const item of items) {
+        const qty = Number(item.quantity || 1);
+
+        let pRows = [];
+        if (item.product_id) {
+          [pRows] = await connection.query(
+            'SELECT reseller_price, cost_price, selling_price, name FROM products WHERE id = ? AND tenant_id = ?',
+            [item.product_id, tenantId]
+          );
+        } else if (item.sku) {
+          [pRows] = await connection.query(
+            'SELECT id, reseller_price, cost_price, selling_price, name FROM products WHERE (sku = ? OR name = ?) AND tenant_id = ?',
+            [item.sku, item.sku, tenantId]
+          );
+          if (pRows.length > 0) item.product_id = pRows[0].id;
+        }
+
+        let unitResellerPrice = 0;
+        if (pRows.length > 0) {
+          unitResellerPrice = Number(pRows[0].reseller_price || pRows[0].cost_price || 0);
+          item.product_name = pRows[0].name;
+        } else {
+          unitResellerPrice = Number(item.unit_reseller_price || item.unit_price || 0);
+        }
+
+        item.unit_cost = unitResellerPrice;
+        item.total_cost = unitResellerPrice * qty;
+        calculatedResellerWholesaleCost += item.total_cost;
+      }
+
+      const totalCOD = customerTotalPrice;
+      const resellerProfit = Math.max(0, totalCOD - (calculatedResellerWholesaleCost + deliveryFeeCharged));
+      const invNo = `RSL-${Date.now().toString().slice(-5)}${i}`;
+      const formattedDate = new Date().toISOString().slice(0, 10);
+
+      // Insert into reseller_sales
+      const [resellerSaleResult] = await connection.query(
+        `INSERT INTO reseller_sales 
+          (tenant_id, reseller_id, reseller_name, customer_name, customer_phone, customer_address, district, thana, courier_name, invoice_no, total_amount, total_cost, gross_profit, delivery_fee_charged, courier_actual_cost, delivery_profit, order_status, payout_status, reseller_wholesale_cost, reseller_profit, order_source, sale_date, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, 'new', 'unpaid', ?, ?, 'portal_bulk', ?, ?)`,
+        [
+          tenantId,
+          reseller_id || null,
+          reseller_name.trim(),
+          customerName,
+          customerPhone,
+          customerAddress,
+          district,
+          thana,
+          courierName,
+          invNo,
+          totalCOD,
+          calculatedResellerWholesaleCost,
+          resellerProfit,
+          deliveryFeeCharged,
+          calculatedResellerWholesaleCost,
+          resellerProfit,
+          formattedDate,
+          notes
+        ]
+      );
+
+      const resellerSaleId = resellerSaleResult.insertId;
+
+      // Insert item records
+      for (const item of items) {
+        await connection.query(
+          `INSERT INTO reseller_sale_items (tenant_id, reseller_sale_id, product_id, product_name, quantity, unit_cost, total_cost)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            tenantId,
+            resellerSaleId,
+            item.product_id || null,
+            item.product_name || 'Product',
+            Number(item.quantity || 1),
+            Number(item.unit_cost || 0),
+            Number(item.total_cost || 0)
+          ]
+        );
+      }
+
+      createdCount++;
+    }
+
+    await connection.commit();
+
+    res.json({
+      message: `Successfully created ${createdCount} reseller orders in bulk!`,
+      created_count: createdCount,
+      errors: errors.length > 0 ? errors : null
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error bulk submitting reseller orders:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
 // 3. Get Reseller Orders List with Statuses
 exports.getResellerOrders = async (req, res) => {
   try {
