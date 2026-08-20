@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Truck, Plus, PackagePlus, CheckCircle, Eye, X, Building2, Phone, MapPin, DollarSign, Wallet, FileText, Trash2 } from 'lucide-react';
+import { Truck, Plus, PackagePlus, CheckCircle, Eye, X, Building2, Phone, MapPin, DollarSign, Wallet, FileText, Trash2, Printer } from 'lucide-react';
 import { ProductSelectSearch } from '../components/ProductSelectSearch';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 
