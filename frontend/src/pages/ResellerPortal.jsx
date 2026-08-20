@@ -816,11 +816,11 @@ const ResellerPortal = () => {
               
               <button
                 type="button"
-                onClick={() => setSortBy('all')}
+                onClick={() => { setSortBy('all'); setInStockOnly(false); setCatalogSearch(''); }}
                 style={{
-                  background: sortBy === 'all' ? 'linear-gradient(135deg, #8b5cf6, #ec4899)' : 'rgba(255, 255, 255, 0.06)',
+                  background: (sortBy === 'all' && !inStockOnly) ? 'linear-gradient(135deg, #8b5cf6, #ec4899)' : 'rgba(255, 255, 255, 0.06)',
                   color: '#fff',
-                  border: sortBy === 'all' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  border: (sortBy === 'all' && !inStockOnly) ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
                   padding: '6px 14px',
                   borderRadius: '20px',
                   fontSize: '12px',
