@@ -1096,14 +1096,29 @@ const ResellerPortal = () => {
           <span>💰 Earnings & Payout Statements</span>
         </button>
 
-        <button
-          onClick={() => setShowBulkModal(true)}
-          className="btn btn-secondary"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)', marginLeft: 'auto' }}
-        >
-          <Upload size={16} />
-          <span>📥 Bulk Excel Upload</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          <a
+            href="/Reseller_Portal_Tutorial_Guide.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            download="Reseller_Portal_Tutorial_Guide.pdf"
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(99, 102, 241, 0.12)', color: '#818cf8', borderColor: 'rgba(99, 102, 241, 0.3)', textDecoration: 'none' }}
+            title="Download complete step-by-step visual tutorial guide PDF"
+          >
+            <FileText size={15} />
+            <span>📘 Tutorial Guide (PDF)</span>
+          </a>
+
+          <button
+            onClick={() => setShowBulkModal(true)}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)' }}
+          >
+            <Upload size={16} />
+            <span>📥 Bulk Excel Upload</span>
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: Wholesale Product Catalog */}
