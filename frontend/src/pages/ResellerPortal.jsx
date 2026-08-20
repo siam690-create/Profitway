@@ -271,11 +271,15 @@ const ResellerPortal = () => {
     }
   }, [resellerName]);
 
+  const [modalProductSearch, setModalProductSearch] = useState('');
+
   const handleOpenOrderModal = (product) => {
     setSelectedProduct(product);
+    setModalProductSearch('');
     setOrderItems([{
       product_id: product.id,
       product_name: product.name,
+      sku: product.sku || '',
       quantity: 1,
       unit_reseller_price: Number(product.reseller_price || 0),
       total_reseller_cost: Number(product.reseller_price || 0)
@@ -345,7 +349,8 @@ const ResellerPortal = () => {
   const totalWholesaleCost = orderItems.reduce((sum, item) => sum + (item.total_reseller_cost || 0), 0);
   const customerProductSalePrice = Number(customerSellingPrice || 0);
   const totalCOD = customerProductSalePrice > 0 ? (customerProductSalePrice + selectedDeliveryFee) : 0;
-  const estimatedProfit = Math.max(0, customerProductSalePrice - totalWholesaleCost);
+  const netEstimatedProfit = customerProductSalePrice - totalWholesaleCost;
+  const isLoss = netEstimatedProfit < 0;
 
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
@@ -2108,34 +2113,113 @@ const ResellerPortal = () => {
                     ))}
                   </div>
 
-                  {/* Add Product Dropdown */}
-                  <div style={{ marginTop: '4px' }}>
-                    <select
-                      className="form-select"
-                      defaultValue=""
-                      onChange={(e) => {
-                        handleSelectProductToAdd(e.target.value);
-                        e.target.value = '';
-                      }}
-                      style={{
-                        background: 'rgba(139, 92, 246, 0.08)',
-                        border: '1px dashed rgba(139, 92, 246, 0.4)',
-                        color: '#c084fc',
-                        padding: '9px 12px',
-                        borderRadius: '8px',
-                        width: '100%',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <option value="" disabled>➕ আরেকটি প্রোডাক্ট যোগ করুন (Add More Products)...</option>
-                      {catalog.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.sku ? `[${p.sku}] ` : ''}{p.name} — Wholesale: {currency}{Number(p.reseller_price || p.retail_price || 0).toFixed(2)}
-                        </option>
-                      ))}
-                    </select>
+                  {/* Add Product Search & Quick Selector */}
+                  <div style={{ marginTop: '6px', position: 'relative' }}>
+                    <div style={{ position: 'relative' }}>
+                      <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#a78bfa' }} />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="🔍 SKU বা প্রোডাক্টের নাম লিখে খুঁজুন ও যোগ করুন..."
+                        value={modalProductSearch}
+                        onChange={(e) => setModalProductSearch(e.target.value)}
+                        style={{
+                          paddingLeft: '36px',
+                          paddingRight: modalProductSearch ? '30px' : '12px',
+                          background: 'rgba(139, 92, 246, 0.08)',
+                          borderColor: 'rgba(139, 92, 246, 0.3)',
+                          fontSize: '13px'
+                        }}
+                      />
+                      {modalProductSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setModalProductSearch('')}
+                          style={{
+                            position: 'absolute',
+                            right: '10px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            padding: '2px'
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Instant Search Results Dropdown */}
+                    {modalProductSearch.trim().length > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: '100%',
+                        marginTop: '4px',
+                        maxHeight: '220px',
+                        overflowY: 'auto',
+                        background: '#1e1b4b',
+                        border: '1px solid #7c3aed',
+                        borderRadius: '10px',
+                        boxShadow: '0 12px 30px rgba(0,0,0,0.7)',
+                        zIndex: 50
+                      }}>
+                        {catalog.filter(p => {
+                          const q = modalProductSearch.toLowerCase().trim();
+                          return (p.name && p.name.toLowerCase().includes(q)) || (p.sku && p.sku.toLowerCase().includes(q));
+                        }).slice(0, 30).map(p => (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              handleAddProductToOrder(p);
+                              setModalProductSearch('');
+                            }}
+                            style={{
+                              padding: '10px 14px',
+                              borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              cursor: 'pointer',
+                              gap: '10px'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(139, 92, 246, 0.25)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '13px', fontWeight: '600', color: '#fff', lineHeight: '1.3' }}>
+                                {p.sku && <span style={{ background: 'rgba(192, 132, 252, 0.2)', color: '#c084fc', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', marginRight: '6px', fontWeight: '700' }}>{p.sku}</span>}
+                                {p.name}
+                              </div>
+                              <div style={{ fontSize: '11.5px', color: '#34d399', marginTop: '2px' }}>
+                                Wholesale Price: <strong>{currency}{Number(p.reseller_price || p.retail_price || 0).toFixed(2)}</strong>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              style={{ padding: '4px 10px', fontSize: '11.5px', borderRadius: '6px', background: '#8b5cf6', borderColor: '#8b5cf6', flexShrink: 0 }}
+                            >
+                              + Add
+                            </button>
+                          </div>
+                        ))}
+
+                        {catalog.filter(p => {
+                          const q = modalProductSearch.toLowerCase().trim();
+                          return (p.name && p.name.toLowerCase().includes(q)) || (p.sku && p.sku.toLowerCase().includes(q));
+                        }).length === 0 && (
+                          <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                            "{modalProductSearch}" দিয়ে কোনো প্রোডাক্ট খুঁজে পাওয়া যায়নি।
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Total Reseller Wholesale Cost */}
@@ -2177,7 +2261,15 @@ const ResellerPortal = () => {
                 </div>
 
                 {/* Live Calculation Summary Box */}
-                <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{
+                  background: isLoss ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-secondary)',
+                  border: isLoss ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border-color)',
+                  padding: '14px',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
                     <span>Product Sale Price (প্রোডাক্ট দাম):</span>
                     <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{currency}{customerProductSalePrice.toFixed(2)}</span>
@@ -2191,11 +2283,18 @@ const ResellerPortal = () => {
                     <span style={{ color: '#f59e0b', fontSize: '16px' }}>{currency}{totalCOD.toFixed(2)}</span>
                   </div>
                   <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '700' }}>Estimated Reseller Profit:</span>
-                    <strong style={{ fontSize: '18px', fontWeight: '800', color: estimatedProfit >= 0 ? '#10b981' : '#ef4444' }}>
-                      +{currency}{estimatedProfit.toFixed(2)}
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: isLoss ? '#ef4444' : 'var(--text-primary)' }}>
+                      {isLoss ? '⚠️ Estimated Reseller Loss (লোকসান):' : 'Estimated Reseller Profit:'}
+                    </span>
+                    <strong style={{ fontSize: '18px', fontWeight: '800', color: isLoss ? '#ef4444' : '#10b981' }}>
+                      {isLoss ? '-' : '+'}{currency}{Math.abs(netEstimatedProfit).toFixed(2)}
                     </strong>
                   </div>
+                  {isLoss && (
+                    <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '8px 10px', fontSize: '12px', color: '#ef4444', fontWeight: '600', marginTop: '2px', lineHeight: '1.4' }}>
+                      ⚠️ সতর্কবার্তা: কাস্টমার বিক্রয়মূল্য ({currency}{customerProductSalePrice.toFixed(2)}) সর্বমোট হোলসেল খরচের ({currency}{totalWholesaleCost.toFixed(2)}) চেয়ে কম হওয়ায় এই অর্ডারে আপনার <strong>{currency}{Math.abs(netEstimatedProfit).toFixed(2)}</strong> টাকা লোকসান হবে!
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group">
