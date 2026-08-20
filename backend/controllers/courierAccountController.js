@@ -171,15 +171,19 @@ exports.deleteCourierAccount = async (req, res) => {
   }
 };
 
-// Dispatch Order via Courier API Live
+// Dispatch Order via Courier API Live (Single or Bulk)
 exports.dispatchOrderToCourier = async (req, res) => {
   try {
     await ensureTableExists();
     const tenantId = req.user.tenantId;
-    const { orderId, orderType = 'reseller', courierAccountId } = req.body;
+    const { orderId, orderIds, orderType = 'reseller', courierAccountId } = req.body;
 
-    if (!orderId || !courierAccountId) {
-      return res.status(400).json({ error: 'orderId and courierAccountId are required.' });
+    const targetOrderIds = orderIds && Array.isArray(orderIds) && orderIds.length > 0 
+      ? orderIds 
+      : (orderId ? [orderId] : []);
+
+    if (targetOrderIds.length === 0 || !courierAccountId) {
+      return res.status(400).json({ error: 'Order ID(s) and courierAccountId are required.' });
     }
 
     // Ensure order tracking columns exist
@@ -205,90 +209,91 @@ exports.dispatchOrderToCourier = async (req, res) => {
     const courierAcc = accRows[0];
     const provider = courierAcc.provider_code.toLowerCase();
 
-    // 2. Fetch order details
-    let orderData = null;
-    if (orderType === 'reseller') {
-      const [rRows] = await db.query('SELECT * FROM reseller_sales WHERE id = ? AND tenant_id = ?', [orderId, tenantId]);
-      if (rRows.length === 0) return res.status(404).json({ error: 'Reseller Order not found.' });
-      orderData = rRows[0];
-    } else {
-      const [sRows] = await db.query('SELECT * FROM sales WHERE id = ? AND tenant_id = ?', [orderId, tenantId]);
-      if (sRows.length === 0) return res.status(404).json({ error: 'Sales Order not found.' });
-      orderData = sRows[0];
-    }
+    let dispatchedCount = 0;
+    let lastTrackingCode = '';
 
-    const invoiceNo = orderData.invoice_no;
-    const customerName = orderData.customer_name || 'Customer';
-    const customerPhone = orderData.customer_phone || orderData.phone || '';
-    const customerAddress = orderData.customer_address || orderData.address || 'Dhaka';
-    const codAmount = Number(orderData.total_amount || orderData.total_price || 0);
+    for (const singleId of targetOrderIds) {
+      let orderData = null;
+      if (orderType === 'reseller') {
+        const [rRows] = await db.query('SELECT * FROM reseller_sales WHERE id = ? AND tenant_id = ?', [singleId, tenantId]);
+        if (rRows.length > 0) orderData = rRows[0];
+      } else {
+        const [sRows] = await db.query('SELECT * FROM sales WHERE id = ? AND tenant_id = ?', [singleId, tenantId]);
+        if (sRows.length > 0) orderData = sRows[0];
+      }
 
-    let trackingCode = '';
-    let consignmentId = '';
+      if (!orderData) continue;
 
-    // 3. Provider API Calls
-    if (provider === 'steadfast') {
-      const apiKey = courierAcc.client_id_key;
-      const secretKey = courierAcc.client_secret_key;
-      const baseUrl = courierAcc.base_url || 'https://portal.steadfast.com.bd/api/v1';
+      const invoiceNo = orderData.invoice_no;
+      const customerName = orderData.customer_name || 'Customer';
+      const customerPhone = orderData.customer_phone || orderData.phone || '';
+      const customerAddress = orderData.customer_address || orderData.address || 'Dhaka';
+      const codAmount = Number(orderData.total_amount || orderData.total_price || 0);
 
-      if (apiKey && secretKey) {
-        try {
-          const sfResponse = await fetch(`${baseUrl}/create_order`, {
-            method: 'POST',
-            headers: {
-              'Api-Key': apiKey,
-              'Secret-Key': secretKey,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              invoice: invoiceNo,
-              recipient_name: customerName,
-              recipient_phone: customerPhone,
-              recipient_address: customerAddress,
-              cod_amount: codAmount,
-              note: `Order #${invoiceNo} via Profitway`
-            })
-          });
+      let trackingCode = '';
 
-          const sfData = await sfResponse.json();
-          if (sfResponse.ok && (sfData.status === 200 || sfData.consignment)) {
-            trackingCode = sfData.consignment?.tracking_code || `SF${Date.now()}`;
-            consignmentId = sfData.consignment?.consignment_id || '';
-          } else {
-            trackingCode = sfData.consignment?.tracking_code || `SF${Math.floor(100000 + Math.random() * 900000)}`;
-            consignmentId = sfData.consignment?.consignment_id || `CS-${Math.floor(100000 + Math.random() * 900000)}`;
+      if (provider === 'steadfast') {
+        const apiKey = courierAcc.client_id_key;
+        const secretKey = courierAcc.client_secret_key;
+        const baseUrl = courierAcc.base_url || 'https://portal.steadfast.com.bd/api/v1';
+
+        if (apiKey && secretKey) {
+          try {
+            const sfResponse = await fetch(`${baseUrl}/create_order`, {
+              method: 'POST',
+              headers: {
+                'Api-Key': apiKey,
+                'Secret-Key': secretKey,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                invoice: invoiceNo,
+                recipient_name: customerName,
+                recipient_phone: customerPhone,
+                recipient_address: customerAddress,
+                cod_amount: codAmount,
+                note: `Order #${invoiceNo} via Profitway`
+              })
+            });
+
+            const sfData = await sfResponse.json();
+            if (sfResponse.ok && (sfData.status === 200 || sfData.consignment)) {
+              trackingCode = sfData.consignment?.tracking_code || `SF${Date.now()}`;
+            } else {
+              trackingCode = sfData.consignment?.tracking_code || `SF${Math.floor(100000 + Math.random() * 900000)}`;
+            }
+          } catch (apiErr) {
+            trackingCode = `SF${Math.floor(100000 + Math.random() * 900000)}`;
           }
-        } catch (apiErr) {
+        } else {
           trackingCode = `SF${Math.floor(100000 + Math.random() * 900000)}`;
-          consignmentId = `CS-${Math.floor(100000 + Math.random() * 900000)}`;
         }
       } else {
-        trackingCode = `SF${Math.floor(100000 + Math.random() * 900000)}`;
-        consignmentId = `CS-${Math.floor(100000 + Math.random() * 900000)}`;
+        trackingCode = `${provider.toUpperCase()}-${Math.floor(10000000 + Math.random() * 90000000)}`;
       }
-    } else {
-      trackingCode = `${provider.toUpperCase()}-${Math.floor(10000000 + Math.random() * 90000000)}`;
-      consignmentId = `CID-${Date.now()}`;
-    }
 
-    // 4. Update order status to 'in_courier' & save tracking code
-    if (orderType === 'reseller') {
-      await db.query(
-        'UPDATE reseller_sales SET order_status = "in_courier", tracking_code = ?, courier_name = ? WHERE id = ? AND tenant_id = ?',
-        [trackingCode, courierAcc.account_label, orderId, tenantId]
-      );
-    } else {
-      await db.query(
-        'UPDATE sales SET status = "in_courier", tracking_code = ? WHERE id = ? AND tenant_id = ?',
-        [trackingCode, orderId, tenantId]
-      );
+      lastTrackingCode = trackingCode;
+
+      if (orderType === 'reseller') {
+        await db.query(
+          'UPDATE reseller_sales SET order_status = "in_courier", tracking_code = ?, courier_name = ? WHERE id = ? AND tenant_id = ?',
+          [trackingCode, courierAcc.account_label, singleId, tenantId]
+        );
+      } else {
+        await db.query(
+          'UPDATE sales SET status = "in_courier", tracking_code = ? WHERE id = ? AND tenant_id = ?',
+          [trackingCode, singleId, tenantId]
+        );
+      }
+
+      dispatchedCount++;
     }
 
     res.json({
-      message: `Order #${invoiceNo} successfully sent to courier via ${courierAcc.account_label}!`,
-      tracking_code: trackingCode,
-      consignment_id: consignmentId,
+      message: dispatchedCount === 1 
+        ? `Order successfully dispatched to courier via ${courierAcc.account_label}! Tracking Code: ${lastTrackingCode}`
+        : `${dispatchedCount} orders successfully dispatched to courier via ${courierAcc.account_label}!`,
+      dispatched_count: dispatchedCount,
       courier_name: courierAcc.account_label
     });
   } catch (error) {

@@ -141,6 +141,17 @@ export const ResellerOrders = () => {
 
   const handleBulkStatusUpdate = async () => {
     if (!bulkStatus || selectedOrderIds.length === 0) return;
+
+    if (bulkStatus === 'in_courier' || bulkStatus === 'shipped') {
+      setDispatchOrder(null); // bulk mode
+      if (courierAccounts && courierAccounts.length > 0) {
+        const active = courierAccounts.find(a => a.is_active) || courierAccounts[0];
+        setSelectedCourierAccountId(active.id);
+      }
+      setShowDispatchModal(true);
+      return;
+    }
+
     setIsBulkProcessing(true);
     try {
       const res = await authFetch('/api/admin/reseller-orders/bulk-status', {
@@ -279,23 +290,26 @@ export const ResellerOrders = () => {
   };
 
   const handleConfirmDispatch = async () => {
-    if (!dispatchOrder || !selectedCourierAccountId) return;
+    if (!selectedCourierAccountId) return;
+    if (!dispatchOrder && selectedOrderIds.length === 0) return;
+
     setIsDispatching(true);
     try {
+      const payload = dispatchOrder 
+        ? { orderId: dispatchOrder.id, orderType: 'reseller', courierAccountId: selectedCourierAccountId }
+        : { orderIds: selectedOrderIds, orderType: 'reseller', courierAccountId: selectedCourierAccountId };
+
       const res = await authFetch('/api/courier-accounts/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: dispatchOrder.id,
-          orderType: 'reseller',
-          courierAccountId: selectedCourierAccountId
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {
         showToast ? showToast('Dispatched 🚚', data.message, 'success') : alert(data.message);
         setShowDispatchModal(false);
         setDispatchOrder(null);
+        clearSelection();
         fetchResellerOrders();
       } else {
         alert(`Error: ${data.error}`);
@@ -865,25 +879,35 @@ export const ResellerOrders = () => {
         </div>
       )}
 
-      {/* Send Order to Courier Dispatch Modal */}
-      {showDispatchModal && dispatchOrder && (
+      {/* Send Order to Courier Dispatch Modal (Single or Bulk) */}
+      {showDispatchModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '520px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Truck size={22} color="var(--accent-primary)" />
-                <h3 style={{ fontSize: '18px', fontWeight: '800' }}>Send Order #{dispatchOrder.invoice_no} to Courier</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: '800' }}>
+                  {dispatchOrder 
+                    ? `Send Order #${dispatchOrder.invoice_no} to Courier`
+                    : `Send ${selectedOrderIds.length} Selected Orders to Courier`}
+                </h3>
               </div>
               <button onClick={() => setShowDispatchModal(false)} className="btn btn-secondary btn-icon"><XCircle size={18} /></button>
             </div>
 
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Order Info Summary */}
-              <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid var(--border-color)' }}>
-                <div>👤 Customer: <strong>{dispatchOrder.customer_name || 'N/A'}</strong> ({dispatchOrder.customer_phone})</div>
-                <div>📍 Address: {dispatchOrder.customer_address}</div>
-                <div>💰 Total COD: <strong style={{ color: '#f59e0b', fontSize: '15px' }}>{currency}{Number(dispatchOrder.total_amount || dispatchOrder.total_price || 0).toFixed(2)}</strong></div>
-              </div>
+              {dispatchOrder ? (
+                <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid var(--border-color)' }}>
+                  <div>👤 Customer: <strong>{dispatchOrder.customer_name || 'N/A'}</strong> ({dispatchOrder.customer_phone})</div>
+                  <div>📍 Address: {dispatchOrder.customer_address}</div>
+                  <div>💰 Total COD: <strong style={{ color: '#f59e0b', fontSize: '15px' }}>{currency}{Number(dispatchOrder.total_amount || dispatchOrder.total_price || 0).toFixed(2)}</strong></div>
+                </div>
+              ) : (
+                <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px', fontSize: '13px', border: '1px solid var(--border-color)' }}>
+                  📦 <strong>{selectedOrderIds.length} Orders</strong> will be dispatched to the selected courier account. Tracking codes will be automatically generated and linked.
+                </div>
+              )}
 
               {/* Select Courier Account */}
               <div className="form-group" style={{ marginBottom: 0 }}>
@@ -924,7 +948,7 @@ export const ResellerOrders = () => {
                 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
               >
                 <Truck size={16} />
-                <span>{isDispatching ? 'Dispatching to Courier...' : '🚚 Dispatch Order to Courier'}</span>
+                <span>{isDispatching ? 'Dispatching to Courier...' : dispatchOrder ? '🚚 Dispatch Order to Courier' : `🚚 Dispatch ${selectedOrderIds.length} Orders`}</span>
               </button>
             </div>
           </div>
