@@ -274,7 +274,75 @@ export const ResellerParcels = () => {
   useEffect(() => {
     fetchData();
     fetchDeliveryRates();
+    fetchInvoices();
   }, []);
+
+  // ─── Invoice Create States ────────────────────────────────
+  const [invoices, setInvoices] = useState([]);
+  const [invoiceResellerId, setInvoiceResellerId] = useState('');
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const [invoiceNotes, setInvoiceNotes] = useState('');
+  const [showInvoiceDetailModal, setShowInvoiceDetailModal] = useState(false);
+  const [selectedInvoiceDetail, setSelectedInvoiceDetail] = useState(null);
+  const [isLoadingInvoiceDetail, setIsLoadingInvoiceDetail] = useState(false);
+
+  const fetchInvoices = async () => {
+    try {
+      const res = await authFetch('/api/reseller/invoices');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) setInvoices(data);
+    } catch (e) {
+      console.error('Error fetching invoices:', e);
+    }
+  };
+
+  const handleCreateInvoice = async () => {
+    if (!invoiceResellerId) return alert('Please select a reseller to create an invoice.');
+    const profile = profilesList.find(p => String(p.id) === String(invoiceResellerId));
+    if (!profile) return alert('Reseller profile not found.');
+
+    if (!window.confirm(`Create invoice for reseller "${profile.name}"?\n\nThis will collect all "Completed" orders for this reseller and mark them as "Paid".`)) return;
+
+    setIsCreatingInvoice(true);
+    try {
+      const res = await authFetch('/api/reseller/invoices', {
+        method: 'POST',
+        body: JSON.stringify({ reseller_id: profile.id, reseller_name: profile.name, notes: invoiceNotes })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`✅ ${data.message}`);
+        setInvoiceNotes('');
+        fetchInvoices();
+        fetchData();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error creating invoice: ${err.message}`);
+    } finally {
+      setIsCreatingInvoice(false);
+    }
+  };
+
+  const handleViewInvoiceDetail = async (invoiceDbId) => {
+    setIsLoadingInvoiceDetail(true);
+    setShowInvoiceDetailModal(true);
+    try {
+      const res = await authFetch(`/api/reseller/invoices/${invoiceDbId}`);
+      const data = await res.json();
+      if (res.ok) setSelectedInvoiceDetail(data);
+      else alert(`Error: ${data.error}`);
+    } catch (e) {
+      alert(`Error loading invoice: ${e.message}`);
+    } finally {
+      setIsLoadingInvoiceDetail(false);
+    }
+  };
+
+  const handlePrintInvoice = () => {
+    window.print();
+  };
 
   // --- Add Item to Reseller Sale Cart ---
   const handleAddItemToSale = () => {
@@ -549,6 +617,13 @@ export const ResellerParcels = () => {
           style={activeTab === 'delivery-rates' ? { background: '#38bdf8', borderColor: '#38bdf8', color: '#fff' } : {}}
         >
           🚚 Delivery Charge Rates (কুরিয়ার সেটিং)
+        </button>
+        <button
+          onClick={() => setActiveTab('invoices')}
+          className={`btn ${activeTab === 'invoices' ? 'btn-primary' : 'btn-secondary'}`}
+          style={activeTab === 'invoices' ? { background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', borderColor: '#7c3aed', color: '#fff' } : {}}
+        >
+          🧾 Reseller Invoices ({invoices.length})
         </button>
       </div>
 
@@ -944,6 +1019,230 @@ export const ResellerParcels = () => {
             </button>
           </div>
         </form>
+      )}
+
+      {/* --- SUB TAB 5: RESELLER INVOICES --- */}
+      {activeTab === 'invoices' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* Create Invoice Panel */}
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#a78bfa', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🧾 Create Reseller Invoice
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+              Select a reseller below and click <strong>Create Invoice</strong>. All their <strong>Completed</strong> orders (status = Complete) will be collected into one invoice and marked as <strong>Paid</strong>.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'flex-end' }}>
+              <div className="form-group">
+                <label className="form-label">Select Reseller *</label>
+                <select
+                  className="form-select"
+                  value={invoiceResellerId}
+                  onChange={e => setInvoiceResellerId(e.target.value)}
+                >
+                  <option value="">— Select Reseller —</option>
+                  {profilesList.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}{p.phone ? ` (${p.phone})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Notes (Optional)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Invoice notes..."
+                  value={invoiceNotes}
+                  onChange={e => setInvoiceNotes(e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleCreateInvoice}
+                disabled={isCreatingInvoice || !invoiceResellerId}
+                className="btn btn-primary"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', borderColor: '#7c3aed', padding: '10px 24px', fontWeight: '800', fontSize: '14px', whiteSpace: 'nowrap' }}
+              >
+                {isCreatingInvoice ? 'Creating...' : '🧾 Create Invoice'}
+              </button>
+            </div>
+          </div>
+
+          {/* Invoice List Table */}
+          <div className="card" style={{ padding: 0 }}>
+            <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700' }}>📋 Invoice History</h3>
+              <button onClick={fetchInvoices} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                🔄 Refresh
+              </button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(124, 58, 237, 0.12)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left' }}>Payment Date</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left' }}>Invoice ID</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left' }}>Reseller</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center' }}>Orders</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Total Collection</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Total Wholesale</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Total Delivery</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Paid Amount</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: '32px', marginBottom: '8px' }}>🧾</div>
+                        No invoices created yet. Select a reseller above and create the first invoice!
+                      </td>
+                    </tr>
+                  ) : (
+                    invoices.map(inv => (
+                      <tr key={inv.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(124, 58, 237, 0.06)'}
+                        onMouseLeave={e => e.currentTarget.style.background = ''}
+                      >
+                        <td style={{ padding: '12px 16px', fontWeight: '600' }}>{inv.payment_date}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: '700', color: '#a78bfa', fontSize: '12px' }}>
+                            {inv.invoice_id}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontWeight: '600' }}>{inv.reseller_name}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                          <span style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', padding: '3px 10px', borderRadius: '20px', fontWeight: '700', fontSize: '12px' }}>
+                            {inv.orders_count}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#f59e0b' }}>৳{Number(inv.total_collection || 0).toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right', color: '#94a3b8' }}>৳{Number(inv.total_wholesale || 0).toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right', color: '#94a3b8' }}>৳{Number(inv.total_delivery_charge || 0).toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '800', color: '#10b981', fontSize: '14px' }}>৳{Number(inv.paid_amount || 0).toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleViewInvoiceDetail(inv.id)}
+                              className="btn btn-secondary btn-sm btn-icon"
+                              title="View Invoice Details"
+                              style={{ color: '#a78bfa' }}
+                            >
+                              <Eye size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { handleViewInvoiceDetail(inv.id); setTimeout(() => window.print(), 800); }}
+                              className="btn btn-secondary btn-sm btn-icon"
+                              title="Download / Print Invoice"
+                              style={{ color: '#38bdf8' }}
+                            >
+                              <Printer size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Detail Modal */}
+      {showInvoiceDetailModal && (
+        <div className="modal-overlay" onClick={() => setShowInvoiceDetailModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" style={{ background: 'linear-gradient(135deg, #7c3aed22, #6d28d922)', borderBottom: '1px solid #7c3aed44' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#a78bfa' }}>
+                  🧾 Invoice Details
+                </h3>
+                {selectedInvoiceDetail && (
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    Invoice ID: <strong style={{ color: '#a78bfa', fontFamily: 'monospace' }}>{selectedInvoiceDetail.invoice_id}</strong> • {selectedInvoiceDetail.reseller_name} • {selectedInvoiceDetail.payment_date}
+                  </p>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={handlePrintInvoice} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#38bdf8' }}>
+                  <Printer size={15} /> Print / Download
+                </button>
+                <button onClick={() => { setShowInvoiceDetailModal(false); setSelectedInvoiceDetail(null); }} className="btn btn-secondary btn-icon">
+                  <FileText size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-body">
+              {isLoadingInvoiceDetail ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading invoice details...</div>
+              ) : selectedInvoiceDetail ? (
+                <>
+                  {/* Invoice Summary Stats */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
+                    {[
+                      { label: 'Total Collection', val: `৳${Number(selectedInvoiceDetail.total_collection || 0).toFixed(2)}`, color: '#f59e0b' },
+                      { label: 'Total Wholesale', val: `৳${Number(selectedInvoiceDetail.total_wholesale || 0).toFixed(2)}`, color: '#94a3b8' },
+                      { label: 'Total Delivery', val: `৳${Number(selectedInvoiceDetail.total_delivery_charge || 0).toFixed(2)}`, color: '#38bdf8' },
+                      { label: 'Paid Amount', val: `৳${Number(selectedInvoiceDetail.paid_amount || 0).toFixed(2)}`, color: '#10b981' }
+                    ].map(({ label, val, color }) => (
+                      <div key={label} style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', textAlign: 'center', border: `1px solid ${color}30` }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>{label}</div>
+                        <div style={{ fontSize: '18px', fontWeight: '800', color }}>{val}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Orders Table */}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(124, 58, 237, 0.1)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                          <th style={{ padding: '10px 12px', textAlign: 'left' }}>Order Invoice #</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left' }}>Tracking Code</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left' }}>Customer Phone</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Wholesale</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Sale Price (COD)</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Collected</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Delivery</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Profit / Loss</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(selectedInvoiceDetail.orders || []).map((o, i) => {
+                          const profit = Number(o.reseller_profit || 0);
+                          const loss = Number(o.return_loss || 0);
+                          return (
+                            <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '10px 12px', fontWeight: '700', color: '#a78bfa' }}>#{o.invoice_no}</td>
+                              <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: '11px' }}>{o.tracking_code || '—'}</td>
+                              <td style={{ padding: '10px 12px' }}>{o.customer_phone || '—'}</td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', color: '#94a3b8' }}>৳{Number(o.reseller_wholesale_cost || 0).toFixed(2)}</td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', color: '#f59e0b' }}>৳{Number(o.total_amount || 0).toFixed(2)}</td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', color: '#38bdf8' }}>৳{Number(o.collected_amount || o.total_amount || 0).toFixed(2)}</td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right' }}>৳{Number(o.delivery_fee_charged || 0).toFixed(2)}</td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700' }}>
+                                {profit > 0 ? <span style={{ color: '#10b981' }}>+৳{profit.toFixed(2)}</span>
+                                  : loss > 0 ? <span style={{ color: '#ef4444' }}>-৳{loss.toFixed(2)}</span>
+                                  : <span style={{ color: '#94a3b8' }}>৳0</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* --- CREATE RESELLER SALE MODAL --- */}

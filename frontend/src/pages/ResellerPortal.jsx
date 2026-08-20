@@ -610,6 +610,11 @@ const ResellerPortal = () => {
     })
     .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
 
+  // Active Orders = not yet paid/invoiced
+  const activeOrders = filteredOrders.filter(o => (o.order_status || '').toLowerCase() !== 'paid');
+  // Completed Orders = paid (invoice created)
+  const completedOrders = filteredOrders.filter(o => (o.order_status || '').toLowerCase() === 'paid');
+
   const summary = walletData?.summary || {
     total_delivered_revenue: 0,
     total_delivered_profit: 0,
@@ -824,7 +829,16 @@ const ResellerPortal = () => {
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           <PackageCheck size={16} />
-          <span>📦 My Orders ({orders.length})</span>
+          <span>📦 Active Orders ({orders.filter(o => (o.order_status || '').toLowerCase() !== 'paid').length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('completed_orders')}
+          className={`btn ${activeTab === 'completed_orders' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          <CheckCircle size={16} />
+          <span>💰 Completed Orders ({orders.filter(o => (o.order_status || '').toLowerCase() === 'paid').length})</span>
         </button>
 
         <button
@@ -1135,7 +1149,7 @@ const ResellerPortal = () => {
         </div>
       )}
 
-      {/* TAB 2: My Orders History */}
+      {/* TAB 2: Active Orders */}
       {activeTab === 'orders' && (
         <div className="card" style={{ padding: 0 }}>
           <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -1328,14 +1342,14 @@ const ResellerPortal = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredOrders.length === 0 ? (
+                {activeOrders.length === 0 ? (
                   <tr>
                     <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                      No reseller orders found for profile "{resellerName}".
+                      No active orders found for profile "{resellerName}". Orders that have been invoiced appear in "Completed Orders".
                     </td>
                   </tr>
                 ) : (
-                  filteredOrders.map(o => {
+                  activeOrders.map(o => {
                     const status = (o.order_status || 'pending').toLowerCase();
                     const wholesale = Number(o.reseller_wholesale_cost || o.total_cost || 0);
                     const sellingPrice = Number(o.total_amount || o.total_price || 0);
@@ -1573,6 +1587,104 @@ const ResellerPortal = () => {
                               );
                             })()}
                           </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2B: Completed Orders (Paid/Invoiced) */}
+      {activeTab === 'completed_orders' && (
+        <div className="card" style={{ padding: 0 }}>
+          <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle size={18} color="#7c3aed" />
+                <span>💰 Completed Orders</span>
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Orders that have been invoiced & payment settled by admin
+              </p>
+            </div>
+            <button onClick={fetchWalletAndOrders} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: 'rgba(124, 58, 237, 0.10)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Invoice #</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Customer</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Items</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Wholesale</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>COD</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Delivery</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Profit</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Invoice ID</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completedOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                      <div style={{ fontSize: '32px', marginBottom: '8px' }}>💰</div>
+                      <div style={{ fontWeight: '700', fontSize: '14px' }}>No completed orders yet</div>
+                      <div style={{ fontSize: '12px', marginTop: '4px' }}>When admin creates an invoice for your orders, they will appear here.</div>
+                    </td>
+                  </tr>
+                ) : (
+                  completedOrders.map(o => {
+                    const wholesale = Number(o.reseller_wholesale_cost || o.total_cost || 0);
+                    const cod = Number(o.total_amount || 0);
+                    const delivery = Number(o.delivery_fee_charged || 0);
+                    const profit = Number(o.reseller_profit || 0);
+                    const loss = Number(o.return_loss || 0);
+                    return (
+                      <tr key={o.id} style={{ borderBottom: '1px solid var(--border-color)', background: 'rgba(124, 58, 237, 0.04)' }}>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ fontWeight: '700', color: '#a78bfa', fontSize: '13px' }}>#{o.invoice_no}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{o.sale_date || o.created_at?.slice(0, 10)}</div>
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ fontWeight: '600' }}>{o.customer_name || 'N/A'}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{o.customer_phone}</div>
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ fontSize: '12px' }}>
+                            {(o.items || []).map((item, i) => (
+                              <div key={i}>• {item.product_name} <strong style={{ color: '#c084fc' }}>×{item.quantity}</strong></div>
+                            ))}
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontWeight: '700', color: '#94a3b8' }}>৳{wholesale.toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px', fontWeight: '700', color: '#f59e0b' }}>৳{cod.toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px', color: '#94a3b8' }}>৳{delivery.toFixed(2)}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          {profit > 0 ? (
+                            <span style={{ color: '#10b981', fontWeight: '700' }}>+৳{profit.toFixed(2)}</span>
+                          ) : loss > 0 ? (
+                            <span style={{ color: '#ef4444', fontWeight: '700' }}>-৳{loss.toFixed(2)}</span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>৳0</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: '700', color: '#7c3aed', fontFamily: 'monospace' }}>
+                            {o.invoice_id || '—'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{ background: 'rgba(124, 58, 237, 0.15)', color: '#a78bfa', border: '1px solid #7c3aed50', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>
+                            💰 Paid
+                          </span>
                         </td>
                       </tr>
                     );

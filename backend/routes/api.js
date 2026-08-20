@@ -236,6 +236,11 @@ router.post('/admin/reseller-orders/bulk-delete', checkActiveSubscription, resel
 router.post('/courier-accounts/sync-status', checkActiveSubscription, courierAccountController.syncCourierOrderStatus);
 router.post('/courier/webhook', courierAccountController.handleCourierWebhook);
 
+// Reseller Invoice APIs (Admin)
+router.get('/reseller/invoices', resellerPortalController.getResellerInvoices);
+router.post('/reseller/invoices', checkActiveSubscription, resellerPortalController.createResellerInvoice);
+router.get('/reseller/invoices/:id', resellerPortalController.getResellerInvoiceById);
+
 // Staff / Users APIs
 router.get('/staff', staffController.getStaff);
 router.post('/staff', checkActiveSubscription, staffController.createStaff);

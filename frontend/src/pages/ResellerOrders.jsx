@@ -112,14 +112,21 @@ export const ResellerOrders = () => {
 
   // Filtered list (Declared after all states & hooks!)
   const filteredOrders = orders.filter(o => {
-    const status = (o.order_status || 'pending').toLowerCase();
+    const rawStatus = (o.order_status || 'pending').toLowerCase();
+    // Normalize to canonical key
+    const status = rawStatus === 'shipped' || rawStatus === 'processing' ? 'in_courier'
+      : rawStatus === 'partial_delivery' || rawStatus === 'partial_delivered' ? 'partially_delivered'
+      : rawStatus === 'completed' ? 'complete'
+      : rawStatus;
 
     // Soft-deleted orders stay exclusively in the 'deleted' tab
     if (statusFilter === 'all' && status === 'deleted') return false;
+    // Paid orders only show in 'all' or 'paid' tab, not the default 'all' view
+    if (statusFilter === 'all' && status === 'paid') return false;
 
     if (statusFilter !== 'all') {
       if (statusFilter === 'in_courier') {
-        if (status !== 'in_courier' && status !== 'shipped' && status !== 'processing') return false;
+        if (status !== 'in_courier') return false;
       } else if (status !== statusFilter) {
         return false;
       }
@@ -278,11 +285,12 @@ export const ResellerOrders = () => {
     { key: 'ready', label: 'Ready', color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', icon: '📦' },
     { key: 'in_courier', label: 'In Courier', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)', icon: '🚚' },
     { key: 'delivered', label: 'Delivered', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: '✅' },
-    { key: 'partial_delivery', label: 'Partial Delivery', color: '#14b8a6', bg: 'rgba(20, 184, 166, 0.15)', icon: '🌓' },
+    { key: 'partially_delivered', label: 'Partially Delivered', color: '#14b8a6', bg: 'rgba(20, 184, 166, 0.15)', icon: '🌓' },
     { key: 'hold', label: 'Hold', color: '#f97316', bg: 'rgba(249, 115, 22, 0.15)', icon: '⏸️' },
     { key: 'return_pending', label: 'Return Pending', color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.15)', icon: '⏳' },
     { key: 'returned', label: 'Returned', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', icon: '🔄' },
-    { key: 'completed', label: 'Completed', color: '#059669', bg: 'rgba(5, 150, 105, 0.15)', icon: '🎯' },
+    { key: 'complete', label: 'Completed', color: '#059669', bg: 'rgba(5, 150, 105, 0.15)', icon: '🎯' },
+    { key: 'paid', label: 'Paid', color: '#7c3aed', bg: 'rgba(124, 58, 237, 0.15)', icon: '💰' },
     { key: 'cancelled', label: 'Cancelled', color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)', icon: '🚫' },
     { key: 'deleted', label: 'Delete', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.18)', icon: '🗑️' }
   ];
@@ -386,9 +394,12 @@ export const ResellerOrders = () => {
 
   const renderStatusBadge = (statusStr) => {
     const s = (statusStr || 'pending').toLowerCase();
-    const cfg = ALL_STATUSES.find(st => st.key === s) ||
-                (s === 'shipped' || s === 'processing' ? ALL_STATUSES.find(st => st.key === 'in_courier') : null) ||
-                ALL_STATUSES.find(st => st.key === 'pending');
+    // Normalize aliases
+    const key = s === 'shipped' || s === 'processing' ? 'in_courier'
+      : s === 'partial_delivery' || s === 'partial_delivered' ? 'partially_delivered'
+      : s === 'completed' ? 'complete'
+      : s;
+    const cfg = ALL_STATUSES.find(st => st.key === key) || ALL_STATUSES.find(st => st.key === 'pending');
 
     return (
       <span
@@ -738,7 +749,11 @@ export const ResellerOrders = () => {
 
                       <td>
                         {(() => {
-                          const currentKey = status === 'shipped' || status === 'processing' ? 'in_courier' : status;
+                          const sRaw = (order.order_status || 'pending').toLowerCase();
+                          const currentKey = sRaw === 'shipped' || sRaw === 'processing' ? 'in_courier'
+                            : sRaw === 'partial_delivery' || sRaw === 'partial_delivered' ? 'partially_delivered'
+                            : sRaw === 'completed' ? 'complete'
+                            : sRaw;
                           const cfg = ALL_STATUSES.find(st => st.key === currentKey) || ALL_STATUSES.find(st => st.key === 'pending');
 
                           return (

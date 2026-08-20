@@ -112,9 +112,38 @@ const ensureResellerSchema = async (conn) => {
     if (caCols.length === 0) {
       await conn.query(`ALTER TABLE reseller_sales ADD COLUMN collected_amount DECIMAL(10,2) DEFAULT 0.00`);
     }
+    const [invIdCols] = await conn.query(`SHOW COLUMNS FROM reseller_sales LIKE 'invoice_id'`);
+    if (invIdCols.length === 0) {
+      await conn.query(`ALTER TABLE reseller_sales ADD COLUMN invoice_id VARCHAR(100) DEFAULT NULL`);
+    }
+    const [cprCols] = await conn.query(`SHOW COLUMNS FROM reseller_sales LIKE 'customer_paid_return'`);
+    if (cprCols.length === 0) {
+      await conn.query(`ALTER TABLE reseller_sales ADD COLUMN customer_paid_return DECIMAL(10,2) DEFAULT 0.00`);
+    }
     try {
       await conn.query("ALTER TABLE reseller_sales ALTER order_status SET DEFAULT 'new'");
     } catch(e) {}
+
+    // Create reseller_invoices table
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS reseller_invoices (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        reseller_id INT DEFAULT NULL,
+        reseller_name VARCHAR(255) DEFAULT NULL,
+        invoice_id VARCHAR(100) UNIQUE NOT NULL,
+        payment_date DATE DEFAULT NULL,
+        orders_count INT DEFAULT 0,
+        total_collection DECIMAL(10,2) DEFAULT 0.00,
+        total_wholesale DECIMAL(10,2) DEFAULT 0.00,
+        total_delivery_charge DECIMAL(10,2) DEFAULT 0.00,
+        paid_amount DECIMAL(10,2) DEFAULT 0.00,
+        notes TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_inv_tenant (tenant_id),
+        INDEX idx_inv_reseller (reseller_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
   } catch (e) {
     console.error('Schema migration error in resellerPortalController:', e);
   }
@@ -1005,17 +1034,18 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
     const delivFee = Number(sale.delivery_fee_charged || 0);
 
     const statusLower = newStatus.toLowerCase();
-    const isPartial = statusLower.includes('partial');
-    const isDelivered = statusLower === 'delivered' || statusLower === 'completed';
-    const isReturned = statusLower === 'returned';
+    const isPartial = statusLower === 'partially_delivered' || statusLower === 'partial_delivery' || statusLower === 'partial_delivered';
+    const isDelivered = statusLower === 'delivered';
+    const isCompleteOrPaid = statusLower === 'complete' || statusLower === 'completed' || statusLower === 'paid';
+    const isReturned = statusLower === 'returned' || statusLower === 'return_pending';
     const isCancelled = statusLower === 'cancelled' || statusLower === 'deleted';
 
-    if (isDelivered) {
-      // Delivered Profit = Total COD - (Wholesale Price + Delivery Charge)
+    if (isDelivered || isCompleteOrPaid) {
+      // Delivered / Complete / Paid = Total COD - (Wholesale Price + Delivery Charge)
       finalProfit = Math.max(0, totalCOD - (wholesaleCost + delivFee));
       finalLoss = 0;
     } else if (isPartial) {
-      // Partial Delivery Profit = Collected Amount - (Delivered Products Wholesale Price + Delivery Charge)
+      // Partial Delivery Profit = Collected Amount - (Wholesale Price + Delivery Charge)
       const partialNet = collectedAmt - (wholesaleCost + delivFee);
       if (partialNet < 0) {
         finalLoss = Math.abs(partialNet);
@@ -1281,6 +1311,220 @@ exports.saveDeliveryRates = async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error('Error saving delivery zones:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
+// 15. Admin: Get all Reseller Invoices
+exports.getResellerInvoices = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const connection = await db.getConnection();
+    try {
+      await ensureResellerSchema(connection);
+    } finally {
+      connection.release();
+    }
+
+    const { reseller_id } = req.query;
+    let query = `SELECT ri.*, rp.phone as reseller_phone 
+                 FROM reseller_invoices ri
+                 LEFT JOIN reseller_profiles rp ON ri.reseller_id = rp.id AND rp.tenant_id = ri.tenant_id
+                 WHERE ri.tenant_id = ?`;
+    const params = [tenantId];
+
+    if (reseller_id) {
+      query += ` AND ri.reseller_id = ?`;
+      params.push(reseller_id);
+    }
+    query += ` ORDER BY ri.id DESC`;
+
+    const [invoices] = await db.query(query, params);
+    res.json(invoices);
+  } catch (error) {
+    console.error('Error fetching reseller invoices:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 16. Admin: Get Single Reseller Invoice Details (with all orders)
+exports.getResellerInvoiceById = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+
+    const [invoices] = await db.query(
+      `SELECT * FROM reseller_invoices WHERE id = ? AND tenant_id = ?`,
+      [id, tenantId]
+    );
+    if (invoices.length === 0) {
+      return res.status(404).json({ error: 'Invoice not found.' });
+    }
+
+    const invoice = invoices[0];
+
+    // Fetch all orders linked to this invoice
+    const [orders] = await db.query(
+      `SELECT rs.*, rsi.product_name, rsi.quantity, rsi.unit_cost, rsi.unit_price, rsi.total_price
+       FROM reseller_sales rs
+       LEFT JOIN reseller_sale_items rsi ON rsi.reseller_sale_id = rs.id AND rsi.tenant_id = rs.tenant_id
+       WHERE rs.invoice_id = ? AND rs.tenant_id = ?
+       ORDER BY rs.id ASC`,
+      [invoice.invoice_id, tenantId]
+    );
+
+    // Group items per order
+    const orderMap = {};
+    for (const row of orders) {
+      if (!orderMap[row.id]) {
+        orderMap[row.id] = {
+          id: row.id,
+          invoice_no: row.invoice_no,
+          tracking_code: row.tracking_code,
+          customer_name: row.customer_name,
+          customer_phone: row.customer_phone,
+          district: row.district,
+          reseller_wholesale_cost: row.reseller_wholesale_cost,
+          total_amount: row.total_amount,
+          delivery_fee_charged: row.delivery_fee_charged,
+          collected_amount: row.collected_amount,
+          customer_paid_return: row.customer_paid_return,
+          reseller_profit: row.reseller_profit,
+          return_loss: row.return_loss,
+          order_status: row.order_status,
+          courier_name: row.courier_name,
+          items: []
+        };
+      }
+      if (row.product_name) {
+        orderMap[row.id].items.push({
+          product_name: row.product_name,
+          quantity: row.quantity,
+          unit_cost: row.unit_cost,
+          unit_price: row.unit_price,
+          total_price: row.total_price
+        });
+      }
+    }
+
+    invoice.orders = Object.values(orderMap);
+    res.json(invoice);
+  } catch (error) {
+    console.error('Error fetching reseller invoice details:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 17. Admin: Create Reseller Invoice from 'complete' status orders
+exports.createResellerInvoice = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    await connection.beginTransaction();
+
+    const conn2 = await db.getConnection();
+    try {
+      await ensureResellerSchema(conn2);
+    } finally {
+      conn2.release();
+    }
+
+    const { reseller_id, reseller_name, notes } = req.body;
+
+    if (!reseller_id && !reseller_name) {
+      return res.status(400).json({ error: 'Please provide reseller_id or reseller_name.' });
+    }
+
+    // Fetch all 'complete'/'completed' orders for this reseller
+    let ordersQuery = `SELECT * FROM reseller_sales WHERE tenant_id = ? AND (order_status = 'complete' OR order_status = 'completed') AND (invoice_id IS NULL OR invoice_id = '')`;
+    const orderParams = [tenantId];
+
+    if (reseller_id) {
+      ordersQuery += ` AND reseller_id = ?`;
+      orderParams.push(reseller_id);
+    } else if (reseller_name) {
+      ordersQuery += ` AND reseller_name = ?`;
+      orderParams.push(reseller_name);
+    }
+    ordersQuery += ` ORDER BY id ASC`;
+
+    const [eligibleOrders] = await connection.query(ordersQuery, orderParams);
+
+    if (eligibleOrders.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'No "Complete" orders found for this reseller to create an invoice.' });
+    }
+
+    // Calculate invoice totals
+    let totalCollection = 0;
+    let totalWholesale = 0;
+    let totalDeliveryCharge = 0;
+
+    for (const o of eligibleOrders) {
+      const status = (o.order_status || '').toLowerCase();
+      const isPartial = status === 'partially_delivered' || status === 'partial_delivery' || status === 'partial_delivered';
+      const collected = isPartial ? Number(o.collected_amount || 0) : Number(o.total_amount || 0);
+      totalCollection += collected;
+      totalWholesale += Number(o.reseller_wholesale_cost || o.total_cost || 0);
+      totalDeliveryCharge += Number(o.delivery_fee_charged || 0);
+    }
+
+    const paidAmount = totalCollection - totalDeliveryCharge;
+
+    // Generate unique invoice ID
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const timeStr = Date.now().toString().slice(-6);
+    const rName = (reseller_name || eligibleOrders[0]?.reseller_name || 'R').replace(/\s+/g, '').substring(0, 8).toUpperCase();
+    const newInvoiceId = `INV-${dateStr}-${rName}-${timeStr}`;
+
+    const paymentDate = today.toISOString().slice(0, 10);
+
+    // Insert invoice record
+    const [invResult] = await connection.query(
+      `INSERT INTO reseller_invoices 
+         (tenant_id, reseller_id, reseller_name, invoice_id, payment_date, orders_count, total_collection, total_wholesale, total_delivery_charge, paid_amount, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        reseller_id || null,
+        reseller_name || eligibleOrders[0].reseller_name,
+        newInvoiceId,
+        paymentDate,
+        eligibleOrders.length,
+        totalCollection,
+        totalWholesale,
+        totalDeliveryCharge,
+        paidAmount,
+        notes || null
+      ]
+    );
+
+    // Update all eligible orders: set invoice_id and change status to 'paid'
+    const orderIds = eligibleOrders.map(o => o.id);
+    await connection.query(
+      `UPDATE reseller_sales SET invoice_id = ?, order_status = 'paid', payout_status = 'paid' WHERE id IN (?) AND tenant_id = ?`,
+      [newInvoiceId, orderIds, tenantId]
+    );
+
+    await connection.commit();
+
+    res.status(201).json({
+      message: `Invoice "${newInvoiceId}" created successfully! ${eligibleOrders.length} orders marked as Paid.`,
+      invoice_id: newInvoiceId,
+      invoice_db_id: invResult.insertId,
+      orders_count: eligibleOrders.length,
+      total_collection: totalCollection,
+      total_wholesale: totalWholesale,
+      total_delivery_charge: totalDeliveryCharge,
+      paid_amount: paidAmount
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error creating reseller invoice:', error);
     res.status(500).json({ error: error.message });
   } finally {
     connection.release();
