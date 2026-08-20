@@ -108,6 +108,10 @@ const ensureResellerSchema = async (conn) => {
     if (srcCols.length === 0) {
       await conn.query(`ALTER TABLE reseller_sales ADD COLUMN order_source VARCHAR(50) DEFAULT 'manual'`);
     }
+    const [caCols] = await conn.query(`SHOW COLUMNS FROM reseller_sales LIKE 'collected_amount'`);
+    if (caCols.length === 0) {
+      await conn.query(`ALTER TABLE reseller_sales ADD COLUMN collected_amount DECIMAL(10,2) DEFAULT 0.00`);
+    }
     try {
       await conn.query("ALTER TABLE reseller_sales ALTER order_status SET DEFAULT 'new'");
     } catch(e) {}
@@ -559,17 +563,32 @@ exports.getResellerWallet = async (req, res) => {
 
     sales.forEach(s => {
       const status = (s.order_status || 'new').toLowerCase();
+      const isPartial = status.includes('partial');
+      const isDelivered = status === 'delivered' || status === 'completed';
+      const isReturned = status === 'returned';
+      const isCancelled = status === 'cancelled' || status === 'deleted';
+
       const totalCOD = Number(s.total_amount || 0);
       const wholesaleCost = Number(s.reseller_wholesale_cost || s.total_cost || 0);
       const delivFee = Number(s.delivery_fee_charged || 0);
       const customerPaidReturn = Number(s.customer_paid_return || 0);
+      const collectedAmt = Number(s.collected_amount || s.total_amount || 0);
 
-      if (status === 'delivered') {
+      if (isDelivered) {
         deliveredCount++;
         totalDeliveredRevenue += totalCOD;
         const profit = Math.max(0, totalCOD - (wholesaleCost + delivFee));
         totalDeliveredProfit += profit;
-      } else if (status === 'returned') {
+      } else if (isPartial) {
+        deliveredCount++;
+        totalDeliveredRevenue += collectedAmt;
+        const partialNet = collectedAmt - (wholesaleCost + delivFee);
+        if (partialNet < 0) {
+          totalReturnLoss += Math.abs(partialNet);
+        } else {
+          totalDeliveredProfit += partialNet;
+        }
+      } else if (isReturned) {
         returnedCount++;
         const netReturn = customerPaidReturn - delivFee;
         if (netReturn < 0) {
@@ -577,7 +596,7 @@ exports.getResellerWallet = async (req, res) => {
         } else {
           totalReturnProfit += netReturn;
         }
-      } else if (status === 'cancelled' || status === 'deleted') {
+      } else if (isCancelled) {
         cancelledCount++;
       } else {
         pendingCount++;
@@ -977,18 +996,35 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
 
     let finalProfit = Number(sale.reseller_profit || 0);
     let finalLoss = Number(sale.return_loss || 0);
-    const { customer_paid_return } = req.body;
+    const { customer_paid_return, collected_amount } = req.body;
     let paidReturnAmt = Number(customer_paid_return !== undefined ? customer_paid_return : (sale.customer_paid_return || 0));
+    let collectedAmt = Number(collected_amount !== undefined ? collected_amount : (sale.collected_amount || sale.total_amount || 0));
 
     const totalCOD = Number(sale.total_amount || 0);
     const wholesaleCost = Number(sale.reseller_wholesale_cost || sale.total_cost || 0);
     const delivFee = Number(sale.delivery_fee_charged || 0);
 
-    if (newStatus === 'delivered') {
+    const statusLower = newStatus.toLowerCase();
+    const isPartial = statusLower.includes('partial');
+    const isDelivered = statusLower === 'delivered' || statusLower === 'completed';
+    const isReturned = statusLower === 'returned';
+    const isCancelled = statusLower === 'cancelled' || statusLower === 'deleted';
+
+    if (isDelivered) {
       // Delivered Profit = Total COD - (Wholesale Price + Delivery Charge)
       finalProfit = Math.max(0, totalCOD - (wholesaleCost + delivFee));
       finalLoss = 0;
-    } else if (newStatus === 'returned') {
+    } else if (isPartial) {
+      // Partial Delivery Profit = Collected Amount - (Delivered Products Wholesale Price + Delivery Charge)
+      const partialNet = collectedAmt - (wholesaleCost + delivFee);
+      if (partialNet < 0) {
+        finalLoss = Math.abs(partialNet);
+        finalProfit = 0;
+      } else {
+        finalLoss = 0;
+        finalProfit = partialNet;
+      }
+    } else if (isReturned) {
       // Paid Return Net Effect = Customer Paid Return - Delivery Charge
       const netReturn = paidReturnAmt - delivFee;
       if (netReturn < 0) {
@@ -998,7 +1034,7 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
         finalLoss = 0;
         finalProfit = netReturn;
       }
-    } else if (newStatus === 'cancelled' || newStatus === 'deleted') {
+    } else if (isCancelled) {
       // Cancelled / Deleted = 0 Profit, 0 Loss
       finalProfit = 0;
       finalLoss = 0;
@@ -1010,9 +1046,9 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
 
     await connection.query(
       `UPDATE reseller_sales 
-       SET order_status = ?, reseller_profit = ?, return_loss = ?, customer_paid_return = ?, notes = COALESCE(?, notes)
+       SET order_status = ?, reseller_profit = ?, return_loss = ?, customer_paid_return = ?, collected_amount = ?, notes = COALESCE(?, notes)
        WHERE id = ? AND tenant_id = ?`,
-      [newStatus, finalProfit, finalLoss, paidReturnAmt, notes || null, id, tenantId]
+      [newStatus, finalProfit, finalLoss, paidReturnAmt, collectedAmt, notes || null, id, tenantId]
     );
 
     await connection.commit();
@@ -1022,7 +1058,8 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
       order_status: newStatus,
       reseller_profit: finalProfit,
       return_loss: finalLoss,
-      customer_paid_return: paidReturnAmt
+      customer_paid_return: paidReturnAmt,
+      collected_amount: collectedAmt
     });
 
   } catch (error) {

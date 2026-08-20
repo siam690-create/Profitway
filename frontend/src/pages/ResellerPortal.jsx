@@ -1456,7 +1456,13 @@ const ResellerPortal = () => {
                               const totalCOD = sellingPrice > 0 ? sellingPrice : (wholesale + Number(o.reseller_profit || 0) + deliveryCharge);
                               const customerPaidReturn = Number(o.customer_paid_return || 0);
 
-                              if (status === 'delivered') {
+                              const statusLower = status.toLowerCase();
+                              const isPartial = statusLower.includes('partial');
+                              const isDelivered = statusLower === 'delivered' || statusLower === 'completed';
+                              const isReturned = statusLower === 'returned';
+                              const isCancelled = statusLower === 'cancelled' || statusLower === 'deleted';
+
+                              if (isDelivered) {
                                 const deliveredProfit = Math.max(0, totalCOD - (wholesale + deliveryCharge));
                                 return (
                                   <>
@@ -1474,7 +1480,35 @@ const ResellerPortal = () => {
                                 );
                               }
 
-                              if (status === 'returned') {
+                              if (isPartial) {
+                                const collectedAmt = Number(o.collected_amount || sellingPrice || 0);
+                                const partialNet = collectedAmt - (wholesale + deliveryCharge);
+                                if (partialNet < 0) {
+                                  return (
+                                    <>
+                                      <div style={{ fontWeight: '800', fontSize: '14px', color: '#ef4444' }}>
+                                        -{currency}{Math.abs(partialNet).toFixed(2)}
+                                      </div>
+                                      <span className="badge badge-danger" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                        Partial Loss
+                                      </span>
+                                    </>
+                                  );
+                                } else {
+                                  return (
+                                    <>
+                                      <div style={{ fontWeight: '800', fontSize: '14px', color: '#14b8a6' }}>
+                                        +{currency}{partialNet.toFixed(2)}
+                                      </div>
+                                      <span className="badge badge-warning" style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(20, 184, 166, 0.2)', color: '#14b8a6', border: '1px solid rgba(20, 184, 166, 0.4)' }}>
+                                        Partial Delivered
+                                      </span>
+                                    </>
+                                  );
+                                }
+                              }
+
+                              if (isReturned) {
                                 const netReturn = customerPaidReturn - deliveryCharge;
                                 if (netReturn < 0) {
                                   return (
@@ -1512,7 +1546,7 @@ const ResellerPortal = () => {
                                 }
                               }
 
-                              if (status === 'cancelled' || status === 'deleted') {
+                              if (isCancelled) {
                                 return (
                                   <>
                                     <div style={{ fontWeight: '800', fontSize: '14px', color: '#94a3b8' }}>
