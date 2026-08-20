@@ -372,6 +372,14 @@ exports.getResellerWallet = async (req, res) => {
 
     const [sales] = await db.query(salesQuery, params);
 
+    for (let s of sales) {
+      const [items] = await db.query(
+        'SELECT * FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?',
+        [s.id, tenantId]
+      );
+      s.items = items;
+    }
+
     let totalDeliveredRevenue = 0;
     let totalDeliveredProfit = 0;
     let totalReturnLoss = 0;
