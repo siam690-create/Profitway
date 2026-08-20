@@ -507,7 +507,7 @@ const ResellerPortal = () => {
     }
   };
 
-  // Process Uploaded Excel/CSV File
+  // Process Uploaded Excel/CSV File (with UTF-8 ArrayBuffer preservation)
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -517,13 +517,13 @@ const ResellerPortal = () => {
 
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        const sheetData = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-        const validated = data.map((row, idx) => {
+        const validated = sheetData.map((row, idx) => {
           const name = String(row['Customer Name'] || row['CustomerName'] || row['Name'] || '').trim();
           const phone = String(row['Customer Phone'] || row['CustomerPhone'] || row['Phone'] || '').trim();
           const address = String(row['Customer Address'] || row['CustomerAddress'] || row['Address'] || '').trim();
@@ -618,7 +618,7 @@ const ResellerPortal = () => {
       }
     };
 
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   // Submit Bulk Orders
@@ -1479,9 +1479,9 @@ const ResellerPortal = () => {
                   activeOrders.map(o => {
                     const status = (o.order_status || 'pending').toLowerCase();
                     const wholesale = Number(o.reseller_wholesale_cost || o.total_cost || 0);
-                    const sellingPrice = Number(o.total_amount || o.total_price || 0);
-                    const deliveryCharge = Number(o.delivery_fee_charged || 100);
-                    const totalCOD = sellingPrice > 0 ? sellingPrice : (wholesale + Number(o.reseller_profit || 0) + deliveryCharge);
+                    const totalCOD = Number(o.total_amount || o.total_price || 0);
+                    const deliveryCharge = Number(o.delivery_fee_charged || 0);
+                    const salePrice = Math.max(0, totalCOD - deliveryCharge);
 
                     // Est Profit = Total COD - (Wholesale Price + Delivery Charge)
                     const estProfit = Math.max(0, totalCOD - (wholesale + deliveryCharge));
@@ -1494,7 +1494,16 @@ const ResellerPortal = () => {
                             #{o.invoice_no}
                           </div>
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                            {o.sale_date ? new Date(o.sale_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '-'}
+                            {o.created_at || o.sale_date ? (
+                              new Date(o.created_at || o.sale_date).toLocaleString('en-GB', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: true
+                              })
+                            ) : '—'}
                           </div>
                         </td>
 
@@ -1512,7 +1521,9 @@ const ResellerPortal = () => {
                             <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '4px', marginTop: '2px', maxWidth: '220px', lineHeight: '1.3' }}>
                               <MapPin size={12} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
                               <span>
-                                {o.customer_address || ''} {o.thana ? `, ${o.thana}` : ''} {o.district ? `, ${o.district}` : ''}
+                                {o.customer_address || ''}
+                                {o.thana && !o.customer_address?.includes(o.thana) ? `, ${o.thana}` : ''}
+                                {o.district && !o.customer_address?.includes(o.district) && !o.district.includes('à') && !o.district.includes('¦') ? `, ${o.district}` : ''}
                               </span>
                             </div>
                           )}
@@ -1569,7 +1580,7 @@ const ResellerPortal = () => {
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', color: 'var(--text-muted)' }}>
                               <span>Sale Price:</span>
-                              <span style={{ fontWeight: '700', color: '#38bdf8' }}>{currency}{sellingPrice.toFixed(2)}</span>
+                              <span style={{ fontWeight: '700', color: '#38bdf8' }}>{currency}{salePrice.toFixed(2)}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', color: 'var(--text-muted)' }}>
                               <span>Delivery Charge:</span>
