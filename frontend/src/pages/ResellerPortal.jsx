@@ -359,34 +359,35 @@ const ResellerPortal = () => {
     }
   };
 
-  // Download Demo Template (.xlsx)
+  // Download Demo Excel Template
   const handleDownloadDemoTemplate = () => {
     try {
+      const zone1 = (deliveryZones && deliveryZones.length > 0) ? deliveryZones[0].zone_name : 'ঢাকার ভেতরে';
+      const zone2 = (deliveryZones && deliveryZones.length > 1) ? deliveryZones[1].zone_name : 'ঢাকার বাইরে';
+      const zone1Charge = (deliveryZones && deliveryZones.length > 0) ? Number(deliveryZones[0].charge || 70) : 70;
+      const zone2Charge = (deliveryZones && deliveryZones.length > 1) ? Number(deliveryZones[1].charge || 120) : 120;
+
       const templateData = [
         {
           'Customer Name': 'Siam Ahmed',
           'Customer Phone': '01884999488',
-          'Customer Address': 'House 44, Road 2/A, Dhanmondi',
-          'District': 'Dhaka',
-          'Thana': 'Dhanmondi',
+          'Customer Address': 'House 44, Road 2/A, Dhanmondi, Dhaka',
           'Product SKU': catalog[0]?.sku || 'SKU-001',
           'Quantity': 1,
-          'Customer Sale Price (COD)': 500,
-          'Delivery Charge': 100,
-          'Courier Name': 'Steadfast',
+          'Customer Sale Price': 500,
+          'Delivery Zone': zone1,
+          'COD': 500 + zone1Charge,
           'Notes': 'Handle with care'
         },
         {
           'Customer Name': 'Rahim Khan',
           'Customer Phone': '01711223344',
-          'Customer Address': 'Station Road, Agrabad',
-          'District': 'Chittagong',
-          'Thana': 'Double Mooring',
+          'Customer Address': 'Station Road, Agrabad, Chittagong',
           'Product SKU': catalog[1]?.sku || catalog[0]?.sku || 'SKU-002',
           'Quantity': 2,
-          'Customer Sale Price (COD)': 1200,
-          'Delivery Charge': 120,
-          'Courier Name': 'Pathao',
+          'Customer Sale Price': 1200,
+          'Delivery Zone': zone2,
+          'COD': 1200 + zone2Charge,
           'Notes': 'Deliver before 5 PM'
         }
       ];
@@ -394,9 +395,8 @@ const ResellerPortal = () => {
       const ws = XLSX.utils.json_to_sheet(templateData);
 
       ws['!cols'] = [
-        { wch: 18 }, { wch: 16 }, { wch: 30 }, { wch: 14 },
-        { wch: 16 }, { wch: 18 }, { wch: 10 }, { wch: 24 },
-        { wch: 16 }, { wch: 14 }, { wch: 20 }
+        { wch: 18 }, { wch: 16 }, { wch: 35 }, { wch: 16 },
+        { wch: 10 }, { wch: 20 }, { wch: 18 }, { wch: 16 }, { wch: 22 }
       ];
 
       const wb = XLSX.utils.book_new();
@@ -428,21 +428,52 @@ const ResellerPortal = () => {
           const name = String(row['Customer Name'] || row['CustomerName'] || row['Name'] || '').trim();
           const phone = String(row['Customer Phone'] || row['CustomerPhone'] || row['Phone'] || '').trim();
           const address = String(row['Customer Address'] || row['CustomerAddress'] || row['Address'] || '').trim();
-          const district = String(row['District'] || 'Dhaka').trim();
-          const thana = String(row['Thana'] || '').trim();
           const sku = String(row['Product SKU'] || row['SKU'] || row['Product Code'] || row['Product'] || '').trim();
           const qty = Number(row['Quantity'] || row['Qty'] || 1);
-          const codPrice = Number(row['Customer Sale Price (COD)'] || row['COD'] || row['Selling Price'] || 0);
-          const delivFee = Number(row['Delivery Charge'] || row['Delivery Fee'] || 100);
-          const courier = String(row['Courier Name'] || row['Courier'] || 'Steadfast').trim();
+          
+          const rawSalePrice = Number(row['Customer Sale Price'] || row['Sale Price'] || row['Selling Price'] || 0);
+          const zoneInput = String(row['Delivery Zone'] || row['Delivery Area'] || row['Zone'] || row['Delivery Charge'] || '').trim();
+          const rawCOD = Number(row['COD'] || row['Customer Sale Price (COD)'] || 0);
           const notes = String(row['Notes'] || '').trim();
+
+          // Zone matching against live admin delivery rates
+          let delivFee = 0;
+          let zoneName = '';
+          const matchedZone = (deliveryZones || []).find(z => 
+            (z.zone_name && z.zone_name.toLowerCase().trim() === zoneInput.toLowerCase())
+          );
+
+          if (matchedZone) {
+            delivFee = Number(matchedZone.charge || 0);
+            zoneName = matchedZone.zone_name;
+          } else if (!isNaN(Number(zoneInput)) && Number(zoneInput) > 0) {
+            delivFee = Number(zoneInput);
+            zoneName = `Charge ৳${delivFee}`;
+          } else {
+            const defZone = (deliveryZones && deliveryZones.length > 0) ? deliveryZones[0] : { zone_name: 'ঢাকার ভেতরে', charge: 70 };
+            delivFee = Number(defZone.charge || 70);
+            zoneName = zoneInput || defZone.zone_name;
+          }
+
+          // Compute Sale Price and Total COD (COD = Sale Price + Delivery Charge)
+          let salePrice = rawSalePrice;
+          let codPrice = rawCOD;
+
+          if (salePrice > 0 && codPrice <= 0) {
+            codPrice = salePrice + delivFee;
+          } else if (codPrice > 0 && salePrice <= 0) {
+            salePrice = Math.max(0, codPrice - delivFee);
+          } else if (salePrice <= 0 && codPrice <= 0) {
+            salePrice = 0;
+            codPrice = 0;
+          }
 
           let errors = [];
           if (!name) errors.push('Customer Name missing');
           if (!phone || phone.length < 10) errors.push('Invalid phone number');
           if (!address) errors.push('Address missing');
           if (!sku) errors.push('Product SKU missing');
-          if (codPrice <= 0) errors.push('Invalid COD Price');
+          if (salePrice <= 0 && codPrice <= 0) errors.push('Sale Price / COD missing');
 
           // Match product against live catalog
           const matchedProd = catalog.find(p => 
@@ -467,13 +498,12 @@ const ResellerPortal = () => {
             name,
             phone,
             address,
-            district,
-            thana,
             sku,
             quantity: qty,
-            codPrice,
+            salePrice,
             delivFee,
-            courier,
+            zoneName,
+            codPrice,
             notes,
             matchedProduct: matchedProd,
             wholesale,
@@ -506,11 +536,9 @@ const ResellerPortal = () => {
         customer_name: r.name,
         customer_phone: r.phone,
         customer_address: r.address,
-        district: r.district,
-        thana: r.thana,
-        courier_name: r.courier,
-        customer_total_price: r.codPrice,
+        district: r.zoneName || 'Dhaka',
         delivery_fee_charged: r.delivFee,
+        customer_total_price: r.codPrice,
         notes: r.notes,
         items: [
           {
@@ -2030,9 +2058,11 @@ const ResellerPortal = () => {
                         <th>Select</th>
                         <th>Status</th>
                         <th>Customer Info</th>
-                        <th>Address & Location</th>
+                        <th>Address & Delivery Zone</th>
                         <th>Product SKU & Qty</th>
-                        <th>COD Price</th>
+                        <th>Sale Price</th>
+                        <th>Delivery Charge</th>
+                        <th>Total COD</th>
                         <th>Est Profit</th>
                       </tr>
                     </thead>
@@ -2065,15 +2095,17 @@ const ResellerPortal = () => {
                             <div style={{ fontSize: '11px', color: '#ec4899' }}>📱 {r.phone || 'N/A'}</div>
                           </td>
                           <td>
-                            <div>{r.address || 'N/A'}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>📍 {r.district} {r.thana ? `, ${r.thana}` : ''}</div>
+                            <div style={{ fontWeight: '600' }}>{r.address || 'N/A'}</div>
+                            <div style={{ fontSize: '11px', color: '#38bdf8', marginTop: '2px' }}>🚚 {r.zoneName || 'Zone'} (+{currency}{r.delivFee})</div>
                           </td>
                           <td>
                             <div style={{ fontWeight: '700', color: '#c084fc' }}>{r.sku} x{r.quantity}</div>
                             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.matchedProduct ? r.matchedProduct.name : 'Unknown Product'}</div>
                           </td>
-                          <td style={{ fontWeight: '700' }}>{currency}{r.codPrice.toFixed(2)}</td>
-                          <td style={{ fontWeight: '800', color: '#10b981' }}>+{currency}{r.estProfit.toFixed(2)}</td>
+                          <td style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{currency}{(r.salePrice || 0).toFixed(2)}</td>
+                          <td style={{ color: '#38bdf8', fontWeight: '600' }}>+{currency}{(r.delivFee || 0).toFixed(2)}</td>
+                          <td style={{ fontWeight: '800', color: '#f59e0b' }}>{currency}{(r.codPrice || 0).toFixed(2)}</td>
+                          <td style={{ fontWeight: '800', color: '#10b981' }}>+{currency}{(r.estProfit || 0).toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
