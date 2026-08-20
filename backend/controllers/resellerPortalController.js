@@ -808,6 +808,35 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
   }
 };
 
+// 13. Admin: Delete Reseller Order
+exports.deleteResellerOrderForAdmin = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+
+    await connection.beginTransaction();
+
+    const [sales] = await connection.query('SELECT invoice_no FROM reseller_sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (sales.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Reseller order not found.' });
+    }
+
+    await connection.query('DELETE FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
+    await connection.query('DELETE FROM reseller_sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+
+    await connection.commit();
+    res.json({ message: `Order #${sales[0].invoice_no} deleted successfully!` });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error deleting reseller order:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
 // 13. Public/Authenticated: Get Current Reseller Delivery Rates & Zones
 exports.getDeliveryRates = async (req, res) => {
   try {

@@ -104,8 +104,45 @@ export const ResellerOrders = () => {
     setShowReturnModal(true);
   };
 
+  // Status Configuration for Workflow
+  const ALL_STATUSES = [
+    { key: 'all', label: 'All Orders', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)', icon: '📋' },
+    { key: 'new', label: 'New Orders', color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.15)', icon: '✨' },
+    { key: 'pending', label: 'Pending', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: '⏳' },
+    { key: 'confirmed', label: 'Confirmed', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)', icon: '👍' },
+    { key: 'ready', label: 'Ready', color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', icon: '📦' },
+    { key: 'in_courier', label: 'In Courier', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)', icon: '🚚' },
+    { key: 'delivered', label: 'Delivered', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: '✅' },
+    { key: 'partial_delivery', label: 'Partial Delivery', color: '#14b8a6', bg: 'rgba(20, 184, 166, 0.15)', icon: '🌓' },
+    { key: 'hold', label: 'Hold', color: '#f97316', bg: 'rgba(249, 115, 22, 0.15)', icon: '⏸️' },
+    { key: 'return_pending', label: 'Return Pending', color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.15)', icon: '⏳' },
+    { key: 'returned', label: 'Returned', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', icon: '🔄' },
+    { key: 'completed', label: 'Completed', color: '#059669', bg: 'rgba(5, 150, 105, 0.15)', icon: '🎯' },
+    { key: 'cancelled', label: 'Cancelled', color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)', icon: '🚫' },
+  ];
+
+  const handleDeleteOrder = async (orderId, invoiceNo) => {
+    if (!window.confirm(`Are you sure you want to DELETE order #${invoiceNo}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await authFetch(`/api/admin/reseller-orders/${orderId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast ? showToast('Deleted 🗑️', data.message, 'success') : alert(data.message);
+        fetchResellerOrders();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error deleting order: ${err.message}`);
+    }
+  };
+
   const copyShippingLabel = (order) => {
-    const text = `Invoice: #${order.invoice_no}\nCustomer: ${order.customer_name || 'N/A'}\nPhone: ${order.customer_phone || 'N/A'}\nAddress: ${order.customer_address || 'N/A'}\nDistrict: ${order.district || 'N/A'}, Thana: ${order.thana || 'N/A'}\nCOD Amount: ৳${order.total_price || 0}`;
+    const text = `Invoice: #${order.invoice_no}\nCustomer: ${order.customer_name || 'N/A'}\nPhone: ${order.customer_phone || 'N/A'}\nAddress: ${order.customer_address || 'N/A'}\nDistrict: ${order.district || 'N/A'}, Thana: ${order.thana || 'N/A'}\nCOD Amount: ৳${order.total_price || order.total_amount || 0}`;
     navigator.clipboard.writeText(text);
     showToast ? showToast('Copied 📋', 'Customer shipping details copied to clipboard!', 'info') : alert('Copied to clipboard!');
   };
@@ -113,7 +150,13 @@ export const ResellerOrders = () => {
   // Filtered list
   const filteredOrders = orders.filter(o => {
     const status = (o.order_status || 'pending').toLowerCase();
-    if (statusFilter !== 'all' && status !== statusFilter) return false;
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'in_courier') {
+        if (status !== 'in_courier' && status !== 'shipped' && status !== 'processing') return false;
+      } else if (status !== statusFilter) {
+        return false;
+      }
+    }
 
     if (selectedResellerFilter !== 'all' && String(o.reseller_name).toLowerCase() !== String(selectedResellerFilter).toLowerCase()) {
       return false;
@@ -145,13 +188,30 @@ export const ResellerOrders = () => {
 
   const renderStatusBadge = (statusStr) => {
     const s = (statusStr || 'pending').toLowerCase();
-    if (s === 'pending') return <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> Pending Approval</span>;
-    if (s === 'processing') return <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Package size={12} /> Processing</span>;
-    if (s === 'shipped') return <span className="badge" style={{ background: '#3b82f6', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Truck size={12} /> Shipped</span>;
-    if (s === 'delivered') return <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={12} /> Delivered</span>;
-    if (s === 'returned') return <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RotateCcw size={12} /> Returned</span>;
-    if (s === 'cancelled') return <span className="badge" style={{ background: '#64748b', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><XCircle size={12} /> Cancelled</span>;
-    return <span className="badge badge-secondary">{statusStr}</span>;
+    const cfg = ALL_STATUSES.find(st => st.key === s) ||
+                (s === 'shipped' || s === 'processing' ? ALL_STATUSES.find(st => st.key === 'in_courier') : null) ||
+                ALL_STATUSES.find(st => st.key === 'pending');
+
+    return (
+      <span
+        className="badge"
+        style={{
+          background: cfg.bg,
+          color: cfg.color,
+          border: `1px solid ${cfg.color}40`,
+          padding: '4px 10px',
+          borderRadius: '20px',
+          fontSize: '12px',
+          fontWeight: '700',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          textTransform: 'capitalize'
+        }}
+      >
+        <span>{cfg.icon}</span> {cfg.label}
+      </span>
+    );
   };
 
   return (
@@ -214,49 +274,42 @@ export const ResellerOrders = () => {
       {/* Main Table Card */}
       <div className="card" style={{ padding: 0 }}>
         {/* Filter and Search Bar */}
-        <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          {/* Status Filter Pills */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`btn btn-sm ${statusFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-            >
-              All ({orders.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('pending')}
-              className={`btn btn-sm ${statusFilter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
-              style={statusFilter === 'pending' ? { background: '#f59e0b', borderColor: '#f59e0b' } : {}}
-            >
-              ⏳ Pending ({pendingOrders.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('processing')}
-              className={`btn btn-sm ${statusFilter === 'processing' ? 'btn-primary' : 'btn-secondary'}`}
-              style={statusFilter === 'processing' ? { background: '#3b82f6', borderColor: '#3b82f6' } : {}}
-            >
-              📦 Processing
-            </button>
-            <button
-              onClick={() => setStatusFilter('shipped')}
-              className={`btn btn-sm ${statusFilter === 'shipped' ? 'btn-primary' : 'btn-secondary'}`}
-            >
-              🚚 Shipped
-            </button>
-            <button
-              onClick={() => setStatusFilter('delivered')}
-              className={`btn btn-sm ${statusFilter === 'delivered' ? 'btn-primary' : 'btn-secondary'}`}
-              style={statusFilter === 'delivered' ? { background: '#10b981', borderColor: '#10b981' } : {}}
-            >
-              ✅ Delivered ({deliveredOrders.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('returned')}
-              className={`btn btn-sm ${statusFilter === 'returned' ? 'btn-primary' : 'btn-secondary'}`}
-              style={statusFilter === 'returned' ? { background: '#ef4444', borderColor: '#ef4444' } : {}}
-            >
-              🔄 Returned ({returnedOrders.length})
-            </button>
+        <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          
+          {/* Scrollable Status Filter Pills Bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '6px', scrollbarWidth: 'thin' }}>
+            {ALL_STATUSES.map(st => {
+              const count = st.key === 'all'
+                ? orders.length
+                : orders.filter(o => {
+                    const s = (o.order_status || 'pending').toLowerCase();
+                    if (st.key === 'in_courier') return s === 'in_courier' || s === 'shipped' || s === 'processing';
+                    return s === st.key;
+                  }).length;
+
+              const isActive = statusFilter === st.key;
+
+              return (
+                <button
+                  key={st.key}
+                  onClick={() => setStatusFilter(st.key)}
+                  className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{
+                    whiteSpace: 'nowrap',
+                    fontSize: '12.5px',
+                    fontWeight: isActive ? '700' : '600',
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    ...(isActive ? { background: st.color, borderColor: st.color, color: '#fff', boxShadow: `0 2px 8px ${st.color}40` } : {})
+                  }}
+                >
+                  <span>{st.icon}</span> {st.label} ({count})
+                </button>
+              );
+            })}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -387,7 +440,38 @@ export const ResellerOrders = () => {
                       <td>{renderStatusBadge(order.order_status)}</td>
 
                       <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          {/* Quick Status Select Dropdown */}
+                          <select
+                            className="form-select"
+                            value={status === 'shipped' || status === 'processing' ? 'in_courier' : status}
+                            onChange={(e) => {
+                              const newSt = e.target.value;
+                              if (newSt === 'returned') {
+                                handleOpenReturnModal(order);
+                              } else {
+                                handleUpdateStatus(order.id, newSt);
+                              }
+                            }}
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              borderRadius: '6px',
+                              background: 'var(--bg-secondary)',
+                              color: 'var(--text-primary)',
+                              border: '1px solid var(--border-color)',
+                              cursor: 'pointer',
+                              maxWidth: '140px'
+                            }}
+                          >
+                            {ALL_STATUSES.filter(s => s.key !== 'all').map(s => (
+                              <option key={s.key} value={s.key}>
+                                {s.icon} {s.label}
+                              </option>
+                            ))}
+                          </select>
+
                           {/* Shipping Label Clipboard Button */}
                           <button
                             type="button"
@@ -408,52 +492,16 @@ export const ResellerOrders = () => {
                             <Eye size={14} />
                           </button>
 
-                          {/* Status Actions */}
-                          {status === 'pending' && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateStatus(order.id, 'processing')}
-                              disabled={isUpdatingStatus}
-                              className="btn btn-primary btn-sm"
-                              style={{ background: '#3b82f6', borderColor: '#3b82f6' }}
-                            >
-                              Approve
-                            </button>
-                          )}
-
-                          {(status === 'pending' || status === 'processing') && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateStatus(order.id, 'shipped')}
-                              disabled={isUpdatingStatus}
-                              className="btn btn-secondary btn-sm"
-                              style={{ borderColor: '#3b82f6', color: '#3b82f6' }}
-                            >
-                              Mark Shipped
-                            </button>
-                          )}
-
-                          {status !== 'delivered' && status !== 'returned' && status !== 'cancelled' && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateStatus(order.id, 'delivered')}
-                              disabled={isUpdatingStatus}
-                              className="btn btn-success btn-sm"
-                            >
-                              Mark Delivered
-                            </button>
-                          )}
-
-                          {status !== 'returned' && status !== 'cancelled' && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenReturnModal(order)}
-                              disabled={isUpdatingStatus}
-                              className="btn btn-danger btn-sm"
-                            >
-                              Return
-                            </button>
-                          )}
+                          {/* Delete Order Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteOrder(order.id, order.invoice_no)}
+                            className="btn btn-secondary btn-icon btn-sm"
+                            title="Delete Reseller Order"
+                            style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                          >
+                            <XCircle size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>

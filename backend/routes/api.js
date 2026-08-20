@@ -213,6 +213,7 @@ router.get('/reports/profit-loss', reportController.getProfitLossReport);
 // Admin Reseller Submitted Orders Management APIs
 router.get('/admin/reseller-orders', resellerPortalController.getAllResellerOrdersForAdmin);
 router.put('/admin/reseller-orders/:id/status', checkActiveSubscription, resellerPortalController.updateResellerOrderStatusByAdmin);
+router.delete('/admin/reseller-orders/:id', checkActiveSubscription, resellerPortalController.deleteResellerOrderForAdmin);
 
 // Staff / Users APIs
 router.get('/staff', staffController.getStaff);
