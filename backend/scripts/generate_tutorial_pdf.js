@@ -509,10 +509,10 @@ const browserPath = fs.existsSync(chromePath) ? chromePath : edgePath;
 
 try {
   console.log('Generating PDF using browser at:', browserPath);
-  const command = `"${browserPath}" --headless --disable-gpu --no-sandbox --print-to-pdf="${pdfFilePath}" "${htmlFilePath}"`;
+  const command = `"${browserPath}" --headless --disable-gpu --no-sandbox --no-pdf-header-footer --print-to-pdf="${pdfFilePath}" "${htmlFilePath}"`;
   execSync(command);
   fs.copyFileSync(pdfFilePath, rootPdfFilePath);
-  console.log('PDF generated successfully at:', pdfFilePath);
+  console.log('PDF generated successfully without headers/footers at:', pdfFilePath);
   console.log('PDF copied to root at:', rootPdfFilePath);
 } catch (err) {
   console.error('Error generating PDF:', err);
