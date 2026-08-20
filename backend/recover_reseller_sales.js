@@ -1,3 +1,4 @@
+require('dotenv').config({ path: __dirname + '/.env' });
 const { execSync } = require('child_process');
 const db = require('./config/db');
 
