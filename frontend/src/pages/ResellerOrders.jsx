@@ -328,19 +328,24 @@ export const ResellerOrders = () => {
     showToast ? showToast('Copied 📋', 'Customer shipping details copied to clipboard!', 'info') : alert('Copied to clipboard!');
   };
 
-  const getTrackingUrl = (courierName = '', trackingCode = '') => {
+  const getTrackingUrl = (order = {}) => {
+    const trackingCode = order.tracking_code || '';
     if (!trackingCode) return '#';
-    const c = String(courierName).toLowerCase();
-    if (c.includes('steadfast')) {
-      return `https://steadfast.com.bd/t/${trackingCode}`;
-    } else if (c.includes('pathao')) {
+
+    const p = String(order.provider_code || '').toLowerCase();
+    const c = String(order.courier_name || '').toLowerCase();
+    const t = String(trackingCode).toUpperCase();
+
+    if (p === 'pathao' || c.includes('pathao') || t.startsWith('DC') || t.startsWith('PAT')) {
       return `https://pathao.com/courier/tracking?consignment_id=${trackingCode}`;
-    } else if (c.includes('redx')) {
+    } else if (p === 'steadfast' || c.includes('steadfast') || t.startsWith('SF')) {
+      return `https://steadfast.com.bd/t/${trackingCode}`;
+    } else if (p === 'redx' || c.includes('redx')) {
       return `https://redx.com.bd/track-order?trackingId=${trackingCode}`;
-    } else if (c.includes('paperfly')) {
+    } else if (p === 'paperfly' || c.includes('paperfly')) {
       return `https://www.paperfly.com.bd/tracking?tracking_id=${trackingCode}`;
     }
-    return `https://steadfast.com.bd/t/${trackingCode}`;
+    return `https://pathao.com/courier/tracking?consignment_id=${trackingCode}`;
   };
 
   // Calculate summary metrics
@@ -646,7 +651,7 @@ export const ResellerOrders = () => {
                                 {order.tracking_code}
                               </strong>
                               <a
-                                href={getTrackingUrl(order.courier_name, order.tracking_code)}
+                                href={getTrackingUrl(order)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{ color: '#8b5cf6', display: 'inline-flex', alignItems: 'center', transition: 'color 0.2s ease' }}

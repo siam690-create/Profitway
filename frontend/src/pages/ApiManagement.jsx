@@ -592,6 +592,27 @@ export const ApiManagement = () => {
                             />
                           </div>
 
+                          {/* Merchant Password */}
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">Password (Merchant Password)</label>
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type={showSecretKeys[`acc_pwd_${acc.id}`] ? 'text' : 'password'}
+                                className="form-input"
+                                placeholder="Merchant password..."
+                                value={acc.merchant_password || ''}
+                                onChange={(e) => handleUpdateAccountField(acc.id, 'merchant_password', e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => toggleShowKey(`acc_pwd_${acc.id}`)}
+                                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                              >
+                                {showSecretKeys[`acc_pwd_${acc.id}`] ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                          </div>
+
                           {/* Webhook URL */}
                           <div className="form-group" style={{ marginBottom: 0 }}>
                             <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

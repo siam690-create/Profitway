@@ -11,6 +11,7 @@ const ensureTableExists = async () => {
       client_id_key TEXT,
       client_secret_key TEXT,
       store_name VARCHAR(100),
+      merchant_password TEXT,
       base_url VARCHAR(255),
       is_active TINYINT(1) DEFAULT 1,
       is_verified TINYINT(1) DEFAULT 1,
@@ -20,6 +21,19 @@ const ensureTableExists = async () => {
     );
   `;
   await db.query(query);
+
+  try {
+    const [mpCols] = await db.query("SHOW COLUMNS FROM courier_accounts LIKE 'merchant_password'");
+    if (mpCols.length === 0) {
+      await db.query("ALTER TABLE courier_accounts ADD COLUMN merchant_password TEXT NULL");
+    }
+    const [pcCols] = await db.query("SHOW COLUMNS FROM reseller_sales LIKE 'provider_code'");
+    if (pcCols.length === 0) {
+      await db.query("ALTER TABLE reseller_sales ADD COLUMN provider_code VARCHAR(50) NULL");
+    }
+  } catch (e) {
+    // safety
+  }
 };
 
 // Get All Courier Accounts for Tenant
@@ -36,9 +50,9 @@ exports.getCourierAccounts = async (req, res) => {
     // If no accounts exist yet, seed default accounts for Steadfast & Pathao
     if (rows.length === 0) {
       await db.query(
-        `INSERT INTO courier_accounts (tenant_id, provider_code, account_label, client_id_key, client_secret_key, is_active, is_verified) VALUES 
-         (?, 'steadfast', 'Steadfast Primary', '', '', 1, 1),
-         (?, 'pathao', 'Pathao Main Store', '', '', 1, 1)`,
+        `INSERT INTO courier_accounts (tenant_id, provider_code, account_label, client_id_key, client_secret_key, store_name, merchant_password, is_active, is_verified) VALUES 
+         (?, 'steadfast', 'Steadfast Primary', '', '', '', '', 1, 1),
+         (?, 'pathao', 'Pathao Main Store', '', '', '', '', 1, 1)`,
         [tenantId, tenantId]
       );
       const [newRows] = await db.query(
@@ -60,7 +74,7 @@ exports.createCourierAccount = async (req, res) => {
   try {
     await ensureTableExists();
     const tenantId = req.user.tenantId;
-    const { provider_code, account_label, client_id_key, client_secret_key, store_name, base_url } = req.body;
+    const { provider_code, account_label, client_id_key, client_secret_key, store_name, merchant_password, base_url } = req.body;
 
     if (!provider_code) {
       return res.status(400).json({ error: 'provider_code is required.' });
@@ -76,8 +90,8 @@ exports.createCourierAccount = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO courier_accounts 
-        (tenant_id, provider_code, account_label, client_id_key, client_secret_key, store_name, base_url, is_active, is_verified)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)`,
+        (tenant_id, provider_code, account_label, client_id_key, client_secret_key, store_name, merchant_password, base_url, is_active, is_verified)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1)`,
       [
         tenantId,
         provider_code.toLowerCase(),
@@ -85,6 +99,7 @@ exports.createCourierAccount = async (req, res) => {
         client_id_key || '',
         client_secret_key || '',
         store_name || '',
+        merchant_password || '',
         base_url || ''
       ]
     );
@@ -102,7 +117,7 @@ exports.updateCourierAccount = async (req, res) => {
     await ensureTableExists();
     const tenantId = req.user.tenantId;
     const { id } = req.params;
-    const { account_label, client_id_key, client_secret_key, store_name, base_url, is_active } = req.body;
+    const { account_label, client_id_key, client_secret_key, store_name, merchant_password, base_url, is_active } = req.body;
 
     await db.query(
       `UPDATE courier_accounts SET 
@@ -110,6 +125,7 @@ exports.updateCourierAccount = async (req, res) => {
         client_id_key = ?, 
         client_secret_key = ?, 
         store_name = ?, 
+        merchant_password = ?,
         base_url = ?, 
         is_active = ?,
         is_verified = 1
@@ -119,6 +135,7 @@ exports.updateCourierAccount = async (req, res) => {
         client_id_key || '',
         client_secret_key || '',
         store_name || '',
+        merchant_password || '',
         base_url || '',
         is_active ? 1 : 0,
         id,
@@ -186,16 +203,6 @@ exports.dispatchOrderToCourier = async (req, res) => {
       return res.status(400).json({ error: 'Please select at least 1 order and a valid Courier Account.' });
     }
 
-    // Ensure order tracking columns exist
-    try {
-      const [c1] = await db.query("SHOW COLUMNS FROM reseller_sales LIKE 'tracking_code'");
-      if (c1.length === 0) await db.query("ALTER TABLE reseller_sales ADD COLUMN tracking_code VARCHAR(100) NULL");
-      const [c2] = await db.query("SHOW COLUMNS FROM reseller_sales LIKE 'courier_name'");
-      if (c2.length === 0) await db.query("ALTER TABLE reseller_sales ADD COLUMN courier_name VARCHAR(100) NULL");
-    } catch (e) {
-      // safety
-    }
-
     // 1. Fetch courier account details
     const [accRows] = await db.query(
       'SELECT * FROM courier_accounts WHERE id = ? AND tenant_id = ?',
@@ -210,6 +217,8 @@ exports.dispatchOrderToCourier = async (req, res) => {
     const provider = courierAcc.provider_code.toLowerCase();
     const apiKey = courierAcc.client_id_key ? courierAcc.client_id_key.trim() : '';
     const secretKey = courierAcc.client_secret_key ? courierAcc.client_secret_key.trim() : '';
+    const merchantEmail = courierAcc.store_name ? courierAcc.store_name.trim() : '';
+    const merchantPassword = courierAcc.merchant_password ? courierAcc.merchant_password.trim() : '';
 
     let baseUrl = courierAcc.base_url ? courierAcc.base_url.trim() : '';
     if (!baseUrl) {
@@ -220,10 +229,16 @@ exports.dispatchOrderToCourier = async (req, res) => {
       else baseUrl = 'https://portal.steadfast.com.bd/api/v1';
     }
 
-    // Verify credentials exist
-    if (!apiKey && !secretKey) {
+    // Verify required credentials exist for provider
+    if (provider === 'steadfast' && (!apiKey || !secretKey)) {
       return res.status(400).json({ 
-        error: `Courier account "${courierAcc.account_label}" (${courierAcc.provider_code.toUpperCase()}) is missing API Key / Secret Key credentials. Please configure in API Management first.` 
+        error: `Steadfast courier account "${courierAcc.account_label}" requires API Key and Secret Key. Please configure in API Management.` 
+      });
+    }
+
+    if (provider === 'pathao' && (!apiKey || !secretKey || !merchantEmail || !merchantPassword)) {
+      return res.status(400).json({ 
+        error: `Pathao courier account "${courierAcc.account_label}" requires Client ID, Client Secret, Merchant Email, AND Password. Please fill all 4 fields in API Management first.` 
       });
     }
 
@@ -287,37 +302,76 @@ exports.dispatchOrderToCourier = async (req, res) => {
           });
 
           const sfData = await sfResponse.json();
+
           if (sfResponse.ok && (sfData.status === 200 || sfData.consignment)) {
             trackingCode = sfData.consignment?.tracking_code || `SF${Date.now()}`;
+            apiSuccess = true;
           } else {
-            trackingCode = sfData.consignment?.tracking_code || `SF${Math.floor(100000 + Math.random() * 900000)}`;
+            const errorMsg = sfData.message || (sfData.errors ? JSON.stringify(sfData.errors) : 'Invalid API Key / Secret Key');
+            errors.push(`Order #${invoiceNo} (Steadfast Error): ${errorMsg}`);
           }
-          apiSuccess = true;
         } catch (apiErr) {
-          trackingCode = `SF${Math.floor(100000 + Math.random() * 900000)}`;
-          apiSuccess = true;
+          errors.push(`Order #${invoiceNo} (Steadfast Error): Could not connect to Steadfast server (${apiErr.message}).`);
         }
       } else if (provider === 'pathao') {
         try {
+          // Pathao OAuth Token Request
           const tokenRes = await fetch(`${baseUrl}/aladdin/api/v1/issue-token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               client_id: apiKey,
               client_secret: secretKey,
+              username: merchantEmail,
+              password: merchantPassword,
               grant_type: 'password'
             })
           });
+
           const tokenData = await tokenRes.json();
+
           if (tokenRes.ok && tokenData.access_token) {
-            trackingCode = `DC${Date.now()}`;
+            const accessToken = tokenData.access_token;
+
+            // Pathao Create Order API Request
+            const orderRes = await fetch(`${baseUrl}/aladdin/api/v1/orders`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({
+                store_id: 1,
+                merchant_order_id: invoiceNo,
+                recipient_name: customerName,
+                recipient_phone: customerPhone,
+                recipient_address: customerAddress,
+                recipient_city: 1,
+                recipient_zone: 1,
+                delivery_type: 48,
+                item_type: 2,
+                special_instruction: `Order #${invoiceNo}`,
+                item_quantity: 1,
+                item_weight: 0.5,
+                amount_to_collect: codAmount
+              })
+            });
+
+            const orderDataRes = await orderRes.json();
+            if (orderRes.ok && (orderDataRes.data?.consignment_id || orderDataRes.consignment_id)) {
+              trackingCode = orderDataRes.data?.consignment_id || orderDataRes.consignment_id;
+              apiSuccess = true;
+            } else {
+              const orderErr = orderDataRes.message || (orderDataRes.errors ? JSON.stringify(orderDataRes.errors) : 'Pathao order creation failed');
+              errors.push(`Order #${invoiceNo} (Pathao Order Error): ${orderErr}`);
+            }
           } else {
-            trackingCode = `DC${Math.floor(10000000 + Math.random() * 90000000)}`;
+            const authErr = tokenData.message || (tokenData.errors ? JSON.stringify(tokenData.errors) : 'Invalid Pathao Client ID, Secret, Email, or Password');
+            errors.push(`Order #${invoiceNo} (Pathao Auth Error): ${authErr}`);
           }
-          apiSuccess = true;
         } catch (pErr) {
-          trackingCode = `DC${Math.floor(10000000 + Math.random() * 90000000)}`;
-          apiSuccess = true;
+          errors.push(`Order #${invoiceNo} (Pathao Connection Error): ${pErr.message}`);
         }
       } else {
         trackingCode = `${provider.toUpperCase()}-${Math.floor(10000000 + Math.random() * 90000000)}`;
@@ -329,8 +383,8 @@ exports.dispatchOrderToCourier = async (req, res) => {
         lastTrackingCode = trackingCode;
         if (orderType === 'reseller') {
           await db.query(
-            'UPDATE reseller_sales SET order_status = "in_courier", tracking_code = ?, courier_name = ? WHERE id = ? AND tenant_id = ?',
-            [trackingCode, courierAcc.account_label, singleId, tenantId]
+            'UPDATE reseller_sales SET order_status = "in_courier", tracking_code = ?, courier_name = ?, provider_code = ? WHERE id = ? AND tenant_id = ?',
+            [trackingCode, courierAcc.account_label, provider, singleId, tenantId]
           );
         } else {
           await db.query(
