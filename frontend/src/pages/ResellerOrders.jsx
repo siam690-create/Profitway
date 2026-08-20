@@ -476,7 +476,7 @@ export const ResellerOrders = () => {
   };
 
   const copyShippingLabel = (order) => {
-    const text = `Invoice: #${order.invoice_no}\nCustomer: ${order.customer_name || 'N/A'}\nPhone: ${order.customer_phone || 'N/A'}\nAddress: ${order.customer_address || 'N/A'}\nDistrict: ${order.district || 'N/A'}, Thana: ${order.thana || 'N/A'}\nCOD Amount: ৳${order.total_price || order.total_amount || 0}`;
+    const text = `Invoice: #${order.invoice_no}\nCustomer: ${order.customer_name || 'N/A'}\nPhone: ${order.customer_phone || 'N/A'}\nAddress: ${order.customer_address || 'N/A'}\nCOD Amount: ৳${Number(order.total_price || order.total_amount || 0).toFixed(2)}`;
     navigator.clipboard.writeText(text);
     showToast ? showToast('Copied 📋', 'Customer shipping details copied to clipboard!', 'info') : alert('Copied to clipboard!');
   };
@@ -1061,8 +1061,6 @@ export const ResellerOrders = () => {
                 <div>👤 <strong>Name:</strong> {viewingOrder.customer_name || 'N/A'}</div>
                 <div>📞 <strong>Phone:</strong> {viewingOrder.customer_phone || 'N/A'}</div>
                 <div>📍 <strong>Address:</strong> {viewingOrder.customer_address || 'N/A'}</div>
-                {viewingOrder.district && <div>🏢 <strong>District/City:</strong> {viewingOrder.district}</div>}
-                {viewingOrder.thana && <div>🏠 <strong>Thana/Area:</strong> {viewingOrder.thana}</div>}
               </div>
 
               {/* Items Table */}
@@ -1181,29 +1179,6 @@ export const ResellerOrders = () => {
                     onChange={(e) => setEditFormData({ ...editFormData, customer_address: e.target.value })}
                     placeholder="e.g. House #12, Road #4, Sector #10, Uttara"
                   />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">District / City</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editFormData.district}
-                      onChange={(e) => setEditFormData({ ...editFormData, district: e.target.value })}
-                      placeholder="e.g. Dhaka"
-                    />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Thana / Area</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editFormData.thana}
-                      onChange={(e) => setEditFormData({ ...editFormData, thana: e.target.value })}
-                      placeholder="e.g. Uttara"
-                    />
-                  </div>
                 </div>
 
                 {/* Pricing & Delivery Charge */}
