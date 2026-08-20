@@ -21,7 +21,8 @@ import {
   Tag,
   ShieldCheck,
   AlertCircle,
-  Pin
+  Pin,
+  ExternalLink
 } from 'lucide-react';
 
 const ResellerPortal = () => {
@@ -346,13 +347,68 @@ const ResellerPortal = () => {
     returned_count: 0
   };
 
+  const ALL_STATUSES = [
+    { key: 'new', label: 'New Orders', color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.15)', icon: '✨' },
+    { key: 'pending', label: 'Pending', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: '⏳' },
+    { key: 'confirmed', label: 'Confirmed', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)', icon: '👍' },
+    { key: 'ready', label: 'Ready', color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', icon: '📦' },
+    { key: 'in_courier', label: 'In Courier', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)', icon: '🚚' },
+    { key: 'delivered', label: 'Delivered', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: '✅' },
+    { key: 'partial_delivery', label: 'Partial Delivery', color: '#14b8a6', bg: 'rgba(20, 184, 166, 0.15)', icon: '🌓' },
+    { key: 'hold', label: 'Hold', color: '#f97316', bg: 'rgba(249, 115, 22, 0.15)', icon: '⏸️' },
+    { key: 'return_pending', label: 'Return Pending', color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.15)', icon: '⏳' },
+    { key: 'returned', label: 'Returned', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', icon: '🔄' },
+    { key: 'completed', label: 'Completed', color: '#059669', bg: 'rgba(5, 150, 105, 0.15)', icon: '🎯' },
+    { key: 'cancelled', label: 'Cancelled', color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)', icon: '🚫' },
+    { key: 'deleted', label: 'Deleted', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.18)', icon: '🗑️' }
+  ];
+
   const renderStatusBadge = (statusStr) => {
-    const s = (statusStr || 'delivered').toLowerCase();
-    if (s === 'delivered') return <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={12} /> Delivered</span>;
-    if (s === 'returned') return <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><XCircle size={12} /> Returned</span>;
-    if (s === 'shipped') return <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Truck size={12} /> Shipped</span>;
-    if (s === 'approved') return <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={12} /> Approved</span>;
-    return <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> Pending</span>;
+    const s = (statusStr || 'pending').toLowerCase();
+    const cfg = ALL_STATUSES.find(st => st.key === s) ||
+                (s === 'shipped' || s === 'processing' ? ALL_STATUSES.find(st => st.key === 'in_courier') : null) ||
+                ALL_STATUSES.find(st => st.key === 'pending');
+
+    return (
+      <span
+        style={{
+          background: cfg.bg,
+          color: cfg.color,
+          border: `1px solid ${cfg.color}40`,
+          padding: '4px 10px',
+          borderRadius: '20px',
+          fontSize: '12px',
+          fontWeight: '700',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          textTransform: 'capitalize'
+        }}
+      >
+        <span>{cfg.icon}</span> {cfg.label}
+      </span>
+    );
+  };
+
+  const getTrackingUrl = (order = {}) => {
+    const trackingCode = order.tracking_code || '';
+    if (!trackingCode) return '#';
+
+    const p = String(order.provider_code || '').toLowerCase();
+    const c = String(order.courier_name || '').toLowerCase();
+    const t = String(trackingCode).toUpperCase();
+    const phone = String(order.customer_phone || order.phone || '').trim();
+
+    if (p === 'pathao' || c.includes('pathao') || t.startsWith('DC') || t.startsWith('PAT') || t.startsWith('DT')) {
+      return `https://merchant.pathao.com/tracking?consignment_id=${trackingCode}${phone ? `&phone=${phone}` : ''}`;
+    } else if (p === 'steadfast' || c.includes('steadfast') || t.startsWith('SF')) {
+      return `https://steadfast.com.bd/t/${trackingCode}`;
+    } else if (p === 'redx' || c.includes('redx')) {
+      return `https://redx.com.bd/track-order?trackingId=${trackingCode}`;
+    } else if (p === 'paperfly' || c.includes('paperfly')) {
+      return `https://www.paperfly.com.bd/tracking?tracking_id=${trackingCode}`;
+    }
+    return `https://merchant.pathao.com/tracking?consignment_id=${trackingCode}${phone ? `&phone=${phone}` : ''}`;
   };
 
   return (
@@ -818,48 +874,146 @@ const ResellerPortal = () => {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Invoice #</th>
-                  <th>Date</th>
-                  <th>Customer Info</th>
-                  <th>Selling Price</th>
-                  <th>Wholesale Cost</th>
-                  <th>Reseller Profit</th>
-                  <th>Delivery Status</th>
-                  <th>Payout Status</th>
+                  <th>INVOICE #</th>
+                  <th>CUSTOMER INFO</th>
+                  <th>ORDERED ITEMS</th>
+                  <th>COURIER</th>
+                  <th>PRICING & COD BREAKDOWN</th>
+                  <th>DELIVERY STATUS</th>
+                  <th>RESELLER PROFIT & PAYOUT</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
                       No reseller orders found for profile "{resellerName}".
                     </td>
                   </tr>
                 ) : (
                   filteredOrders.map(o => {
-                    const status = (o.order_status || 'delivered').toLowerCase();
+                    const status = (o.order_status || 'pending').toLowerCase();
                     const profit = Number(o.reseller_profit || o.gross_profit || 0);
+                    const wholesale = Number(o.reseller_wholesale_cost || o.total_cost || 0);
+                    const sellingPrice = Number(o.total_amount || o.total_price || 0);
+                    const deliveryCharge = Number(o.delivery_fee_charged || 100);
+                    const totalCOD = sellingPrice > 0 ? sellingPrice : (wholesale + profit + deliveryCharge);
 
                     return (
                       <tr key={o.id}>
-                        <td style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{o.invoice_no}</td>
-                        <td style={{ fontSize: '13px' }}>{o.sale_date ? new Date(o.sale_date).toLocaleDateString() : '-'}</td>
+                        {/* INVOICE # & DATE */}
                         <td>
-                          <div style={{ fontWeight: '600' }}>{o.customer_name || 'Customer'}</div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>📱 {o.customer_phone || '-'}</div>
+                          <div style={{ fontWeight: '800', color: 'var(--accent-primary)', fontSize: '14px' }}>
+                            #{o.invoice_no}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {o.sale_date ? new Date(o.sale_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '-'}
+                          </div>
                         </td>
-                        <td style={{ fontWeight: '700' }}>{currency}{Number(o.total_amount || 0).toFixed(2)}</td>
-                        <td style={{ fontWeight: '600', color: 'var(--text-muted)' }}>{currency}{Number(o.reseller_wholesale_cost || o.total_cost || 0).toFixed(2)}</td>
-                        <td style={{ fontWeight: '800', color: status === 'returned' ? 'var(--danger)' : 'var(--success)' }}>
-                          {status === 'returned' ? `-${currency}${(Number(o.return_loss || 100)).toFixed(2)}` : `+${currency}${profit.toFixed(2)}`}
-                        </td>
-                        <td>{renderStatusBadge(o.order_status)}</td>
+
+                        {/* CUSTOMER INFO */}
                         <td>
-                          {o.payout_status === 'paid' ? (
-                            <span className="badge badge-success">Paid</span>
-                          ) : (
-                            <span className="badge badge-secondary">Unpaid</span>
+                          <div style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '13px' }}>
+                            {o.customer_name || 'Customer'}
+                          </div>
+                          {o.customer_phone && (
+                            <div style={{ fontSize: '12px', color: '#ec4899', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', fontWeight: '600' }}>
+                              <Phone size={12} /> {o.customer_phone}
+                            </div>
                           )}
+                          {(o.customer_address || o.district || o.thana) && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '4px', marginTop: '2px', maxWidth: '220px', lineHeight: '1.3' }}>
+                              <MapPin size={12} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
+                              <span>
+                                {o.customer_address || ''} {o.thana ? `, ${o.thana}` : ''} {o.district ? `, ${o.district}` : ''}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* ORDERED ITEMS */}
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '260px' }}>
+                            {(o.items && o.items.length > 0) ? (
+                              o.items.map((i, idx) => (
+                                <div key={idx} style={{ fontSize: '12px', color: 'var(--text-primary)', lineHeight: '1.3' }}>
+                                  • {i.product_name} <span style={{ fontWeight: '700', color: '#c084fc' }}>x{i.quantity}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>-</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* COURIER INFO */}
+                        <td>
+                          {o.tracking_code ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <strong style={{ fontSize: '13px', color: 'var(--text-primary)', letterSpacing: '0.02em', wordBreak: 'break-all' }}>
+                                  {o.tracking_code}
+                                </strong>
+                                <a
+                                  href={getTrackingUrl(o)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ color: '#8b5cf6', display: 'inline-flex', alignItems: 'center', transition: 'color 0.2s ease' }}
+                                  title="Track Parcel on Courier Website"
+                                >
+                                  <ExternalLink size={14} />
+                                </a>
+                              </div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                {o.courier_name || 'Courier'}
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>—</span>
+                          )}
+                        </td>
+
+                        {/* PRICING & COD BREAKDOWN */}
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', color: 'var(--text-muted)' }}>
+                              <span>Wholesale Price:</span>
+                              <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{currency}{wholesale.toFixed(2)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', color: 'var(--text-muted)' }}>
+                              <span>Sale Price:</span>
+                              <span style={{ fontWeight: '700', color: '#38bdf8' }}>{currency}{sellingPrice.toFixed(2)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', color: 'var(--text-muted)' }}>
+                              <span>Delivery Charge:</span>
+                              <span>+{currency}{deliveryCharge.toFixed(2)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontWeight: '800', borderTop: '1px dashed var(--border-color)', paddingTop: '3px', marginTop: '2px', color: '#fbbf24' }}>
+                              <span>Total COD:</span>
+                              <span>{currency}{totalCOD.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* DELIVERY STATUS */}
+                        <td>
+                          {renderStatusBadge(o.order_status)}
+                        </td>
+
+                        {/* RESELLER PROFIT & PAYOUT */}
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ fontWeight: '800', fontSize: '14px', color: status === 'returned' ? '#ef4444' : '#10b981' }}>
+                              {status === 'returned' ? `-${currency}${(Number(o.return_loss || 100)).toFixed(2)}` : `+${currency}${profit.toFixed(2)}`}
+                            </div>
+                            <div>
+                              {o.payout_status === 'paid' ? (
+                                <span className="badge badge-success" style={{ fontSize: '11px', padding: '2px 8px' }}>Paid</span>
+                              ) : (
+                                <span className="badge badge-secondary" style={{ fontSize: '11px', padding: '2px 8px' }}>Unpaid</span>
+                              )}
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     );
