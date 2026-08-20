@@ -882,7 +882,7 @@ const ResellerPortal = () => {
                   <th>COURIER</th>
                   <th>PRICING & COD BREAKDOWN</th>
                   <th>DELIVERY STATUS</th>
-                  <th>RESELLER PROFIT & PAYOUT</th>
+                  <th>EST PROFIT & PAYOUT</th>
                 </tr>
               </thead>
               <tbody>
@@ -895,11 +895,13 @@ const ResellerPortal = () => {
                 ) : (
                   filteredOrders.map(o => {
                     const status = (o.order_status || 'pending').toLowerCase();
-                    const profit = Number(o.reseller_profit || o.gross_profit || 0);
                     const wholesale = Number(o.reseller_wholesale_cost || o.total_cost || 0);
                     const sellingPrice = Number(o.total_amount || o.total_price || 0);
                     const deliveryCharge = Number(o.delivery_fee_charged || 100);
-                    const totalCOD = sellingPrice > 0 ? sellingPrice : (wholesale + profit + deliveryCharge);
+                    const totalCOD = sellingPrice > 0 ? sellingPrice : (wholesale + Number(o.reseller_profit || 0) + deliveryCharge);
+
+                    // Est Profit = Total COD - (Wholesale Price + Delivery Charge)
+                    const estProfit = Math.max(0, totalCOD - (wholesale + deliveryCharge));
 
                     return (
                       <tr key={o.id}>
@@ -1006,7 +1008,7 @@ const ResellerPortal = () => {
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <div style={{ fontWeight: '800', fontSize: '14px', color: status === 'returned' ? '#ef4444' : '#10b981' }}>
-                              {status === 'returned' ? `-${currency}${(Number(o.return_loss || 100)).toFixed(2)}` : `+${currency}${profit.toFixed(2)}`}
+                              {status === 'returned' ? `-${currency}${(Number(o.return_loss || 100)).toFixed(2)}` : `+${currency}${estProfit.toFixed(2)}`}
                             </div>
                             <div>
                               {o.payout_status === 'paid' ? (

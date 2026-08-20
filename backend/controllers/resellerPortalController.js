@@ -235,9 +235,9 @@ exports.submitResellerOrder = async (req, res) => {
     const customerPrice = Number(customer_total_price || 0);
     const delivFee = Number(delivery_fee_charged || 0);
 
-    // Reseller profit = Product Sale Price (Total COD - Delivery Fee) - Reseller wholesale price
-    const productSalePrice = Math.max(0, customerPrice - delivFee);
-    const resellerProfit = Math.max(0, productSalePrice - calculatedResellerWholesaleCost);
+    // Est Profit = Total COD - (Wholesale Price + Delivery Charge)
+    const totalCOD = customerPrice;
+    const resellerProfit = Math.max(0, totalCOD - (calculatedResellerWholesaleCost + delivFee));
     const invNo = `RSL-${Date.now().toString().slice(-6)}`;
     const formattedDate = new Date().toISOString().slice(0, 10);
 
