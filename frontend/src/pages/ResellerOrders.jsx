@@ -34,6 +34,36 @@ export const ResellerOrders = () => {
   const [bulkStatus, setBulkStatus] = useState('');
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
+  // Filtered list
+  const filteredOrders = orders.filter(o => {
+    const status = (o.order_status || 'pending').toLowerCase();
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'in_courier') {
+        if (status !== 'in_courier' && status !== 'shipped' && status !== 'processing') return false;
+      } else if (status !== statusFilter) {
+        return false;
+      }
+    }
+
+    if (selectedResellerFilter !== 'all' && String(o.reseller_name).toLowerCase() !== String(selectedResellerFilter).toLowerCase()) {
+      return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const inv = String(o.invoice_no || '').toLowerCase();
+      const rName = String(o.reseller_name || '').toLowerCase();
+      const cName = String(o.customer_name || '').toLowerCase();
+      const phone = String(o.customer_phone || '').toLowerCase();
+      const addr = String(o.customer_address || '').toLowerCase();
+      const itemsStr = (o.items || []).map(i => String(i.product_name || '').toLowerCase()).join(' ');
+
+      return inv.includes(q) || rName.includes(q) || cName.includes(q) || phone.includes(q) || addr.includes(q) || itemsStr.includes(q);
+    }
+
+    return true;
+  });
+
   const toggleSelectOrder = (id) => {
     setSelectedOrderIds(prev => 
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
@@ -190,36 +220,6 @@ export const ResellerOrders = () => {
     navigator.clipboard.writeText(text);
     showToast ? showToast('Copied 📋', 'Customer shipping details copied to clipboard!', 'info') : alert('Copied to clipboard!');
   };
-
-  // Filtered list
-  const filteredOrders = orders.filter(o => {
-    const status = (o.order_status || 'pending').toLowerCase();
-    if (statusFilter !== 'all') {
-      if (statusFilter === 'in_courier') {
-        if (status !== 'in_courier' && status !== 'shipped' && status !== 'processing') return false;
-      } else if (status !== statusFilter) {
-        return false;
-      }
-    }
-
-    if (selectedResellerFilter !== 'all' && String(o.reseller_name).toLowerCase() !== String(selectedResellerFilter).toLowerCase()) {
-      return false;
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const inv = String(o.invoice_no || '').toLowerCase();
-      const rName = String(o.reseller_name || '').toLowerCase();
-      const cName = String(o.customer_name || '').toLowerCase();
-      const phone = String(o.customer_phone || '').toLowerCase();
-      const addr = String(o.customer_address || '').toLowerCase();
-      const itemsStr = (o.items || []).map(i => String(i.product_name || '').toLowerCase()).join(' ');
-
-      return inv.includes(q) || rName.includes(q) || cName.includes(q) || phone.includes(q) || addr.includes(q) || itemsStr.includes(q);
-    }
-
-    return true;
-  });
 
   // Calculate summary metrics
   const pendingOrders = orders.filter(o => (o.order_status || 'pending').toLowerCase() === 'pending');
