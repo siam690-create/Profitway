@@ -480,9 +480,9 @@ exports.bulkSubmitResellerOrders = async (req, res) => {
           customerName,
           customerPhone,
           customerAddress,
-          district,
-          thana,
-          courierName,
+          district || null,
+          thana || null,
+          courierName || 'Steadfast',
           invNo,
           totalCOD,
           calculatedResellerWholesaleCost,
@@ -491,25 +491,34 @@ exports.bulkSubmitResellerOrders = async (req, res) => {
           calculatedResellerWholesaleCost,
           resellerProfit,
           formattedDate,
-          notes
+          notes || null
         ]
       );
 
       const resellerSaleId = resellerSaleResult.insertId;
 
-      // Insert item records
+      // Insert item records into reseller_sale_items
       for (const item of items) {
+        const qty = Number(item.quantity || 1);
+        const unitCost = Number(item.unit_cost || 0);
+        const unitPrice = Number(item.unit_price || unitCost);
+        const totalPrice = qty * unitPrice;
+        const itemProfit = qty * (unitPrice - unitCost);
+
         await connection.query(
-          `INSERT INTO reseller_sale_items (tenant_id, reseller_sale_id, product_id, product_name, quantity, unit_cost, total_cost)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO reseller_sale_items 
+            (tenant_id, reseller_sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, item_profit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             tenantId,
             resellerSaleId,
             item.product_id || null,
             item.product_name || 'Product',
-            Number(item.quantity || 1),
-            Number(item.unit_cost || 0),
-            Number(item.total_cost || 0)
+            qty,
+            unitCost,
+            unitPrice,
+            totalPrice,
+            itemProfit
           ]
         );
       }
