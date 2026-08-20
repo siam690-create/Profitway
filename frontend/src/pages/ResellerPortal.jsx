@@ -26,11 +26,14 @@ import {
   ExternalLink,
   Upload,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Sun,
+  Moon,
+  Calendar
 } from 'lucide-react';
 
 const ResellerPortal = () => {
-  const { authFetch, currency, showToast, resellerSession, logoutReseller, products: contextProducts } = useApp();
+  const { authFetch, currency, showToast, resellerSession, logoutReseller, products: contextProducts, theme, toggleTheme } = useApp();
 
   const [resellerName, setResellerName] = useState(() => {
     return resellerSession?.name || localStorage.getItem('profitway_reseller_name') || 'sellway';
@@ -58,6 +61,52 @@ const ResellerPortal = () => {
   const [orderSearch, setOrderSearch] = useState('');
   const [sortBy, setSortBy] = useState('all'); // 'all', 'pinned', 'top_margin', 'low_price', 'high_price', 'in_stock'
   const [inStockOnly, setInStockOnly] = useState(false);
+
+  // Date Filter System States
+  const [dateFilterPreset, setDateFilterPreset] = useState('all'); // 'all', 'today', 'yesterday', 'last_7_days', 'this_month', 'custom'
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const isDateInFilter = (dateStr) => {
+    if (dateFilterPreset === 'all') return true;
+    if (!dateStr) return false;
+
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return false;
+
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const targetStr = d.toISOString().slice(0, 10);
+
+    if (dateFilterPreset === 'today') {
+      return targetStr === todayStr;
+    }
+
+    if (dateFilterPreset === 'yesterday') {
+      const yest = new Date(now);
+      yest.setDate(yest.getDate() - 1);
+      const yestStr = yest.toISOString().slice(0, 10);
+      return targetStr === yestStr;
+    }
+
+    if (dateFilterPreset === 'last_7_days') {
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return d >= sevenDaysAgo && d <= now;
+    }
+
+    if (dateFilterPreset === 'this_month') {
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }
+
+    if (dateFilterPreset === 'custom') {
+      if (startDate && targetStr < startDate) return false;
+      if (endDate && targetStr > endDate) return false;
+      return true;
+    }
+
+    return true;
+  };
 
   // Pinned Products Per Reseller
   const [pinnedProductIds, setPinnedProductIds] = useState(() => {
@@ -549,11 +598,16 @@ const ResellerPortal = () => {
     });
 
   const filteredOrders = orders
-    .filter(o =>
-      (o.invoice_no || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
-      (o.customer_name || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
-      (o.customer_phone || '').toLowerCase().includes(orderSearch.toLowerCase())
-    )
+    .filter(o => {
+      const matchSearch =
+        (o.invoice_no || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+        (o.customer_name || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+        (o.customer_phone || '').toLowerCase().includes(orderSearch.toLowerCase());
+
+      const matchDate = isDateInFilter(o.sale_date || o.created_at);
+
+      return matchSearch && matchDate;
+    })
     .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
 
   const summary = walletData?.summary || {
@@ -678,6 +732,22 @@ const ResellerPortal = () => {
                 <ShieldCheck size={14} /> Login
               </button>
             )}
+
+            <button
+              onClick={toggleTheme}
+              className="btn btn-secondary btn-icon btn-sm"
+              title={theme === 'dark' ? 'Switch to Light Mode ☀️' : 'Switch to Dark Mode 🌙'}
+              style={{
+                background: theme === 'dark' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                color: theme === 'dark' ? '#f59e0b' : '#6366f1',
+                border: theme === 'dark' ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(99, 102, 241, 0.3)',
+                borderRadius: '8px',
+                padding: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              {theme === 'dark' ? <Sun size={15} color="#f59e0b" /> : <Moon size={15} color="#6366f1" />}
+            </button>
 
             <button onClick={fetchWalletAndOrders} className="btn btn-secondary btn-icon btn-sm" title="Refresh Profile Data">
               <RefreshCw size={14} />
@@ -1111,6 +1181,137 @@ const ResellerPortal = () => {
             <button onClick={fetchWalletAndOrders} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <RefreshCw size={14} /> Refresh Orders
             </button>
+          </div>
+
+          {/* Date Filter Bar */}
+          <div style={{ padding: '12px 16px', background: 'rgba(15, 23, 42, 0.55)', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Calendar size={15} color="#8b5cf6" /> Filter by Date:
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setDateFilterPreset('all')}
+                style={{
+                  background: dateFilterPreset === 'all' ? 'linear-gradient(135deg, #8b5cf6, #ec4899)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: dateFilterPreset === 'all' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '5px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                📅 All Time
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDateFilterPreset('today')}
+                style={{
+                  background: dateFilterPreset === 'today' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: dateFilterPreset === 'today' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '5px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                ☀️ Today
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDateFilterPreset('yesterday')}
+                style={{
+                  background: dateFilterPreset === 'yesterday' ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: dateFilterPreset === 'yesterday' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '5px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                📆 Yesterday
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDateFilterPreset('last_7_days')}
+                style={{
+                  background: dateFilterPreset === 'last_7_days' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: dateFilterPreset === 'last_7_days' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '5px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                🗓️ Last 7 Days
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDateFilterPreset('this_month')}
+                style={{
+                  background: dateFilterPreset === 'this_month' ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: dateFilterPreset === 'this_month' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '5px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                📅 This Month
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDateFilterPreset('custom')}
+                style={{
+                  background: dateFilterPreset === 'custom' ? 'linear-gradient(135deg, #ec4899, #be185d)' : 'rgba(255, 255, 255, 0.06)',
+                  color: '#fff',
+                  border: dateFilterPreset === 'custom' ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+                  padding: '5px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                🎯 Custom Range
+              </button>
+            </div>
+
+            {dateFilterPreset === 'custom' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="form-input"
+                  style={{ padding: '4px 8px', fontSize: '12px', height: '32px', background: '#1e293b', color: '#fff' }}
+                />
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="form-input"
+                  style={{ padding: '4px 8px', fontSize: '12px', height: '32px', background: '#1e293b', color: '#fff' }}
+                />
+              </div>
+            )}
           </div>
 
           <div style={{ overflowX: 'auto' }}>
