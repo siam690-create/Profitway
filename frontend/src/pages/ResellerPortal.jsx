@@ -174,13 +174,15 @@ const ResellerPortal = () => {
     try {
       setLoading(true);
       const url = resellerName 
-        ? `/api/reseller/catalog?reseller_name=${encodeURIComponent(resellerName)}`
-        : '/api/reseller/catalog';
+        ? `/api/reseller/catalog?reseller_name=${encodeURIComponent(resellerName)}&_t=${Date.now()}`
+        : `/api/reseller/catalog?_t=${Date.now()}`;
       const res = await fetch(url);
       const data = await res.json();
-      if (res.ok) setCatalog(data);
+      if (res.ok && Array.isArray(data)) {
+        setCatalog(data);
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Error fetching reseller catalog:', e);
     } finally {
       setLoading(false);
     }
@@ -190,7 +192,7 @@ const ResellerPortal = () => {
   const fetchWalletAndOrders = async () => {
     if (!resellerName) return;
     try {
-      const res = await fetch(`/api/reseller/wallet?reseller_name=${encodeURIComponent(resellerName)}`);
+      const res = await fetch(`/api/reseller/wallet?reseller_name=${encodeURIComponent(resellerName)}&_t=${Date.now()}`);
       const data = await res.json();
       if (res.ok) {
         setWalletData(data);
@@ -200,6 +202,10 @@ const ResellerPortal = () => {
       console.error(e);
     }
   };
+
+  useEffect(() => {
+    fetchCatalog();
+  }, []);
 
   useEffect(() => {
     fetchCatalog();
