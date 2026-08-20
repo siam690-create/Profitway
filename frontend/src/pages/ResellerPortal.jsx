@@ -329,11 +329,13 @@ const ResellerPortal = () => {
       return 0;
     });
 
-  const filteredOrders = orders.filter(o =>
-    (o.invoice_no || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
-    (o.customer_name || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
-    (o.customer_phone || '').toLowerCase().includes(orderSearch.toLowerCase())
-  );
+  const filteredOrders = orders
+    .filter(o =>
+      (o.invoice_no || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+      (o.customer_name || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+      (o.customer_phone || '').toLowerCase().includes(orderSearch.toLowerCase())
+    )
+    .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
 
   const summary = walletData?.summary || {
     total_delivered_revenue: 0,

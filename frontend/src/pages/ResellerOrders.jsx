@@ -121,7 +121,7 @@ export const ResellerOrders = () => {
     }
 
     return true;
-  });
+  }).sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
 
   const toggleSelectOrder = (id) => {
     setSelectedOrderIds(prev => 

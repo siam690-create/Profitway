@@ -370,6 +370,8 @@ exports.getResellerWallet = async (req, res) => {
       params.push(reseller_name);
     }
 
+    salesQuery += ` ORDER BY id DESC`;
+
     const [sales] = await db.query(salesQuery, params);
 
     for (let s of sales) {
