@@ -35,7 +35,8 @@ import {
   Minus,
   FileText,
   Printer,
-  Eye
+  Eye,
+  RotateCcw
 } from 'lucide-react';
 
 const ResellerPortal = () => {
@@ -955,56 +956,81 @@ const ResellerPortal = () => {
           </div>
         </div>
 
-        {/* Live Wallet KPI Stats Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginTop: '20px' }}>
-          <div style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', padding: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <DollarSign size={16} /> <span>Available Wallet Balance</span>
-            </div>
-            <div style={{ fontSize: '26px', fontWeight: '800', color: '#10b981', marginTop: '6px' }}>
-              {currency}{summary.available_balance.toFixed(2)}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Net Profit minus Payouts Received
-            </div>
-          </div>
+        {/* Live KPI Stats Cards */}
+        {(() => {
+          const nonDeletedOrders = orders.filter(o => (o.order_status || '').toLowerCase() !== 'deleted');
+          const totalOrdersCount = nonDeletedOrders.length;
+          const deliveredOrdersCount = nonDeletedOrders.filter(o => {
+            const s = (o.order_status || '').toLowerCase();
+            return s === 'delivered' || s === 'completed' || s === 'complete' || s === 'paid';
+          }).length;
+          const returnedOrdersCount = nonDeletedOrders.filter(o => {
+            const s = (o.order_status || '').toLowerCase();
+            return s === 'returned' || s === 'return_pending';
+          }).length;
+          const activeInTransitCount = nonDeletedOrders.filter(o => {
+            const s = (o.order_status || '').toLowerCase();
+            return s !== 'delivered' && s !== 'completed' && s !== 'complete' && s !== 'paid' && s !== 'returned' && s !== 'cancelled';
+          }).length;
 
-          <div style={{ background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '12px', padding: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <TrendingUp size={16} /> <span>Delivered Profit ({summary.delivered_count})</span>
-            </div>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: '#3b82f6', marginTop: '6px' }}>
-              +{currency}{summary.total_delivered_profit.toFixed(2)}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Total profit from successful sales
-            </div>
-          </div>
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginTop: '20px' }}>
+              
+              {/* 1. Total Received Money */}
+              <div style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <DollarSign size={17} /> <span>Total Received Money</span>
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '800', color: '#10b981', marginTop: '6px' }}>
+                  {currency}{Number(summary.paid_amount || 0).toFixed(2)}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  পেমেন্ট মারফত মোট প্রাপ্ত টাকা
+                </div>
+              </div>
 
-          <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', padding: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <TrendingDown size={16} /> <span>Return Charges Loss ({summary.returned_count})</span>
-            </div>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: '#ef4444', marginTop: '6px' }}>
-              -{currency}{summary.total_return_loss.toFixed(2)}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Delivery fee cost on returned parcels
-            </div>
-          </div>
+              {/* 2. Total Delivered Order */}
+              <div style={{ background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle size={17} /> <span>Total Delivered Order</span>
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '800', color: '#3b82f6', marginTop: '6px' }}>
+                  {deliveredOrdersCount || summary.delivered_count} <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-muted)' }}>Orders</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#10b981', marginTop: '4px', fontWeight: '600' }}>
+                  Profit: +{currency}{Number(summary.total_delivered_profit || 0).toFixed(2)}
+                </div>
+              </div>
 
-          <div style={{ background: 'rgba(139, 92, 246, 0.12)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '12px', padding: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: '#8b5cf6', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <CreditCard size={16} /> <span>Total Payouts Received</span>
+              {/* 3. Total Returned Order */}
+              <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <RotateCcw size={17} /> <span>Total Returned Order</span>
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '800', color: '#ef4444', marginTop: '6px' }}>
+                  {returnedOrdersCount || summary.returned_count} <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-muted)' }}>Orders</span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', fontWeight: '600' }}>
+                  Loss: -{currency}{Number(summary.total_return_loss || 0).toFixed(2)}
+                </div>
+              </div>
+
+              {/* 4. Total Order */}
+              <div style={{ background: 'rgba(139, 92, 246, 0.12)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ShoppingBag size={17} /> <span>Total Order</span>
+                </div>
+                <div style={{ fontSize: '26px', fontWeight: '800', color: '#c084fc', marginTop: '6px' }}>
+                  {totalOrdersCount} <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-muted)' }}>Orders</span>
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  {activeInTransitCount} Active / In Transit
+                </div>
+              </div>
+
             </div>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: '#8b5cf6', marginTop: '6px' }}>
-              {currency}{summary.paid_amount.toFixed(2)}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Paid to bKash / Bank by merchant
-            </div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
 
       {/* Tabs Navigation */}
