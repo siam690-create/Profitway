@@ -234,43 +234,6 @@ export const ResellerOrders = () => {
         </button>
       </div>
 
-      {/* KPI Stats Cards Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        <div className="card" style={{ padding: '16px', borderLeft: '4px solid #f59e0b' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>Pending Approval</div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#f59e0b', marginTop: '4px' }}>
-            {pendingOrders.length} <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-muted)' }}>Orders</span>
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '16px', borderLeft: '4px solid #10b981' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>Delivered Sales COD</div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#10b981', marginTop: '4px' }}>
-            {formatCurrency(totalDeliveredRevenue)}
-          </div>
-          <div style={{ fontSize: '11px', color: '#10b981', marginTop: '2px', fontWeight: '700' }}>
-            Delivered Profit: +{formatCurrency(totalResellerProfit)}
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '16px', borderLeft: '4px solid #ef4444' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>Returned Loss (Courier)</div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#ef4444', marginTop: '4px' }}>
-            -{formatCurrency(totalReturnLoss)}
-          </div>
-          <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '2px', fontWeight: '700' }}>
-            {returnedOrders.length} Returned Parcels
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '16px', borderLeft: '4px solid #8b5cf6' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>Total Submitted Orders</div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: '#8b5cf6', marginTop: '4px' }}>
-            {orders.length} <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-muted)' }}>Parcels</span>
-          </div>
-        </div>
-      </div>
-
       {/* Main Table Card */}
       <div className="card" style={{ padding: 0 }}>
         {/* Filter and Search Bar */}
