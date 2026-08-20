@@ -1024,8 +1024,8 @@ const ResellerPortal = () => {
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
-                        <span className={`badge ${p.stock_quantity > 0 ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px' }}>
-                          In Stock: {p.stock_quantity} {p.unit}
+                        <span className={`badge ${p.stock_quantity > 0 ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px', fontWeight: '700' }}>
+                          {p.stock_quantity > 0 ? 'Available Stock' : 'Stock Out'}
                         </span>
                       </div>
                     </div>
