@@ -173,12 +173,9 @@ const ResellerPortal = () => {
   const fetchCatalog = async () => {
     try {
       setLoading(true);
-      const url = resellerName 
-        ? `/api/reseller/catalog?reseller_name=${encodeURIComponent(resellerName)}&_t=${Date.now()}`
-        : `/api/reseller/catalog?_t=${Date.now()}`;
-      const res = await fetch(url);
+      const res = await fetch(`/api/reseller/catalog?_t=${Date.now()}`);
       const data = await res.json();
-      if (res.ok && Array.isArray(data)) {
+      if (Array.isArray(data)) {
         setCatalog(data);
       }
     } catch (e) {
@@ -727,7 +724,7 @@ const ResellerPortal = () => {
       {/* Tabs Navigation */}
       <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
         <button
-          onClick={() => setActiveTab('catalog')}
+          onClick={() => { setActiveTab('catalog'); fetchCatalog(); }}
           className={`btn ${activeTab === 'catalog' ? 'btn-primary' : 'btn-secondary'}`}
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
@@ -943,99 +940,112 @@ const ResellerPortal = () => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-            {filteredCatalog.map(p => {
-              const estimatedMargin = Math.max(0, p.retail_price - p.reseller_price);
-              const isPinned = pinnedProductIds.includes(p.id);
+          {filteredCatalog.length === 0 ? (
+            <div style={{ padding: '40px 20px', textAlign: 'center', background: 'rgba(30, 41, 59, 0.5)', borderRadius: '16px', border: '1px solid var(--border-color)', margin: '16px 0' }}>
+              <ShoppingBag size={48} color="#8b5cf6" style={{ marginBottom: '12px' }} />
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#fff', margin: 0 }}>No Products Loaded in Wholesale Catalog</h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '8px 0 20px 0' }}>
+                If products do not appear automatically, click the reload button below to fetch all 236 store products.
+              </p>
+              <button onClick={fetchCatalog} className="btn btn-primary" style={{ background: '#8b5cf6', borderColor: '#8b5cf6', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: '700' }}>
+                <RefreshCw size={16} /> <span>Reload Wholesale Catalog</span>
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+              {filteredCatalog.map(p => {
+                const estimatedMargin = Math.max(0, p.retail_price - p.reseller_price);
+                const isPinned = pinnedProductIds.includes(p.id);
 
-              return (
-                <div
-                  key={p.id}
-                  className="card"
-                  style={{
-                    padding: '16px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justify: 'space-between',
-                    gap: '12px',
-                    border: isPinned ? '1.5px solid #f59e0b' : '1px solid var(--border-color)',
-                    background: isPinned ? 'rgba(245, 158, 11, 0.04)' : undefined,
-                    boxShadow: isPinned ? '0 4px 16px rgba(245, 158, 11, 0.15)' : undefined,
-                    position: 'relative'
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                      <div>
-                        <h3 style={{ fontSize: '15px', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>{p.name}</h3>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>SKU: {p.sku}</div>
+                return (
+                  <div
+                    key={p.id}
+                    className="card"
+                    style={{
+                      padding: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      border: isPinned ? '1.5px solid #f59e0b' : '1px solid var(--border-color)',
+                      background: isPinned ? 'rgba(245, 158, 11, 0.04)' : undefined,
+                      boxShadow: isPinned ? '0 4px 16px rgba(245, 158, 11, 0.15)' : undefined,
+                      position: 'relative'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <div>
+                          <h3 style={{ fontSize: '15px', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>{p.name}</h3>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>SKU: {p.sku}</div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                          {p.is_combo && <span className="badge badge-info" style={{ fontSize: '10px' }}>COMBO</span>}
+                          <button
+                            type="button"
+                            onClick={() => togglePinProduct(p.id)}
+                            style={{
+                              background: isPinned ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                              border: isPinned ? '1px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.15)',
+                              color: isPinned ? '#f59e0b' : '#94a3b8',
+                              borderRadius: '8px',
+                              padding: '4px 8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              transition: 'all 0.2s ease'
+                            }}
+                            title={isPinned ? 'Unpin Product' : 'Pin Product to Top'}
+                          >
+                            <Pin size={13} fill={isPinned ? '#f59e0b' : 'transparent'} />
+                            <span>{isPinned ? 'Pinned' : 'Pin'}</span>
+                          </button>
+                        </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                        {p.is_combo && <span className="badge badge-info" style={{ fontSize: '10px' }}>COMBO</span>}
-                        <button
-                          type="button"
-                          onClick={() => togglePinProduct(p.id)}
-                          style={{
-                            background: isPinned ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.06)',
-                            border: isPinned ? '1px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.15)',
-                            color: isPinned ? '#f59e0b' : '#94a3b8',
-                            borderRadius: '8px',
-                            padding: '4px 8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            transition: 'all 0.2s ease'
-                          }}
-                          title={isPinned ? 'Unpin Product' : 'Pin Product to Top'}
-                        >
-                          <Pin size={13} fill={isPinned ? '#f59e0b' : 'transparent'} />
-                          <span>{isPinned ? 'Pinned' : 'Pin'}</span>
-                        </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+                        <span className={`badge ${p.stock_quantity > 0 ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px' }}>
+                          In Stock: {p.stock_quantity} {p.unit}
+                        </span>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
-                      <span className={`badge ${p.stock_quantity > 0 ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px' }}>
-                        In Stock: {p.stock_quantity} {p.unit}
-                      </span>
+                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
+                        <span>Retail Selling Price:</span>
+                        <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{currency}{p.retail_price.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '800' }}>
+                        <span>Wholesale Reseller Price:</span>
+                        <span style={{ color: '#8b5cf6' }}>{currency}{p.reseller_price.toFixed(2)}</span>
+                      </div>
+
+                      {/* Estimated Margin Badge */}
+                      <div style={{ background: 'rgba(16, 185, 129, 0.12)', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', fontWeight: '600', color: '#10b981' }}>💰 Est. Margin / Profit:</span>
+                        <strong style={{ fontSize: '13px', fontWeight: '800', color: '#10b981' }}>
+                          +{currency}{estimatedMargin.toFixed(2)}
+                        </strong>
+                      </div>
+
+                      <button
+                        onClick={() => handleOpenOrderModal(p)}
+                        disabled={p.stock_quantity <= 0}
+                        className="btn btn-primary btn-sm"
+                        style={{ width: '100%', marginTop: '4px', justifyContent: 'center' }}
+                      >
+                        <Plus size={14} /> Submit Order for Customer
+                      </button>
                     </div>
                   </div>
-
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
-                      <span>Retail Selling Price:</span>
-                      <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{currency}{p.retail_price.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '800' }}>
-                      <span>Wholesale Reseller Price:</span>
-                      <span style={{ color: '#8b5cf6' }}>{currency}{p.reseller_price.toFixed(2)}</span>
-                    </div>
-
-                    {/* Estimated Margin Badge */}
-                    <div style={{ background: 'rgba(16, 185, 129, 0.12)', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#10b981' }}>💰 Est. Margin / Profit:</span>
-                      <strong style={{ fontSize: '13px', fontWeight: '800', color: '#10b981' }}>
-                        +{currency}{estimatedMargin.toFixed(2)}
-                      </strong>
-                    </div>
-
-                    <button
-                      onClick={() => handleOpenOrderModal(p)}
-                      disabled={p.stock_quantity <= 0}
-                      className="btn btn-primary btn-sm"
-                      style={{ width: '100%', marginTop: '4px', justifyContent: 'center' }}
-                    >
-                      <Plus size={14} /> Submit Order for Customer
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
