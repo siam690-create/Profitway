@@ -162,6 +162,32 @@ exports.getResellerCatalog = async (req, res) => {
       [tenantId]
     );
 
+    for (let prod of products) {
+      if (prod.is_combo) {
+        const [comboItems] = await db.query(
+          `SELECT ci.*, p.stock_quantity as child_stock
+           FROM combo_items ci
+           JOIN products p ON ci.child_product_id = p.id
+           WHERE ci.combo_product_id = ? AND ci.tenant_id = ?`,
+          [prod.id, tenantId]
+        );
+        if (comboItems.length > 0) {
+          let maxComboPossible = Infinity;
+          for (const cItem of comboItems) {
+            const childAvailable = Number(cItem.child_stock || 0);
+            const requiredPerCombo = Number(cItem.quantity || 1);
+            const possibleFromThisChild = Math.floor(childAvailable / requiredPerCombo);
+            if (possibleFromThisChild < maxComboPossible) {
+              maxComboPossible = possibleFromThisChild;
+            }
+          }
+          prod.stock_quantity = maxComboPossible === Infinity ? 0 : maxComboPossible;
+        } else {
+          prod.stock_quantity = 0;
+        }
+      }
+    }
+
     const catalog = products.map(p => ({
       id: p.id,
       name: p.name || 'Unnamed Product',
