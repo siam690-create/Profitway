@@ -386,12 +386,6 @@ export const ResellerOrders = () => {
                             <span style={{ fontWeight: '800', color: 'var(--text-primary)', fontSize: '12.5px' }}>Total COD:</span>
                             <strong style={{ fontSize: '15px', color: '#f59e0b', fontWeight: '800' }}>{currency}{totalCOD.toFixed(2)}</strong>
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Est. Profit:</span>
-                            <strong style={{ fontSize: '13px', color: profit >= 0 ? '#10b981' : '#ef4444' }}>
-                              +{currency}{profit.toFixed(2)}
-                            </strong>
-                          </div>
                           {status === 'returned' && (
                             <div style={{ fontSize: '11px', color: '#ef4444', textAlign: 'right' }}>
                               Loss: -{currency}{Number(order.return_loss || 100).toFixed(2)}
