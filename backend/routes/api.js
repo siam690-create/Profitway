@@ -227,6 +227,7 @@ router.get('/reports/profit-loss', reportController.getProfitLossReport);
 
 // Admin Reseller Submitted Orders Management APIs
 router.get('/admin/reseller-orders', resellerPortalController.getAllResellerOrdersForAdmin);
+router.put('/admin/reseller-orders/:id', checkActiveSubscription, resellerPortalController.updateResellerOrderDetailsByAdmin);
 router.put('/admin/reseller-orders/:id/status', checkActiveSubscription, resellerPortalController.updateResellerOrderStatusByAdmin);
 router.delete('/admin/reseller-orders/:id', checkActiveSubscription, resellerPortalController.deleteResellerOrderForAdmin);
 router.post('/admin/reseller-orders/bulk-status', checkActiveSubscription, resellerPortalController.bulkUpdateResellerOrdersStatus);

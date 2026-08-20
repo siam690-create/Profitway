@@ -1131,6 +1131,152 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
   }
 };
 
+// 12B. Admin: Edit Full Reseller Order Details (Customer, Delivery Fee, Total COD, Products, Notes)
+exports.updateResellerOrderDetailsByAdmin = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+    const {
+      customer_name,
+      customer_phone,
+      customer_address,
+      district,
+      thana,
+      delivery_fee_charged,
+      total_amount,
+      notes,
+      order_status,
+      items
+    } = req.body;
+
+    await connection.beginTransaction();
+
+    const [existingRows] = await connection.query(
+      'SELECT * FROM reseller_sales WHERE id = ? AND tenant_id = ? FOR UPDATE',
+      [id, tenantId]
+    );
+
+    if (existingRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Reseller order not found.' });
+    }
+
+    const currentOrder = existingRows[0];
+    const delivFee = delivery_fee_charged !== undefined ? Number(delivery_fee_charged) : Number(currentOrder.delivery_fee_charged || 0);
+    const totalCOD = total_amount !== undefined ? Number(total_amount) : Number(currentOrder.total_amount || 0);
+
+    let calculatedWholesaleCost = Number(currentOrder.reseller_wholesale_cost || 0);
+
+    // If items were provided, update reseller_sale_items and recalculate wholesale cost
+    if (items && Array.isArray(items) && items.length > 0) {
+      calculatedWholesaleCost = 0;
+      await connection.query('DELETE FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
+
+      for (const item of items) {
+        const qty = Number(item.quantity || 1);
+        let unitCost = Number(item.unit_cost || 0);
+        let unitPrice = Number(item.unit_price || unitCost);
+
+        if (item.product_id && !unitCost) {
+          const [pRows] = await connection.query(
+            'SELECT reseller_price, cost_price, name FROM products WHERE id = ? AND tenant_id = ?',
+            [item.product_id, tenantId]
+          );
+          if (pRows.length > 0) {
+            unitCost = Number(pRows[0].reseller_price || pRows[0].cost_price || 0);
+            item.product_name = pRows[0].name;
+          }
+        }
+
+        const totalPrice = qty * unitPrice;
+        const itemProfit = qty * (unitPrice - unitCost);
+        calculatedWholesaleCost += qty * unitCost;
+
+        await connection.query(
+          `INSERT INTO reseller_sale_items 
+            (tenant_id, reseller_sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, item_profit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            tenantId,
+            id,
+            item.product_id || null,
+            item.product_name || 'Product',
+            qty,
+            unitCost,
+            unitPrice,
+            totalPrice,
+            itemProfit
+          ]
+        );
+      }
+    }
+
+    // Recalculate profit = Total COD - (Wholesale + Delivery)
+    const newProfit = Math.max(0, totalCOD - (calculatedWholesaleCost + delivFee));
+
+    await connection.query(
+      `UPDATE reseller_sales SET
+        customer_name = ?,
+        customer_phone = ?,
+        customer_address = ?,
+        district = ?,
+        thana = ?,
+        delivery_fee_charged = ?,
+        total_amount = ?,
+        total_cost = ?,
+        reseller_wholesale_cost = ?,
+        reseller_profit = ?,
+        gross_profit = ?,
+        notes = ?,
+        order_status = COALESCE(?, order_status)
+       WHERE id = ? AND tenant_id = ?`,
+      [
+        customer_name !== undefined ? customer_name : currentOrder.customer_name,
+        customer_phone !== undefined ? customer_phone : currentOrder.customer_phone,
+        customer_address !== undefined ? customer_address : currentOrder.customer_address,
+        district !== undefined ? district : currentOrder.district,
+        thana !== undefined ? thana : currentOrder.thana,
+        delivFee,
+        totalCOD,
+        calculatedWholesaleCost,
+        calculatedWholesaleCost,
+        newProfit,
+        newProfit,
+        notes !== undefined ? notes : currentOrder.notes,
+        order_status || null,
+        id,
+        tenantId
+      ]
+    );
+
+    await connection.commit();
+
+    res.json({
+      message: `Order #${currentOrder.invoice_no} updated successfully!`,
+      order: {
+        id,
+        customer_name,
+        customer_phone,
+        customer_address,
+        district,
+        thana,
+        delivery_fee_charged: delivFee,
+        total_amount: totalCOD,
+        reseller_wholesale_cost: calculatedWholesaleCost,
+        reseller_profit: newProfit
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating reseller order details:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
 // 13. Admin: Delete Reseller Order (Soft Delete -> Status = 'deleted')
 exports.deleteResellerOrderForAdmin = async (req, res) => {
   const connection = await db.getConnection();
