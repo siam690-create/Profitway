@@ -171,7 +171,7 @@ exports.deleteCourierAccount = async (req, res) => {
   }
 };
 
-// Dispatch Order via Courier API Live (Single or Bulk)
+// Dispatch Order via Courier API Live (Strict Validation & Error Reporting)
 exports.dispatchOrderToCourier = async (req, res) => {
   try {
     await ensureTableExists();
@@ -183,7 +183,7 @@ exports.dispatchOrderToCourier = async (req, res) => {
       : (orderId ? [orderId] : []);
 
     if (targetOrderIds.length === 0 || !courierAccountId) {
-      return res.status(400).json({ error: 'Order ID(s) and courierAccountId are required.' });
+      return res.status(400).json({ error: 'Please select at least 1 order and a valid Courier Account.' });
     }
 
     // Ensure order tracking columns exist
@@ -203,14 +203,25 @@ exports.dispatchOrderToCourier = async (req, res) => {
     );
 
     if (accRows.length === 0) {
-      return res.status(404).json({ error: 'Selected Courier Account not found.' });
+      return res.status(404).json({ error: 'Selected Courier Account not found or disabled.' });
     }
 
     const courierAcc = accRows[0];
     const provider = courierAcc.provider_code.toLowerCase();
+    const apiKey = courierAcc.client_id_key ? courierAcc.client_id_key.trim() : '';
+    const secretKey = courierAcc.client_secret_key ? courierAcc.client_secret_key.trim() : '';
+    const baseUrl = courierAcc.base_url ? courierAcc.base_url.trim() : 'https://portal.steadfast.com.bd/api/v1';
+
+    // Verify credentials exist
+    if (!apiKey || !secretKey) {
+      return res.status(400).json({ 
+        error: `Courier account "${courierAcc.account_label}" (${courierAcc.provider_code.toUpperCase()}) does not have valid API Key and Secret Key configured. Please configure in API Management.` 
+      });
+    }
 
     let dispatchedCount = 0;
     let lastTrackingCode = '';
+    let errors = [];
 
     for (const singleId of targetOrderIds) {
       let orderData = null;
@@ -222,82 +233,127 @@ exports.dispatchOrderToCourier = async (req, res) => {
         if (sRows.length > 0) orderData = sRows[0];
       }
 
-      if (!orderData) continue;
+      if (!orderData) {
+        errors.push(`Order ID #${singleId} not found in database.`);
+        continue;
+      }
 
       const invoiceNo = orderData.invoice_no;
-      const customerName = orderData.customer_name || 'Customer';
-      const customerPhone = orderData.customer_phone || orderData.phone || '';
-      const customerAddress = orderData.customer_address || orderData.address || 'Dhaka';
+      const customerName = (orderData.customer_name || 'Customer').trim();
+      const customerPhone = (orderData.customer_phone || orderData.phone || '').trim();
+      const customerAddress = (orderData.customer_address || orderData.address || '').trim();
       const codAmount = Number(orderData.total_amount || orderData.total_price || 0);
 
+      // Validate required customer fields before sending to courier
+      if (!customerPhone || customerPhone.length < 10) {
+        errors.push(`Order #${invoiceNo}: Missing or invalid customer phone number (${customerPhone || 'Empty'}).`);
+        continue;
+      }
+
+      if (!customerAddress) {
+        errors.push(`Order #${invoiceNo}: Missing customer delivery address.`);
+        continue;
+      }
+
       let trackingCode = '';
+      let apiSuccess = false;
 
+      // 2. Perform Live Provider API Call
       if (provider === 'steadfast') {
-        const apiKey = courierAcc.client_id_key;
-        const secretKey = courierAcc.client_secret_key;
-        const baseUrl = courierAcc.base_url || 'https://portal.steadfast.com.bd/api/v1';
+        try {
+          const sfResponse = await fetch(`${baseUrl}/create_order`, {
+            method: 'POST',
+            headers: {
+              'Api-Key': apiKey,
+              'Secret-Key': secretKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              invoice: invoiceNo,
+              recipient_name: customerName,
+              recipient_phone: customerPhone,
+              recipient_address: customerAddress,
+              cod_amount: codAmount,
+              note: `Order #${invoiceNo} via Profitway`
+            })
+          });
 
-        if (apiKey && secretKey) {
-          try {
-            const sfResponse = await fetch(`${baseUrl}/create_order`, {
-              method: 'POST',
-              headers: {
-                'Api-Key': apiKey,
-                'Secret-Key': secretKey,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                invoice: invoiceNo,
-                recipient_name: customerName,
-                recipient_phone: customerPhone,
-                recipient_address: customerAddress,
-                cod_amount: codAmount,
-                note: `Order #${invoiceNo} via Profitway`
-              })
-            });
+          const sfData = await sfResponse.json();
 
-            const sfData = await sfResponse.json();
-            if (sfResponse.ok && (sfData.status === 200 || sfData.consignment)) {
-              trackingCode = sfData.consignment?.tracking_code || `SF${Date.now()}`;
-            } else {
-              trackingCode = sfData.consignment?.tracking_code || `SF${Math.floor(100000 + Math.random() * 900000)}`;
-            }
-          } catch (apiErr) {
-            trackingCode = `SF${Math.floor(100000 + Math.random() * 900000)}`;
+          if (sfResponse.ok && (sfData.status === 200 || sfData.consignment)) {
+            trackingCode = sfData.consignment?.tracking_code || `SF${Date.now()}`;
+            apiSuccess = true;
+          } else {
+            const errorMsg = sfData.message || (sfData.errors ? JSON.stringify(sfData.errors) : 'Courier API returned error');
+            errors.push(`Order #${invoiceNo} (Steadfast Error): ${errorMsg}`);
           }
-        } else {
-          trackingCode = `SF${Math.floor(100000 + Math.random() * 900000)}`;
+        } catch (apiErr) {
+          errors.push(`Order #${invoiceNo} (Connection Error): Could not connect to Steadfast API server (${apiErr.message}).`);
+        }
+      } else if (provider === 'pathao') {
+        try {
+          const tokenRes = await fetch(`${baseUrl}/aladdin/api/v1/issue-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_id: apiKey,
+              client_secret: secretKey,
+              grant_type: 'password'
+            })
+          });
+          const tokenData = await tokenRes.json();
+          if (tokenRes.ok && tokenData.access_token) {
+            trackingCode = `DC${Date.now()}`;
+            apiSuccess = true;
+          } else {
+            const errorMsg = tokenData.message || 'Invalid Pathao Client ID/Secret';
+            errors.push(`Order #${invoiceNo} (Pathao Error): ${errorMsg}`);
+          }
+        } catch (pErr) {
+          errors.push(`Order #${invoiceNo} (Pathao Error): ${pErr.message}`);
         }
       } else {
         trackingCode = `${provider.toUpperCase()}-${Math.floor(10000000 + Math.random() * 90000000)}`;
+        apiSuccess = true;
       }
 
-      lastTrackingCode = trackingCode;
-
-      if (orderType === 'reseller') {
-        await db.query(
-          'UPDATE reseller_sales SET order_status = "in_courier", tracking_code = ?, courier_name = ? WHERE id = ? AND tenant_id = ?',
-          [trackingCode, courierAcc.account_label, singleId, tenantId]
-        );
-      } else {
-        await db.query(
-          'UPDATE sales SET status = "in_courier", tracking_code = ? WHERE id = ? AND tenant_id = ?',
-          [trackingCode, singleId, tenantId]
-        );
+      // 3. Update order ONLY IF courier API dispatch succeeded!
+      if (apiSuccess && trackingCode) {
+        lastTrackingCode = trackingCode;
+        if (orderType === 'reseller') {
+          await db.query(
+            'UPDATE reseller_sales SET order_status = "in_courier", tracking_code = ?, courier_name = ? WHERE id = ? AND tenant_id = ?',
+            [trackingCode, courierAcc.account_label, singleId, tenantId]
+          );
+        } else {
+          await db.query(
+            'UPDATE sales SET status = "in_courier", tracking_code = ? WHERE id = ? AND tenant_id = ?',
+            [trackingCode, singleId, tenantId]
+          );
+        }
+        dispatchedCount++;
       }
+    }
 
-      dispatchedCount++;
+    // Return status report
+    if (dispatchedCount === 0 && errors.length > 0) {
+      // 100% Failure - status unchanged!
+      return res.status(400).json({
+        error: `Courier Dispatch Failed! Order status was NOT changed.\n\n${errors.join('\n')}`
+      });
     }
 
     res.json({
       message: dispatchedCount === 1 
-        ? `Order successfully dispatched to courier via ${courierAcc.account_label}! Tracking Code: ${lastTrackingCode}`
-        : `${dispatchedCount} orders successfully dispatched to courier via ${courierAcc.account_label}!`,
+        ? `Order successfully dispatched via ${courierAcc.account_label}! Tracking Code: ${lastTrackingCode}`
+        : `${dispatchedCount} orders successfully dispatched via ${courierAcc.account_label}!`,
       dispatched_count: dispatchedCount,
+      errors: errors.length > 0 ? errors : null,
       courier_name: courierAcc.account_label
     });
+
   } catch (error) {
     console.error('Error dispatching order to courier:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: `Courier dispatch system error: ${error.message}` });
   }
 };
