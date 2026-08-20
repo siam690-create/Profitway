@@ -108,6 +108,7 @@ router.post('/courier-accounts', checkActiveSubscription, courierAccountControll
 router.put('/courier-accounts/:id', checkActiveSubscription, courierAccountController.updateCourierAccount);
 router.patch('/courier-accounts/:id/toggle', checkActiveSubscription, courierAccountController.toggleCourierAccount);
 router.delete('/courier-accounts/:id', checkActiveSubscription, courierAccountController.deleteCourierAccount);
+router.post('/courier-accounts/dispatch', checkActiveSubscription, courierAccountController.dispatchOrderToCourier);
 
 // Store API Keys Management APIs (External Order Ingestion Setup)
 router.get('/store-api-keys', storeApiKeyController.getStoreApiKeys);
