@@ -28,6 +28,7 @@ const taskController = require('../controllers/taskController');
 const resellerController = require('../controllers/resellerController');
 const resellerPortalController = require('../controllers/resellerPortalController');
 const apiIntegrationController = require('../controllers/apiIntegrationController');
+const courierAccountController = require('../controllers/courierAccountController');
 
 const { authenticate, requireSuperAdmin, checkActiveSubscription } = require('../middleware/authMiddleware');
 
@@ -100,6 +101,13 @@ router.put('/settings', checkActiveSubscription, settingController.updateSetting
 // API Management & Integrations APIs
 router.get('/api-integrations', apiIntegrationController.getApiIntegrations);
 router.put('/api-integrations', checkActiveSubscription, apiIntegrationController.updateApiIntegrations);
+
+// Multi-Account Courier Management APIs
+router.get('/courier-accounts', courierAccountController.getCourierAccounts);
+router.post('/courier-accounts', checkActiveSubscription, courierAccountController.createCourierAccount);
+router.put('/courier-accounts/:id', checkActiveSubscription, courierAccountController.updateCourierAccount);
+router.patch('/courier-accounts/:id/toggle', checkActiveSubscription, courierAccountController.toggleCourierAccount);
+router.delete('/courier-accounts/:id', checkActiveSubscription, courierAccountController.deleteCourierAccount);
 
 // Store API Keys Management APIs (External Order Ingestion Setup)
 router.get('/store-api-keys', storeApiKeyController.getStoreApiKeys);
