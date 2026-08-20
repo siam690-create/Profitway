@@ -400,41 +400,52 @@ export const ResellerOrders = () => {
                         </div>
                       </td>
 
-                      <td>{renderStatusBadge(order.order_status)}</td>
+                      <td>
+                        {(() => {
+                          const currentKey = status === 'shipped' || status === 'processing' ? 'in_courier' : status;
+                          const cfg = ALL_STATUSES.find(st => st.key === currentKey) || ALL_STATUSES.find(st => st.key === 'pending');
+
+                          return (
+                            <select
+                              value={currentKey}
+                              onChange={(e) => {
+                                const newSt = e.target.value;
+                                if (newSt === 'returned') {
+                                  handleOpenReturnModal(order);
+                                } else {
+                                  handleUpdateStatus(order.id, newSt);
+                                }
+                              }}
+                              style={{
+                                background: cfg.bg,
+                                color: cfg.color,
+                                border: `1px solid ${cfg.color}60`,
+                                padding: '6px 12px',
+                                borderRadius: '20px',
+                                fontSize: '12px',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                outline: 'none',
+                                textTransform: 'capitalize',
+                                boxShadow: `0 2px 6px ${cfg.color}20`
+                              }}
+                            >
+                              {ALL_STATUSES.filter(s => s.key !== 'all').map(s => (
+                                <option
+                                  key={s.key}
+                                  value={s.key}
+                                  style={{ background: '#1e293b', color: '#f8fafc', fontWeight: '600' }}
+                                >
+                                  {s.icon} {s.label}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })()}
+                      </td>
 
                       <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                          {/* Quick Status Select Dropdown */}
-                          <select
-                            className="form-select"
-                            value={status === 'shipped' || status === 'processing' ? 'in_courier' : status}
-                            onChange={(e) => {
-                              const newSt = e.target.value;
-                              if (newSt === 'returned') {
-                                handleOpenReturnModal(order);
-                              } else {
-                                handleUpdateStatus(order.id, newSt);
-                              }
-                            }}
-                            style={{
-                              padding: '4px 8px',
-                              fontSize: '12px',
-                              fontWeight: '600',
-                              borderRadius: '6px',
-                              background: 'var(--bg-secondary)',
-                              color: 'var(--text-primary)',
-                              border: '1px solid var(--border-color)',
-                              cursor: 'pointer',
-                              maxWidth: '140px'
-                            }}
-                          >
-                            {ALL_STATUSES.filter(s => s.key !== 'all').map(s => (
-                              <option key={s.key} value={s.key}>
-                                {s.icon} {s.label}
-                              </option>
-                            ))}
-                          </select>
-
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '6px' }}>
                           {/* Shipping Label Clipboard Button */}
                           <button
                             type="button"
