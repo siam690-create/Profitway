@@ -551,28 +551,40 @@ exports.getResellerWallet = async (req, res) => {
     let totalDeliveredRevenue = 0;
     let totalDeliveredProfit = 0;
     let totalReturnLoss = 0;
+    let totalReturnProfit = 0;
     let deliveredCount = 0;
     let pendingCount = 0;
     let returnedCount = 0;
+    let cancelledCount = 0;
 
     sales.forEach(s => {
-      const status = (s.order_status || 'delivered').toLowerCase();
-      const profit = Number(s.reseller_profit || s.gross_profit || 0);
-      const deliveryFee = Number(s.delivery_fee_charged || s.courier_actual_cost || 0);
+      const status = (s.order_status || 'new').toLowerCase();
+      const totalCOD = Number(s.total_amount || 0);
+      const wholesaleCost = Number(s.reseller_wholesale_cost || s.total_cost || 0);
+      const delivFee = Number(s.delivery_fee_charged || 0);
+      const customerPaidReturn = Number(s.customer_paid_return || 0);
 
       if (status === 'delivered') {
         deliveredCount++;
-        totalDeliveredRevenue += Number(s.total_amount || 0);
+        totalDeliveredRevenue += totalCOD;
+        const profit = Math.max(0, totalCOD - (wholesaleCost + delivFee));
         totalDeliveredProfit += profit;
       } else if (status === 'returned') {
         returnedCount++;
-        totalReturnLoss += (Number(s.return_loss || 0) || deliveryFee || 100);
-      } else if (status === 'pending' || status === 'approved' || status === 'shipped') {
+        const netReturn = customerPaidReturn - delivFee;
+        if (netReturn < 0) {
+          totalReturnLoss += Math.abs(netReturn);
+        } else {
+          totalReturnProfit += netReturn;
+        }
+      } else if (status === 'cancelled' || status === 'deleted') {
+        cancelledCount++;
+      } else {
         pendingCount++;
       }
     });
 
-    const netProfit = totalDeliveredProfit - totalReturnLoss;
+    const netProfit = (totalDeliveredProfit + totalReturnProfit) - totalReturnLoss;
 
     // Calculate payouts
     let payoutQuery = `SELECT * FROM reseller_payouts WHERE tenant_id = ?`;
@@ -963,19 +975,54 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
       }
     }
 
-    const returnLossAmt = newStatus === 'returned' ? Number(return_loss || 100) : 0;
+    let finalProfit = Number(sale.reseller_profit || 0);
+    let finalLoss = Number(sale.return_loss || 0);
+    const { customer_paid_return } = req.body;
+    let paidReturnAmt = Number(customer_paid_return !== undefined ? customer_paid_return : (sale.customer_paid_return || 0));
+
+    const totalCOD = Number(sale.total_amount || 0);
+    const wholesaleCost = Number(sale.reseller_wholesale_cost || sale.total_cost || 0);
+    const delivFee = Number(sale.delivery_fee_charged || 0);
+
+    if (newStatus === 'delivered') {
+      // Delivered Profit = Total COD - (Wholesale Price + Delivery Charge)
+      finalProfit = Math.max(0, totalCOD - (wholesaleCost + delivFee));
+      finalLoss = 0;
+    } else if (newStatus === 'returned') {
+      // Paid Return Net Effect = Customer Paid Return - Delivery Charge
+      const netReturn = paidReturnAmt - delivFee;
+      if (netReturn < 0) {
+        finalLoss = Math.abs(netReturn);
+        finalProfit = 0;
+      } else {
+        finalLoss = 0;
+        finalProfit = netReturn;
+      }
+    } else if (newStatus === 'cancelled' || newStatus === 'deleted') {
+      // Cancelled / Deleted = 0 Profit, 0 Loss
+      finalProfit = 0;
+      finalLoss = 0;
+    } else {
+      // Pending / In Courier / Processing: Est Profit
+      finalProfit = Math.max(0, totalCOD - (wholesaleCost + delivFee));
+      finalLoss = 0;
+    }
 
     await connection.query(
       `UPDATE reseller_sales 
-       SET order_status = ?, return_loss = ?, notes = COALESCE(?, notes)
+       SET order_status = ?, reseller_profit = ?, return_loss = ?, customer_paid_return = ?, notes = COALESCE(?, notes)
        WHERE id = ? AND tenant_id = ?`,
-      [newStatus, returnLossAmt, notes || null, id, tenantId]
+      [newStatus, finalProfit, finalLoss, paidReturnAmt, notes || null, id, tenantId]
     );
 
     await connection.commit();
 
     res.json({
-      message: `Reseller Order #${sale.invoice_no} status updated to "${newStatus.toUpperCase()}" successfully!`
+      message: `Reseller Order #${sale.invoice_no} status updated to "${newStatus.toUpperCase()}" successfully!`,
+      order_status: newStatus,
+      reseller_profit: finalProfit,
+      return_loss: finalLoss,
+      customer_paid_return: paidReturnAmt
     });
 
   } catch (error) {

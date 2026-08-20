@@ -1449,16 +1449,95 @@ const ResellerPortal = () => {
                         {/* RESELLER PROFIT & PAYOUT */}
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <div style={{ fontWeight: '800', fontSize: '14px', color: status === 'returned' ? '#ef4444' : '#10b981' }}>
-                              {status === 'returned' ? `-${currency}${(Number(o.return_loss || 100)).toFixed(2)}` : `+${currency}${estProfit.toFixed(2)}`}
-                            </div>
-                            <div>
-                              {o.payout_status === 'paid' ? (
-                                <span className="badge badge-success" style={{ fontSize: '11px', padding: '2px 8px' }}>Paid</span>
-                              ) : (
-                                <span className="badge badge-secondary" style={{ fontSize: '11px', padding: '2px 8px' }}>Unpaid</span>
-                              )}
-                            </div>
+                            {(() => {
+                              const wholesale = Number(o.reseller_wholesale_cost || o.total_cost || 0);
+                              const sellingPrice = Number(o.total_amount || o.total_price || 0);
+                              const deliveryCharge = Number(o.delivery_fee_charged || 0);
+                              const totalCOD = sellingPrice > 0 ? sellingPrice : (wholesale + Number(o.reseller_profit || 0) + deliveryCharge);
+                              const customerPaidReturn = Number(o.customer_paid_return || 0);
+
+                              if (status === 'delivered') {
+                                const deliveredProfit = Math.max(0, totalCOD - (wholesale + deliveryCharge));
+                                return (
+                                  <>
+                                    <div style={{ fontWeight: '800', fontSize: '14px', color: '#10b981' }}>
+                                      +{currency}{deliveredProfit.toFixed(2)}
+                                    </div>
+                                    <div>
+                                      {o.payout_status === 'paid' ? (
+                                        <span className="badge badge-success" style={{ fontSize: '11px', padding: '2px 8px' }}>Paid</span>
+                                      ) : (
+                                        <span className="badge badge-secondary" style={{ fontSize: '11px', padding: '2px 8px' }}>Unpaid</span>
+                                      )}
+                                    </div>
+                                  </>
+                                );
+                              }
+
+                              if (status === 'returned') {
+                                const netReturn = customerPaidReturn - deliveryCharge;
+                                if (netReturn < 0) {
+                                  return (
+                                    <>
+                                      <div style={{ fontWeight: '800', fontSize: '14px', color: '#ef4444' }}>
+                                        -{currency}{Math.abs(netReturn).toFixed(2)}
+                                      </div>
+                                      <span className="badge badge-danger" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                        Return Loss
+                                      </span>
+                                    </>
+                                  );
+                                } else if (netReturn > 0) {
+                                  return (
+                                    <>
+                                      <div style={{ fontWeight: '800', fontSize: '14px', color: '#10b981' }}>
+                                        +{currency}{netReturn.toFixed(2)}
+                                      </div>
+                                      <span className="badge badge-success" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                        Return Profit
+                                      </span>
+                                    </>
+                                  );
+                                } else {
+                                  return (
+                                    <>
+                                      <div style={{ fontWeight: '800', fontSize: '14px', color: '#94a3b8' }}>
+                                        {currency}0.00
+                                      </div>
+                                      <span className="badge badge-secondary" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                        Return (Breakeven)
+                                      </span>
+                                    </>
+                                  );
+                                }
+                              }
+
+                              if (status === 'cancelled' || status === 'deleted') {
+                                return (
+                                  <>
+                                    <div style={{ fontWeight: '800', fontSize: '14px', color: '#94a3b8' }}>
+                                      {currency}0.00
+                                    </div>
+                                    <span className="badge badge-secondary" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                      Cancelled
+                                    </span>
+                                  </>
+                                );
+                              }
+
+                              // Default / Pending / In-Courier: Show Estimate
+                              const estProfit = Math.max(0, totalCOD - (wholesale + deliveryCharge));
+                              return (
+                                <>
+                                  <div style={{ fontWeight: '800', fontSize: '14px', color: '#38bdf8' }}>
+                                    +{currency}{estProfit.toFixed(2)}
+                                  </div>
+                                  <span className="badge badge-secondary" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                    Est. Profit (Unpaid)
+                                  </span>
+                                </>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>
