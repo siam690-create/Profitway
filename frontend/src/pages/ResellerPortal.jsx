@@ -51,6 +51,31 @@ const ResellerPortal = () => {
       setResellerName(resellerSession.name);
     }
   }, [resellerSession]);
+
+  // Auto-sync profile name if renamed by Admin
+  useEffect(() => {
+    fetch(`/api/reseller/profiles?_t=${Date.now()}`)
+      .then(res => res.json())
+      .then(profiles => {
+        if (Array.isArray(profiles) && profiles.length > 0) {
+          if (resellerSession?.id) {
+            const match = profiles.find(p => p.id === resellerSession.id);
+            if (match && match.name !== resellerName) {
+              setResellerName(match.name);
+              localStorage.setItem('profitway_reseller_name', match.name);
+            }
+          } else {
+            const match = profiles.find(p => p.name === resellerName);
+            if (!match && profiles.length > 0) {
+              // Pick the active registered profile
+              setResellerName(profiles[0].name);
+              localStorage.setItem('profitway_reseller_name', profiles[0].name);
+            }
+          }
+        }
+      })
+      .catch(() => {});
+  }, [resellerSession]);
   const [resellerId, setResellerId] = useState('');
 
   const [activeTab, setActiveTab] = useState('catalog'); // 'catalog', 'orders', 'wallet'

@@ -1,8 +1,11 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 
-// Helper to ensure database tables & columns exist
+let schemaEnsured = false;
+
+// Helper to ensure database tables & columns exist (cached per process)
 const ensureResellerSchema = async (conn) => {
+  if (schemaEnsured) return;
   try {
     await conn.query(`
       CREATE TABLE IF NOT EXISTS reseller_profiles (
@@ -165,6 +168,8 @@ const ensureResellerSchema = async (conn) => {
     if (reCols.length === 0) {
       await conn.query(`ALTER TABLE reseller_invoices ADD COLUMN reseller_email VARCHAR(255) DEFAULT NULL`);
     }
+
+    schemaEnsured = true;
   } catch (e) {
     console.error('Schema migration error in resellerPortalController:', e);
   }
@@ -805,16 +810,10 @@ exports.processResellerPayout = async (req, res) => {
 // 6. Get all Reseller Profiles
 exports.getResellerProfiles = async (req, res) => {
   try {
-    const tenantId = req.user.tenantId;
-    const connection = await db.getConnection();
-    try {
-      await ensureResellerSchema(connection);
-    } finally {
-      connection.release();
-    }
+    const tenantId = req.user ? req.user.tenantId : await resolveTenantId(req);
 
     const [profiles] = await db.query(
-      `SELECT * FROM reseller_profiles WHERE tenant_id = ? ORDER BY id DESC`,
+      `SELECT id, name, phone, email, address, bkash_no, nagad_no, bank_info, status FROM reseller_profiles WHERE tenant_id = ? ORDER BY id DESC`,
       [tenantId]
     );
 
@@ -879,9 +878,13 @@ exports.updateResellerProfile = async (req, res) => {
     const { id } = req.params;
     const { name, phone, email, password, address, bkash_no, nagad_no, bank_info, status } = req.body;
 
+    const [oldRows] = await db.query('SELECT name FROM reseller_profiles WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    const oldName = oldRows.length > 0 ? oldRows[0].name : null;
+    const newName = name ? name.trim() : 'Reseller';
+
     let hashedPasswordSql = '';
     const params = [
-      name ? name.trim() : 'Reseller',
+      newName,
       phone ? phone.trim() : null,
       email ? email.trim() : null,
       address || null,
@@ -906,7 +909,13 @@ exports.updateResellerProfile = async (req, res) => {
       params
     );
 
-    res.json({ message: 'Reseller profile updated successfully!' });
+    if (oldName && newName && oldName !== newName) {
+      await db.query('UPDATE reseller_sales SET reseller_name = ? WHERE (reseller_id = ? OR reseller_name = ?) AND tenant_id = ?', [newName, id, oldName, tenantId]);
+      await db.query('UPDATE reseller_invoices SET reseller_name = ? WHERE (reseller_id = ? OR reseller_name = ?) AND tenant_id = ?', [newName, id, oldName, tenantId]);
+      await db.query('UPDATE reseller_payouts SET reseller_name = ? WHERE (reseller_id = ? OR reseller_name = ?) AND tenant_id = ?', [newName, id, oldName, tenantId]);
+    }
+
+    res.json({ message: 'Reseller profile updated successfully!', newName });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
