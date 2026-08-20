@@ -601,6 +601,113 @@ const ResellerPortal = () => {
     }
   };
 
+  // Export Order Information to Excel Format (.xlsx)
+  const handleExportOrdersExcel = async (ordersToExport, title = 'Reseller_Orders') => {
+    if (!ordersToExport || ordersToExport.length === 0) {
+      alert('No orders available to export.');
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Profitway Reseller Portal';
+      workbook.created = new Date();
+
+      const sheet = workbook.addWorksheet('Orders List', {
+        views: [{ showGridLines: true }]
+      });
+
+      sheet.columns = [
+        { header: 'SL', key: 'sl', width: 6 },
+        { header: 'Invoice #', key: 'invoice_no', width: 16 },
+        { header: 'Date', key: 'date', width: 14 },
+        { header: 'Customer Name', key: 'customer_name', width: 22 },
+        { header: 'Customer Phone', key: 'customer_phone', width: 16 },
+        { header: 'Delivery Address', key: 'customer_address', width: 35 },
+        { header: 'Courier', key: 'courier_name', width: 14 },
+        { header: 'Tracking Code', key: 'tracking_code', width: 18 },
+        { header: 'Items Ordered', key: 'items', width: 30 },
+        { header: 'Wholesale Cost', key: 'wholesale_cost', width: 16 },
+        { header: 'Sale Price', key: 'sale_price', width: 14 },
+        { header: 'Delivery Charge', key: 'delivery_charge', width: 16 },
+        { header: 'Total COD', key: 'total_cod', width: 14 },
+        { header: 'Delivery Status', key: 'order_status', width: 16 },
+        { header: 'Reseller Profit / Loss', key: 'profit_loss', width: 20 },
+        { header: 'Payout Status', key: 'payout_status', width: 14 }
+      ];
+
+      // Header styling
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF6366F1' }
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      headerRow.height = 28;
+
+      // Add Data Rows
+      ordersToExport.forEach((o, index) => {
+        const itemsStr = (o.items || []).map(i => `${i.product_name || i.name} (x${i.quantity || 1})`).join(', ') || 'N/A';
+        const profit = Number(o.reseller_profit || 0);
+        const loss = Number(o.return_loss || 0);
+        const profitLossStr = profit > 0 ? `+${profit.toFixed(2)}` : loss > 0 ? `-${loss.toFixed(2)}` : '0.00';
+        const salePrice = Number(o.total_amount || 0) - Number(o.delivery_fee_charged || 0);
+
+        const row = sheet.addRow({
+          sl: index + 1,
+          invoice_no: o.invoice_no ? `#${o.invoice_no}` : `ORD-${o.id}`,
+          date: o.sale_date ? new Date(o.sale_date).toLocaleDateString('en-GB') : (o.created_at ? new Date(o.created_at).toLocaleDateString('en-GB') : '-'),
+          customer_name: o.customer_name || 'N/A',
+          customer_phone: o.customer_phone || o.phone || '',
+          customer_address: o.customer_address || o.address || '',
+          courier_name: o.courier_name || o.provider_code || 'Steadfast',
+          tracking_code: o.tracking_code || '-',
+          items: itemsStr,
+          wholesale_cost: Number(o.reseller_wholesale_cost || 0).toFixed(2),
+          sale_price: salePrice > 0 ? salePrice.toFixed(2) : Number(o.total_amount || 0).toFixed(2),
+          delivery_charge: Number(o.delivery_fee_charged || 0).toFixed(2),
+          total_cod: Number(o.total_amount || 0).toFixed(2),
+          order_status: (o.order_status || 'Pending').toUpperCase(),
+          profit_loss: profitLossStr,
+          payout_status: (o.payout_status || 'Unpaid').toUpperCase()
+        });
+
+        row.alignment = { vertical: 'middle' };
+        row.getCell('sl').alignment = { vertical: 'middle', horizontal: 'center' };
+        row.getCell('invoice_no').font = { bold: true, color: { argb: 'FF6D28D9' } };
+        row.getCell('order_status').alignment = { vertical: 'middle', horizontal: 'center' };
+        row.getCell('payout_status').alignment = { vertical: 'middle', horizontal: 'center' };
+
+        // Numbers alignment
+        ['wholesale_cost', 'sale_price', 'delivery_charge', 'total_cod', 'profit_loss'].forEach(key => {
+          row.getCell(key).alignment = { vertical: 'middle', horizontal: 'right' };
+        });
+
+        // Profit coloring
+        if (profit > 0) {
+          row.getCell('profit_loss').font = { bold: true, color: { argb: 'FF059669' } };
+        } else if (loss > 0) {
+          row.getCell('profit_loss').font = { bold: true, color: { argb: 'FFDC2626' } };
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title}_${resellerName || 'Reseller'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Export error: ${err.message}`);
+    }
+  };
+
   // Process Uploaded Excel/CSV File (with UTF-8 ArrayBuffer preservation)
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -1568,25 +1675,49 @@ const ResellerPortal = () => {
               </button>
             </div>
 
-            {dateFilterPreset === 'custom' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="form-input"
-                  style={{ padding: '4px 8px', fontSize: '12px', height: '32px', background: '#1e293b', color: '#fff' }}
-                />
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>to</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="form-input"
-                  style={{ padding: '4px 8px', fontSize: '12px', height: '32px', background: '#1e293b', color: '#fff' }}
-                />
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+              {dateFilterPreset === 'custom' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="form-input"
+                    style={{ padding: '4px 8px', fontSize: '12px', height: '32px', background: '#1e293b', color: '#fff' }}
+                  />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>to</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="form-input"
+                    style={{ padding: '4px 8px', fontSize: '12px', height: '32px', background: '#1e293b', color: '#fff' }}
+                  />
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleExportOrdersExcel(activeOrders, 'Active_Orders')}
+                className="btn btn-secondary btn-sm"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#10b981',
+                  borderColor: 'rgba(16, 185, 129, 0.35)',
+                  fontWeight: '700',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+                title="Export all filtered active orders to Excel (.xlsx)"
+              >
+                <FileSpreadsheet size={15} />
+                <span>📊 Download Excel</span>
+              </button>
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -1883,9 +2014,32 @@ const ResellerPortal = () => {
                 Orders that have been invoiced & payment settled by admin
               </p>
             </div>
-            <button onClick={fetchWalletAndOrders} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <RefreshCw size={14} /> Refresh
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => handleExportOrdersExcel(completedOrders, 'Completed_Orders')}
+                className="btn btn-secondary btn-sm"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#10b981',
+                  borderColor: 'rgba(16, 185, 129, 0.35)',
+                  fontWeight: '700',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+                title="Export completed orders to Excel (.xlsx)"
+              >
+                <FileSpreadsheet size={15} />
+                <span>📊 Download Excel</span>
+              </button>
+              <button onClick={fetchWalletAndOrders} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <RefreshCw size={14} /> Refresh
+              </button>
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
