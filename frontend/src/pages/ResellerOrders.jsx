@@ -602,6 +602,7 @@ export const ResellerOrders = () => {
                   const totalCOD = Number(order.total_amount || order.total_price || order.customer_total_price || 0);
                   const deliveryCharge = Number(order.delivery_fee_charged || order.delivery_fee || 0);
                   const wholesaleCost = Number(order.reseller_wholesale_cost || order.total_cost || 0);
+                  const salePrice = Math.max(0, totalCOD - deliveryCharge);
                   // Est Profit = Total COD - (Wholesale Price + Delivery Charge)
                   const profit = Math.max(0, totalCOD - (wholesaleCost + deliveryCharge));
                   const isChecked = selectedOrderIds.includes(order.id);
