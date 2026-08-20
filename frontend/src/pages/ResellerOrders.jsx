@@ -297,8 +297,7 @@ export const ResellerOrders = () => {
                 <th>Reseller Name</th>
                 <th>Customer Info</th>
                 <th>Ordered Items</th>
-                <th>Total COD</th>
-                <th>Wholesale & Est. Profit</th>
+                <th>Pricing & COD Breakdown</th>
                 <th>Status</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -306,7 +305,7 @@ export const ResellerOrders = () => {
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                     No reseller portal orders found matching filter criteria.
                   </td>
                 </tr>
@@ -314,6 +313,10 @@ export const ResellerOrders = () => {
                 filteredOrders.map(order => {
                   const status = (order.order_status || 'pending').toLowerCase();
                   const profit = Number(order.reseller_profit || 0);
+                  const totalCOD = Number(order.total_amount || order.total_price || order.customer_total_price || 0);
+                  const deliveryCharge = Number(order.delivery_fee_charged || order.delivery_fee || 0);
+                  const wholesaleCost = Number(order.reseller_wholesale_cost || order.total_cost || 0);
+                  const salePrice = Math.max(0, totalCOD - deliveryCharge);
 
                   return (
                     <tr key={order.id}>
@@ -350,25 +353,35 @@ export const ResellerOrders = () => {
                       </td>
 
                       <td>
-                        <strong style={{ fontSize: '15px', color: 'var(--text-primary)' }}>
-                          {currency}{Number(order.total_amount || order.total_price || order.customer_total_price || 0).toFixed(2)}
-                        </strong>
-                      </td>
-
-                      <td>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          Wholesale: <strong style={{ color: 'var(--text-primary)', fontSize: '12px' }}>{currency}{Number(order.reseller_wholesale_cost || order.total_cost || 0).toFixed(2)}</strong>
-                        </div>
-                        <div style={{ marginTop: '2px' }}>
-                          <strong style={{ fontSize: '14px', color: '#10b981' }}>
-                            +{currency}{profit.toFixed(2)}
-                          </strong>
-                        </div>
-                        {status === 'returned' && (
-                          <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '2px' }}>
-                            Loss: -{currency}{Number(order.return_loss || 100).toFixed(2)}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', minWidth: '190px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                            <span>Wholesale Price:</span>
+                            <strong style={{ color: 'var(--text-primary)' }}>{currency}{wholesaleCost.toFixed(2)}</strong>
                           </div>
-                        )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                            <span>Sale Price:</span>
+                            <strong style={{ color: '#38bdf8' }}>{currency}{salePrice.toFixed(2)}</strong>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
+                            <span>Delivery Charge:</span>
+                            <strong>+{currency}{deliveryCharge.toFixed(2)}</strong>
+                          </div>
+                          <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '4px', marginTop: '2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: '800', color: 'var(--text-primary)', fontSize: '12.5px' }}>Total COD:</span>
+                            <strong style={{ fontSize: '15px', color: '#f59e0b', fontWeight: '800' }}>{currency}{totalCOD.toFixed(2)}</strong>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Est. Profit:</span>
+                            <strong style={{ fontSize: '13px', color: profit >= 0 ? '#10b981' : '#ef4444' }}>
+                              +{currency}{profit.toFixed(2)}
+                            </strong>
+                          </div>
+                          {status === 'returned' && (
+                            <div style={{ fontSize: '11px', color: '#ef4444', textAlign: 'right' }}>
+                              Loss: -{currency}{Number(order.return_loss || 100).toFixed(2)}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       <td>{renderStatusBadge(order.order_status)}</td>
