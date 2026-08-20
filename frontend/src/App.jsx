@@ -20,6 +20,7 @@ import { StaffManager } from './pages/StaffManager';
 import { TaskManager } from './pages/TaskManager';
 import { ResellerParcels } from './pages/ResellerParcels';
 import { ResellerOrders } from './pages/ResellerOrders';
+import { ResellerInvoices } from './pages/ResellerInvoices';
 import ResellerPortal from './pages/ResellerPortal';
 import { Settings } from './pages/Settings';
 import { ApiManagement } from './pages/ApiManagement';
@@ -148,6 +149,7 @@ function MainApp() {
       case 'staff': return <StaffManager />;
       case 'tasks': return <TaskManager />;
       case 'reseller-orders': return <ResellerOrders />;
+      case 'reseller-invoices': return <ResellerInvoices />;
       case 'reseller-parcels': return <ResellerParcels />;
       case 'reseller-portal': return <ResellerPortal />;
       case 'settings': return <Settings />;

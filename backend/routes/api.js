@@ -240,6 +240,7 @@ router.post('/courier/webhook', courierAccountController.handleCourierWebhook);
 router.get('/reseller/invoices', resellerPortalController.getResellerInvoices);
 router.post('/reseller/invoices', checkActiveSubscription, resellerPortalController.createResellerInvoice);
 router.get('/reseller/invoices/:id', resellerPortalController.getResellerInvoiceById);
+router.put('/reseller/invoices/:id/mark-paid', checkActiveSubscription, resellerPortalController.markResellerInvoicePaid);
 
 // Staff / Users APIs
 router.get('/staff', staffController.getStaff);

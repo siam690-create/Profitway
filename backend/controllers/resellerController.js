@@ -10,7 +10,7 @@ exports.getResellerSales = async (req, res) => {
       SELECT rs.*, fa.name as account_name
       FROM reseller_sales rs
       LEFT JOIN finance_accounts fa ON rs.account_id = fa.id
-      WHERE rs.tenant_id = ? AND (rs.order_source IS NULL OR rs.order_source != 'portal')
+      WHERE rs.tenant_id = ?
     `;
     const params = [tenantId];
 
