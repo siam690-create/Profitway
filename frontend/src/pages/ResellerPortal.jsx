@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import {
   ShoppingBag,
   PackageCheck,
@@ -359,50 +360,146 @@ const ResellerPortal = () => {
     }
   };
 
-  // Download Demo Excel Template
-  const handleDownloadDemoTemplate = () => {
+  // Download Demo Excel Template with Native Dropdown Data Validation & Dynamic Formula
+  const handleDownloadDemoTemplate = async () => {
     try {
-      const zone1 = (deliveryZones && deliveryZones.length > 0) ? deliveryZones[0].zone_name : 'ঢাকার ভেতরে';
-      const zone2 = (deliveryZones && deliveryZones.length > 1) ? deliveryZones[1].zone_name : 'ঢাকার বাইরে';
-      const zone1Charge = (deliveryZones && deliveryZones.length > 0) ? Number(deliveryZones[0].charge || 70) : 70;
-      const zone2Charge = (deliveryZones && deliveryZones.length > 1) ? Number(deliveryZones[1].charge || 120) : 120;
+      const activeZones = (deliveryZones && deliveryZones.length > 0)
+        ? deliveryZones
+        : [
+            { zone_name: 'ঢাকার বাইরে', charge: 120 },
+            { zone_name: 'ঢাকার ভেতরে', charge: 70 },
+            { zone_name: 'সাব ঢাকা', charge: 100 }
+          ];
 
-      const templateData = [
-        {
-          'Customer Name': 'Siam Ahmed',
-          'Customer Phone': '01884999488',
-          'Customer Address': 'House 44, Road 2/A, Dhanmondi, Dhaka',
-          'Product SKU': catalog[0]?.sku || 'SKU-001',
-          'Quantity': 1,
-          'Customer Sale Price': 500,
-          'Delivery Zone': zone1,
-          'COD': 500 + zone1Charge,
-          'Notes': 'Handle with care'
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Profitway';
+      workbook.created = new Date();
+
+      // --- SHEET 1: Bulk Orders Demo ---
+      const sheet = workbook.addWorksheet('Bulk Orders Demo', {
+        views: [{ showGridLines: true }]
+      });
+
+      sheet.columns = [
+        { header: 'Customer Name', key: 'name', width: 20 },
+        { header: 'Customer Phone', key: 'phone', width: 18 },
+        { header: 'Customer Address', key: 'address', width: 36 },
+        { header: 'Product SKU', key: 'sku', width: 16 },
+        { header: 'Quantity', key: 'quantity', width: 12 },
+        { header: 'Customer Sale Price', key: 'sale_price', width: 22 },
+        { header: 'Delivery Zone', key: 'zone', width: 22 },
+        { header: 'COD', key: 'cod', width: 18 },
+        { header: 'Notes', key: 'notes', width: 26 }
+      ];
+
+      // Style Header Row
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4F46E5' }
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      headerRow.height = 28;
+
+      const zone1 = activeZones[0]?.zone_name || 'ঢাকার বাইরে';
+      const zone1Charge = Number(activeZones[0]?.charge || 120);
+      const zone2 = activeZones[1]?.zone_name || 'ঢাকার ভেতরে';
+      const zone2Charge = Number(activeZones[1]?.charge || 70);
+
+      // Sample Data Rows
+      sheet.addRow({
+        name: 'Siam Ahmed',
+        phone: '01884999488',
+        address: 'House 44, Road 2/A, Dhanmondi, Dhaka',
+        sku: catalog[0]?.sku || 'SKU-001',
+        quantity: 1,
+        sale_price: 500,
+        zone: zone1,
+        cod: {
+          formula: `IF(F2="","",F2+IFERROR(VLOOKUP(G2,'Delivery Zones'!$A$2:$B$50,2,FALSE),${zone1Charge}))`,
+          result: 500 + zone1Charge
         },
-        {
-          'Customer Name': 'Rahim Khan',
-          'Customer Phone': '01711223344',
-          'Customer Address': 'Station Road, Agrabad, Chittagong',
-          'Product SKU': catalog[1]?.sku || catalog[0]?.sku || 'SKU-002',
-          'Quantity': 2,
-          'Customer Sale Price': 1200,
-          'Delivery Zone': zone2,
-          'COD': 1200 + zone2Charge,
-          'Notes': 'Deliver before 5 PM'
+        notes: 'Handle with care'
+      });
+
+      sheet.addRow({
+        name: 'Rahim Khan',
+        phone: '01711223344',
+        address: 'Station Road, Agrabad, Chittagong',
+        sku: catalog[1]?.sku || catalog[0]?.sku || 'SKU-002',
+        quantity: 2,
+        sale_price: 1200,
+        zone: zone2,
+        cod: {
+          formula: `IF(F3="","",F3+IFERROR(VLOOKUP(G3,'Delivery Zones'!$A$2:$B$50,2,FALSE),${zone2Charge}))`,
+          result: 1200 + zone2Charge
+        },
+        notes: 'Deliver before 5 PM'
+      });
+
+      // Add Data Validation Dropdown & Formulas for Rows 2 to 300
+      const zoneCount = activeZones.length;
+      for (let r = 2; r <= 300; r++) {
+        const zoneCell = sheet.getCell(`G${r}`);
+        zoneCell.dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: [`'Delivery Zones'!$A$2:$A$${zoneCount + 1}`],
+          showErrorMessage: true,
+          errorTitle: 'Invalid Zone',
+          error: 'Please select a valid Delivery Zone from the dropdown list.'
+        };
+
+        if (r > 3) {
+          const codCell = sheet.getCell(`H${r}`);
+          codCell.value = {
+            formula: `IF(F${r}="","",F${r}+IFERROR(VLOOKUP(G${r},'Delivery Zones'!$A$2:$B$50,2,FALSE),0))`,
+            result: 0
+          };
         }
+      }
+
+      // --- SHEET 2: Delivery Zones Reference Table ---
+      const zonesSheet = workbook.addWorksheet('Delivery Zones', {
+        views: [{ showGridLines: true }]
+      });
+
+      zonesSheet.columns = [
+        { header: 'Zone Name (এলাকা)', key: 'zone_name', width: 25 },
+        { header: 'Delivery Charge (৳)', key: 'charge', width: 20 }
       ];
 
-      const ws = XLSX.utils.json_to_sheet(templateData);
+      const zHeader = zonesSheet.getRow(1);
+      zHeader.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      zHeader.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF059669' }
+      };
+      zHeader.alignment = { vertical: 'middle', horizontal: 'center' };
+      zHeader.height = 25;
 
-      ws['!cols'] = [
-        { wch: 18 }, { wch: 16 }, { wch: 35 }, { wch: 16 },
-        { wch: 10 }, { wch: 20 }, { wch: 18 }, { wch: 16 }, { wch: 22 }
-      ];
+      activeZones.forEach(z => {
+        zonesSheet.addRow({
+          zone_name: z.zone_name,
+          charge: Number(z.charge || 0)
+        });
+      });
 
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Bulk Orders Demo');
+      // Export workbook to download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Profitway_Bulk_Order_Demo_Template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
 
-      XLSX.writeFile(wb, 'Profitway_Bulk_Order_Demo_Template.xlsx');
     } catch (err) {
       alert(`Error generating Excel template: ${err.message}`);
     }
