@@ -19,7 +19,8 @@ import {
   FileText,
   DollarSign,
   AlertCircle,
-  Filter
+  Filter,
+  Trash2
 } from 'lucide-react';
 
 export const ResellerOrders = () => {
