@@ -811,7 +811,7 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
   }
 };
 
-// 13. Admin: Delete Reseller Order
+// 13. Admin: Delete Reseller Order (Soft Delete -> Status = 'deleted')
 exports.deleteResellerOrderForAdmin = async (req, res) => {
   const connection = await db.getConnection();
   try {
@@ -826,11 +826,11 @@ exports.deleteResellerOrderForAdmin = async (req, res) => {
       return res.status(404).json({ error: 'Reseller order not found.' });
     }
 
-    await connection.query('DELETE FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
-    await connection.query('DELETE FROM reseller_sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    // Soft delete by updating status to 'deleted'
+    await connection.query("UPDATE reseller_sales SET order_status = 'deleted' WHERE id = ? AND tenant_id = ?", [id, tenantId]);
 
     await connection.commit();
-    res.json({ message: `Order #${sales[0].invoice_no} deleted successfully!` });
+    res.json({ message: `Order #${sales[0].invoice_no} moved to Delete status folder!` });
   } catch (error) {
     await connection.rollback();
     console.error('Error deleting reseller order:', error);
@@ -863,13 +863,13 @@ exports.bulkUpdateResellerOrdersStatus = async (req, res) => {
       const [items] = await connection.query('SELECT * FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
 
       // Stock logic
-      if ((prevStatus === 'pending' || prevStatus === 'cancelled') && (newStatus === 'processing' || newStatus === 'shipped' || newStatus === 'delivered' || newStatus === 'in_courier')) {
+      if ((prevStatus === 'pending' || prevStatus === 'cancelled' || prevStatus === 'deleted') && (newStatus === 'processing' || newStatus === 'shipped' || newStatus === 'delivered' || newStatus === 'in_courier')) {
         for (const item of items) {
           if (item.product_id) {
             await connection.query('UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ? AND tenant_id = ?', [item.quantity, item.product_id, tenantId]);
           }
         }
-      } else if ((prevStatus === 'processing' || prevStatus === 'shipped' || prevStatus === 'delivered' || prevStatus === 'in_courier') && (newStatus === 'returned' || newStatus === 'cancelled')) {
+      } else if ((prevStatus === 'processing' || prevStatus === 'shipped' || prevStatus === 'delivered' || prevStatus === 'in_courier') && (newStatus === 'returned' || newStatus === 'cancelled' || newStatus === 'deleted')) {
         for (const item of items) {
           if (item.product_id) {
             await connection.query('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?', [item.quantity, item.product_id, tenantId]);
@@ -891,7 +891,7 @@ exports.bulkUpdateResellerOrdersStatus = async (req, res) => {
   }
 };
 
-// 15. Admin: Bulk Delete Reseller Orders
+// 15. Admin: Bulk Delete Reseller Orders (Soft Delete -> Status = 'deleted')
 exports.bulkDeleteResellerOrders = async (req, res) => {
   const connection = await db.getConnection();
   try {
@@ -904,13 +904,10 @@ exports.bulkDeleteResellerOrders = async (req, res) => {
 
     await connection.beginTransaction();
 
-    for (const id of orderIds) {
-      await connection.query('DELETE FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
-      await connection.query('DELETE FROM reseller_sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
-    }
+    await connection.query("UPDATE reseller_sales SET order_status = 'deleted' WHERE id IN (?) AND tenant_id = ?", [orderIds, tenantId]);
 
     await connection.commit();
-    res.json({ message: `Successfully deleted ${orderIds.length} reseller orders!` });
+    res.json({ message: `Successfully moved ${orderIds.length} orders to Delete status folder!` });
   } catch (error) {
     await connection.rollback();
     console.error('Error bulk deleting reseller orders:', error);

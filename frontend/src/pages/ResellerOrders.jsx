@@ -92,6 +92,10 @@ export const ResellerOrders = () => {
   // Filtered list (Declared after all states & hooks!)
   const filteredOrders = orders.filter(o => {
     const status = (o.order_status || 'pending').toLowerCase();
+
+    // Soft-deleted orders stay exclusively in the 'deleted' tab
+    if (statusFilter === 'all' && status === 'deleted') return false;
+
     if (statusFilter !== 'all') {
       if (statusFilter === 'in_courier') {
         if (status !== 'in_courier' && status !== 'shipped' && status !== 'processing') return false;
@@ -259,6 +263,7 @@ export const ResellerOrders = () => {
     { key: 'returned', label: 'Returned', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', icon: '🔄' },
     { key: 'completed', label: 'Completed', color: '#059669', bg: 'rgba(5, 150, 105, 0.15)', icon: '🎯' },
     { key: 'cancelled', label: 'Cancelled', color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)', icon: '🚫' },
+    { key: 'deleted', label: 'Delete', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.18)', icon: '🗑️' }
   ];
 
   const handleDeleteOrder = async (orderId, invoiceNo) => {
