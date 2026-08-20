@@ -335,9 +335,10 @@ export const ResellerOrders = () => {
     const p = String(order.provider_code || '').toLowerCase();
     const c = String(order.courier_name || '').toLowerCase();
     const t = String(trackingCode).toUpperCase();
+    const phone = String(order.customer_phone || order.phone || '').trim();
 
     if (p === 'pathao' || c.includes('pathao') || t.startsWith('DC') || t.startsWith('PAT') || t.startsWith('DT')) {
-      return `https://merchant.pathao.com/tracking?consignment_id=${trackingCode}`;
+      return `https://merchant.pathao.com/tracking?consignment_id=${trackingCode}${phone ? `&phone=${phone}` : ''}`;
     } else if (p === 'steadfast' || c.includes('steadfast') || t.startsWith('SF')) {
       return `https://steadfast.com.bd/t/${trackingCode}`;
     } else if (p === 'redx' || c.includes('redx')) {
@@ -345,7 +346,7 @@ export const ResellerOrders = () => {
     } else if (p === 'paperfly' || c.includes('paperfly')) {
       return `https://www.paperfly.com.bd/tracking?tracking_id=${trackingCode}`;
     }
-    return `https://merchant.pathao.com/tracking?consignment_id=${trackingCode}`;
+    return `https://merchant.pathao.com/tracking?consignment_id=${trackingCode}${phone ? `&phone=${phone}` : ''}`;
   };
 
   // Calculate summary metrics
