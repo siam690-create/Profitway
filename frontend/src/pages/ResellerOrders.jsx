@@ -437,14 +437,15 @@ export const ResellerOrders = () => {
               font-weight: 600;
             }
 
-            .courier-tag {
-              background: #000;
-              color: #fff;
-              font-size: 9px;
-              font-weight: 800;
-              padding: 1px 5px;
+            .brand-tag {
+              border: 1.5px solid #000;
+              color: #000;
+              background: #fff;
+              font-size: 9.5px;
+              font-weight: 900;
+              padding: 2px 6px;
               border-radius: 3px;
-              text-transform: uppercase;
+              letter-spacing: 0.03em;
               display: inline-block;
             }
 
@@ -525,8 +526,9 @@ export const ResellerOrders = () => {
             }
 
             .cod-amount-box {
-              background: #000;
-              color: #fff;
+              background: #fff;
+              color: #000;
+              border: 2px solid #000;
               padding: 3px 8px;
               border-radius: 4px;
               text-align: center;
@@ -534,28 +536,40 @@ export const ResellerOrders = () => {
 
             .cod-label {
               font-size: 8px;
-              font-weight: 700;
+              font-weight: 800;
               text-transform: uppercase;
-              letter-spacing: 0.05em;
+              letter-spacing: 0.06em;
+              color: #000;
               line-height: 1;
+              margin-bottom: 2px;
             }
 
             .cod-val {
-              font-size: 16px;
+              font-size: 17px;
               font-weight: 900;
               font-family: 'Inter', sans-serif;
+              color: #000;
               line-height: 1.1;
             }
 
             .sender-info {
               text-align: right;
-              font-size: 8.5px;
+              font-size: 9px;
               line-height: 1.2;
             }
 
-            .sender-name {
+            .sender-label {
+              font-size: 8.5px;
               font-weight: 700;
-              font-size: 9.5px;
+              color: #444;
+              text-transform: uppercase;
+            }
+
+            .sender-name {
+              font-weight: 800;
+              font-size: 11px;
+              color: #000;
+              margin-top: 1px;
             }
           </style>
         </head>
@@ -564,7 +578,6 @@ export const ResellerOrders = () => {
             const formattedDate = o.sale_date ? new Date(o.sale_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (o.created_at ? new Date(o.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
             const totalCOD = Number(o.total_price || o.total_amount || 0);
             const items = o.items || [];
-            const courier = o.courier_name || o.provider_code || 'Courier';
 
             return `
               <div class="label-page">
@@ -575,7 +588,7 @@ export const ResellerOrders = () => {
                       ${formattedDate ? `<div class="order-date">${formattedDate}</div>` : ''}
                     </div>
                     <div style="text-align: right;">
-                      <span class="courier-tag">${courier}</span>
+                      <span class="brand-tag">SellwayBD</span>
                       ${o.tracking_code ? `<div style="font-size: 8.5px; font-family: monospace; font-weight: bold; margin-top: 2px;">${o.tracking_code}</div>` : ''}
                     </div>
                   </div>
@@ -603,7 +616,7 @@ export const ResellerOrders = () => {
                     <div class="cod-val">৳${totalCOD.toFixed(0)}</div>
                   </div>
                   <div class="sender-info">
-                    <div style="color: #666;">Sold by / Reseller:</div>
+                    <div class="sender-label">Sold By:</div>
                     <div class="sender-name">${o.reseller_name || 'Reseller'}</div>
                   </div>
                 </div>
