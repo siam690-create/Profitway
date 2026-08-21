@@ -111,9 +111,33 @@ function MainApp() {
   // Permission Checks for Staff/Employee roles
   const hasModulePermission = (moduleKey) => {
     if (isSuperAdmin || role === 'owner') return true;
+    if (moduleKey === 'staff-portal') return true; // All staff members can access their own punch in / employee portal
+    if (moduleKey === 'settings' || moduleKey === 'api-management' || moduleKey === 'subscription') {
+      return role === 'owner' || isSuperAdmin;
+    }
+
     try {
-      const perms = user?.permissions ? (typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions) : {};
-      return Boolean(perms[moduleKey]);
+      let perms = user?.permissions;
+      if (typeof perms === 'string') {
+        perms = JSON.parse(perms);
+      }
+
+      if (Array.isArray(perms)) {
+        if (moduleKey === 'team-chat') return perms.includes('chat') || perms.includes('team-chat');
+        if (moduleKey === 'reseller-orders') return perms.includes('reseller-orders') || perms.includes('reseller-portal-orders');
+        if (moduleKey === 'reseller-invoices') return perms.includes('reseller-invoices');
+        if (moduleKey === 'reseller-parcels') return perms.includes('reseller-parcels') || perms.includes('resellers');
+        if (moduleKey === 'tasks') return perms.includes('tasks');
+        if (moduleKey === 'attendance') return perms.includes('attendance');
+        return perms.includes(moduleKey);
+      } else if (perms && typeof perms === 'object') {
+        if (moduleKey === 'team-chat') return Boolean(perms['chat'] || perms['team-chat']);
+        if (moduleKey === 'reseller-orders') return Boolean(perms['reseller-orders'] || perms['reseller-portal-orders']);
+        if (moduleKey === 'reseller-invoices') return Boolean(perms['reseller-invoices']);
+        if (moduleKey === 'reseller-parcels') return Boolean(perms['reseller-parcels'] || perms['resellers']);
+        return Boolean(perms[moduleKey]);
+      }
+      return false;
     } catch (e) {
       return false;
     }
