@@ -938,10 +938,16 @@ const ResellerPortal = () => {
     })
     .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
 
-  // Active Orders = not yet paid/invoiced
-  const activeOrders = filteredOrders.filter(o => (o.order_status || '').toLowerCase() !== 'paid');
-  // Completed Orders = paid (invoice created)
-  const completedOrders = filteredOrders.filter(o => (o.order_status || '').toLowerCase() === 'paid');
+  // Active Orders = live orders in transit / processing (exclude paid and deleted)
+  const activeOrders = filteredOrders.filter(o => {
+    const s = (o.order_status || '').toLowerCase();
+    return s !== 'paid' && s !== 'deleted';
+  });
+  // Completed / Closed Orders = paid (invoice created) or deleted/closed
+  const completedOrders = filteredOrders.filter(o => {
+    const s = (o.order_status || '').toLowerCase();
+    return s === 'paid' || s === 'deleted';
+  });
 
   const summary = walletData?.summary || {
     total_delivered_revenue: 0,
@@ -2108,9 +2114,15 @@ const ResellerPortal = () => {
                           </div>
                         </td>
                         <td style={{ padding: '12px 16px' }}>
-                          <span style={{ background: 'rgba(124, 58, 237, 0.15)', color: '#a78bfa', border: '1px solid #7c3aed50', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>
-                            💰 Paid
-                          </span>
+                          {(o.order_status || '').toLowerCase() === 'deleted' ? (
+                            <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid #ef444450', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>
+                              🗑️ Deleted
+                            </span>
+                          ) : (
+                            <span style={{ background: 'rgba(124, 58, 237, 0.15)', color: '#a78bfa', border: '1px solid #7c3aed50', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>
+                              💰 Paid
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
