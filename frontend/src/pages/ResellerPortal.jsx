@@ -938,15 +938,15 @@ const ResellerPortal = () => {
     })
     .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
 
-  // Active Orders = live orders in transit / processing (exclude paid and deleted)
+  // Active Orders = live orders in transit / processing (exclude paid, deleted, and cancelled)
   const activeOrders = filteredOrders.filter(o => {
     const s = (o.order_status || '').toLowerCase();
-    return s !== 'paid' && s !== 'deleted';
+    return s !== 'paid' && s !== 'deleted' && s !== 'cancelled';
   });
-  // Completed / Closed Orders = paid (invoice created) or deleted/closed
+  // Completed / Closed Orders = paid (invoice created), deleted, or cancelled
   const completedOrders = filteredOrders.filter(o => {
     const s = (o.order_status || '').toLowerCase();
-    return s === 'paid' || s === 'deleted';
+    return s === 'paid' || s === 'deleted' || s === 'cancelled';
   });
 
   const summary = walletData?.summary || {
@@ -2117,6 +2117,10 @@ const ResellerPortal = () => {
                           {(o.order_status || '').toLowerCase() === 'deleted' ? (
                             <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid #ef444450', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>
                               🗑️ Deleted
+                            </span>
+                          ) : (o.order_status || '').toLowerCase() === 'cancelled' ? (
+                            <span style={{ background: 'rgba(100, 116, 139, 0.15)', color: '#94a3b8', border: '1px solid #94a3b850', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>
+                              🚫 Cancelled
                             </span>
                           ) : (
                             <span style={{ background: 'rgba(124, 58, 237, 0.15)', color: '#a78bfa', border: '1px solid #7c3aed50', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '700' }}>
