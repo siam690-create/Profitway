@@ -24,7 +24,16 @@ export const AppProvider = ({ children }) => {
     return localStorage.getItem('token') ? 'dashboard' : 'landing';
   });
   const [activeTab, setActiveTabState] = useState(() => {
-    return localStorage.getItem('profitway_active_tab') || 'dashboard';
+    const saved = localStorage.getItem('profitway_active_tab');
+    if (saved) return saved;
+    const u = safeJsonParse('user');
+    if (u && u.role !== 'owner' && u.role !== 'superadmin' && u.role !== 'super_admin') {
+      const p = Array.isArray(u.permissions) ? u.permissions : [];
+      if (!p.includes('dashboard')) {
+        return 'staff-portal';
+      }
+    }
+    return 'dashboard';
   });
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
