@@ -676,6 +676,35 @@ export const ResellerOrders = () => {
     }
   };
 
+  const handleUpdateStatus = async (orderId, newStatus, returnLoss = 0, notes = '') => {
+    setIsUpdatingStatus(true);
+    try {
+      const res = await authFetch(`/api/admin/reseller-orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_status: newStatus,
+          return_loss: returnLoss,
+          notes: notes
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setShowReturnModal(false);
+        setSelectedOrderForReturn(null);
+        fetchResellerOrders();
+        showToast ? showToast('Status Updated ✅', `Order status changed to ${newStatus.toUpperCase()}`, 'success') : alert(`Status updated to ${newStatus}`);
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error updating order status: ${err.message}`);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   const handleOpenDispatchModal = (order) => {
     setDispatchOrder(order);
     if (courierAccounts && courierAccounts.length > 0) {
@@ -1130,8 +1159,8 @@ export const ResellerOrders = () => {
                                 const newSt = e.target.value;
                                 if (newSt === 'returned') {
                                   handleOpenReturnModal(order);
-                                } else if (newSt === 'in_courier' || newSt === 'shipped') {
-                                  handleOpenDispatchModal(order);
+                                } else if (newSt === 'deleted') {
+                                  handleDeleteOrder(order.id, order.invoice_no);
                                 } else {
                                   handleUpdateStatus(order.id, newSt);
                                 }
