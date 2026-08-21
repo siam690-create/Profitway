@@ -825,11 +825,17 @@ export const ResellerOrders = () => {
           {/* Scrollable Status Filter Pills Bar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '6px', scrollbarWidth: 'thin' }}>
             {ALL_STATUSES.map(st => {
+              const baseOrders = selectedResellerFilter === 'all'
+                ? orders
+                : orders.filter(o => String(o.reseller_name).toLowerCase() === String(selectedResellerFilter).toLowerCase());
+
               const count = st.key === 'all'
-                ? orders.length
-                : orders.filter(o => {
+                ? baseOrders.filter(o => (o.order_status || '').toLowerCase() !== 'deleted' && (o.order_status || '').toLowerCase() !== 'paid').length
+                : baseOrders.filter(o => {
                     const s = (o.order_status || 'pending').toLowerCase();
                     if (st.key === 'in_courier') return s === 'in_courier' || s === 'shipped' || s === 'processing';
+                    if (st.key === 'complete') return s === 'complete' || s === 'completed';
+                    if (st.key === 'partially_delivered') return s === 'partially_delivered' || s === 'partial_delivery';
                     return s === st.key;
                   }).length;
 

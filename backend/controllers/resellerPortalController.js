@@ -1003,7 +1003,6 @@ exports.getAllResellerOrdersForAdmin = async (req, res) => {
     const [sales] = await db.query(
       `SELECT * FROM reseller_sales 
        WHERE tenant_id = ? 
-         AND (order_source = 'portal' OR (customer_phone IS NOT NULL AND customer_phone != '' AND reseller_profit > 0))
        ORDER BY id DESC`,
       [tenantId]
     );
