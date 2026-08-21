@@ -491,29 +491,28 @@ export const ResellerOrders = () => {
             }
 
             .items-box {
-              border: 1px dashed #666;
+              border: 1px dashed #555;
               border-radius: 4px;
-              padding: 3px 5px;
+              padding: 4px 6px;
               margin-bottom: 4px;
               flex: 1;
-              max-height: 70px;
-              overflow: hidden;
             }
 
             .items-title {
               font-size: 8.5px;
-              font-weight: 700;
+              font-weight: 800;
               text-transform: uppercase;
-              color: #555;
-              margin-bottom: 2px;
+              color: #444;
+              margin-bottom: 3px;
             }
 
             .item-line {
               font-size: 9.5px;
-              line-height: 1.2;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
+              line-height: 1.35;
+              white-space: normal;
+              word-break: break-word;
+              color: #000;
+              margin-bottom: 3px;
             }
 
             .cod-footer {
@@ -604,9 +603,12 @@ export const ResellerOrders = () => {
 
                   <div class="items-box">
                     <div class="items-title">📦 PACKAGE ITEMS (${items.length}):</div>
-                    ${items.length > 0 ? items.map(i => `
-                      <div class="item-line">• ${i.product_name || i.name} <strong>×${i.quantity || 1}</strong></div>
-                    `).join('') : '<div class="item-line">• Standard Parcel</div>'}
+                    ${items.length > 0 ? items.map(i => {
+                      const sku = i.sku || i.product_sku || (products && products.find(p => p.id === i.product_id)?.sku) || '';
+                      const name = i.product_name || i.name || 'Product';
+                      const qty = i.quantity || 1;
+                      return `<div class="item-line">• ${sku ? `<strong>(${sku})</strong> ` : ''}${name} <strong>×${qty}</strong></div>`;
+                    }).join('') : '<div class="item-line">• Standard Parcel</div>'}
                   </div>
                 </div>
 
