@@ -25,7 +25,8 @@ const MODULE_LIST = [
 
 const ALL_MODULE_PERMISSIONS = [
   { key: 'dashboard', label: '📊 Business Dashboard', shortLabel: '📊 Dashboard', desc: 'দোকানের মোট বিক্রি, লাভ-ক্ষতি ও ড্যাশবোর্ড ওভারভিউ' },
-  { key: 'inventory', label: '📦 Stock & Inventory', shortLabel: '📦 Stock', desc: 'স্টক দেখা ও নতুন প্রোডাক্ট এডিট/আপডেট করা' },
+  { key: 'inventory', label: '📦 Stock & Inventory (View Only)', shortLabel: '📦 View Stock', desc: 'শুধুমাত্র স্টক দেখা ও মূল্য/মার্জিন চেক করা (কোনো এডিট/ডিলিট নয়)' },
+  { key: 'inventory-edit', label: '✏️ Stock (Add / Edit / Delete)', shortLabel: '✏️ Edit Stock', desc: 'নতুন প্রোডাক্ট যোগ, স্টক এডিট, দাম পরিবর্তন ও ডিলিট করার পূর্ণ ক্ষমতা' },
   { key: 'pos', label: '🛒 POS / Counter Sale', shortLabel: '🛒 POS', desc: 'কাউন্টারে কাস্টমারের বিক্রি করা' },
   { key: 'wholesale', label: '🏬 Wholesale B2B Sales', shortLabel: '🏬 Wholesale', desc: 'পাইকারি বিক্রি ও বিটুবি ক্রেতার হিসাব' },
   { key: 'reseller-orders', label: '🛍️ Reseller Portal Orders', shortLabel: '🛍️ Reseller Orders', desc: 'রিসেলারদের পোর্টাল অর্ডার দেখা, স্ট্যাটাস পরিবর্তন ও লেবেল প্রিন্ট' },

@@ -123,6 +123,7 @@ function MainApp() {
       }
 
       if (Array.isArray(perms)) {
+        if (moduleKey === 'inventory') return perms.includes('inventory') || perms.includes('inventory-edit') || perms.includes('inventory_edit');
         if (moduleKey === 'team-chat') return perms.includes('chat') || perms.includes('team-chat');
         if (moduleKey === 'reseller-orders') return perms.includes('reseller-orders') || perms.includes('reseller-portal-orders');
         if (moduleKey === 'reseller-invoices') return perms.includes('reseller-invoices');
@@ -131,6 +132,7 @@ function MainApp() {
         if (moduleKey === 'attendance') return perms.includes('attendance');
         return perms.includes(moduleKey);
       } else if (perms && typeof perms === 'object') {
+        if (moduleKey === 'inventory') return Boolean(perms['inventory'] || perms['inventory-edit'] || perms['inventory_edit']);
         if (moduleKey === 'team-chat') return Boolean(perms['chat'] || perms['team-chat']);
         if (moduleKey === 'reseller-orders') return Boolean(perms['reseller-orders'] || perms['reseller-portal-orders']);
         if (moduleKey === 'reseller-invoices') return Boolean(perms['reseller-invoices']);

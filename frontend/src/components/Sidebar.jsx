@@ -65,6 +65,7 @@ export const Sidebar = () => {
     if (isOwnerOrAdmin || !userPermissions || !Array.isArray(userPermissions)) return true;
     if (item.id === 'staff-portal') return true;
     if (item.id === 'team-chat') return userPermissions.includes('chat') || userPermissions.includes('team-chat');
+    if (item.id === 'inventory') return userPermissions.includes('inventory') || userPermissions.includes('inventory-edit') || userPermissions.includes('inventory_edit');
     if (item.id === 'reseller-orders') return userPermissions.includes('reseller-orders') || userPermissions.includes('reseller-portal-orders');
     if (item.id === 'reseller-invoices') return userPermissions.includes('reseller-invoices');
     if (item.id === 'reseller-parcels') return userPermissions.includes('reseller-parcels') || userPermissions.includes('resellers') || userPermissions.includes('reseller-management');

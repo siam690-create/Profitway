@@ -5,7 +5,11 @@ import { Package, Plus, Search, Filter, AlertTriangle, Layers3, Edit2, Trash2, X
 import { BulkImportModal } from '../components/BulkImportModal';
 
 export const Inventory = () => {
-  const { products, categories, currency, formatCurrency, fetchCategories, authFetch, refreshAllData } = useApp();
+  const { products, categories, currency, formatCurrency, fetchCategories, authFetch, refreshAllData, user } = useApp();
+  const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'superadmin';
+  const userPermissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  const canEditStock = isOwnerOrAdmin || userPermissions.includes('inventory-edit') || userPermissions.includes('inventory_edit');
+
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -352,11 +356,19 @@ export const Inventory = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {!canEditStock && (
+            <span style={{ fontSize: '12px', fontWeight: '700', padding: '6px 12px', borderRadius: '8px', background: 'rgba(100, 116, 139, 0.15)', color: '#94a3b8', border: '1px solid #475569', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              🔒 View-Only Mode (Read-Only)
+            </span>
+          )}
+
           {/* Product Categories Manager Modal Button */}
-          <button onClick={() => setShowCategoryModal(true)} className="btn btn-secondary" title="Manage Categories">
-            <Layers size={16} />
-            <span>Categories</span>
-          </button>
+          {canEditStock && (
+            <button onClick={() => setShowCategoryModal(true)} className="btn btn-secondary" title="Manage Categories">
+              <Layers size={16} />
+              <span>Categories</span>
+            </button>
+          )}
 
           {/* Bulk Export Excel Button */}
           <button onClick={handleExportProducts} className="btn btn-secondary" title="Export Current Stock to Excel File">
@@ -365,15 +377,19 @@ export const Inventory = () => {
           </button>
 
           {/* Bulk Import Excel/CSV Button */}
-          <button onClick={() => setShowBulkImportModal(true)} className="btn btn-secondary" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', border: '1px solid rgba(99, 102, 241, 0.3)', fontWeight: '700' }}>
-            <Upload size={16} />
-            <span>Import Excel / CSV</span>
-          </button>
+          {canEditStock && (
+            <button onClick={() => setShowBulkImportModal(true)} className="btn btn-secondary" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', border: '1px solid rgba(99, 102, 241, 0.3)', fontWeight: '700' }}>
+              <Upload size={16} />
+              <span>Import Excel / CSV</span>
+            </button>
+          )}
 
-          <button onClick={handleOpenAddModal} className="btn btn-primary">
-            <Plus size={16} />
-            <span>+ Add Product / Combo</span>
-          </button>
+          {canEditStock && (
+            <button onClick={handleOpenAddModal} className="btn btn-primary">
+              <Plus size={16} />
+              <span>+ Add Product / Combo</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -391,14 +407,14 @@ export const Inventory = () => {
                 <th>Selling Price</th>
                 <th>Margin / Profit</th>
                 <th>Stock Status</th>
-                <th>Actions</th>
+                {canEditStock && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    No products found. Click "+ Add Product / Combo" to add items.
+                  <td colSpan={canEditStock ? 9 : 8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                    No products found.
                   </td>
                 </tr>
               ) : (
@@ -465,22 +481,24 @@ export const Inventory = () => {
                             onClick={() => handleOpenStockAudit(p)}
                             className={`badge ${isLowStock ? 'badge-danger' : 'badge-success'}`}
                             style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '700' }}
-                            title="Click to view Stock Movement History & Adjust Stock"
+                            title="Click to view Stock Movement History"
                           >
                             <History size={12} /> {p.stock_quantity} {p.unit || 'Pcs'} {isLowStock && ' (Low Stock!)'}
                           </span>
                         )}
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button onClick={() => handleOpenEditModal(p)} className="btn btn-secondary btn-icon btn-sm" title="Edit Product">
-                            <Edit2 size={14} />
-                          </button>
-                          <button onClick={() => handleDelete(p.id, p.name)} className="btn btn-danger btn-icon btn-sm" title="Delete Product">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
+                      {canEditStock && (
+                        <td>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => handleOpenEditModal(p)} className="btn btn-secondary btn-icon btn-sm" title="Edit Product">
+                              <Edit2 size={14} />
+                            </button>
+                            <button onClick={() => handleDelete(p.id, p.name)} className="btn btn-danger btn-icon btn-sm" title="Delete Product">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -983,7 +1001,7 @@ export const Inventory = () => {
               </div>
 
               {/* 🛠️ Quick Stock Fix & Manual Corrector Form */}
-              {!selectedAuditProduct.is_combo && (
+              {canEditStock && !selectedAuditProduct.is_combo && (
                 <form onSubmit={handleFixStockSubmit} style={{ padding: '14px', background: 'rgba(99, 102, 241, 0.08)', borderRadius: '10px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
                   <h4 style={{ fontSize: '13px', fontWeight: '700', margin: '0 0 10px 0', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Check size={14} />
