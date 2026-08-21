@@ -145,6 +145,29 @@ function MainApp() {
     }
   };
 
+  // Auto-switch away from restricted tab (e.g. if default is 'dashboard' but staff has no dashboard access)
+  useEffect(() => {
+    if (user && role !== 'owner' && !isSuperAdmin) {
+      if (!hasModulePermission(activeTab)) {
+        if (hasModulePermission('staff-portal')) {
+          setActiveTab('staff-portal');
+        } else if (hasModulePermission('inventory')) {
+          setActiveTab('inventory');
+        } else if (hasModulePermission('pos')) {
+          setActiveTab('pos');
+        } else if (hasModulePermission('orders')) {
+          setActiveTab('orders');
+        } else if (hasModulePermission('reseller-orders')) {
+          setActiveTab('reseller-orders');
+        } else if (hasModulePermission('team-chat')) {
+          setActiveTab('team-chat');
+        } else if (hasModulePermission('tasks')) {
+          setActiveTab('tasks');
+        }
+      }
+    }
+  }, [activeTab, user]);
+
   const renderActivePage = () => {
     if (!isSuperAdmin && role !== 'owner' && !hasModulePermission(activeTab)) {
       return (
@@ -153,6 +176,13 @@ function MainApp() {
           <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
             You do not have permission to access the "{activeTab}" module. Please contact your business owner or admin.
           </p>
+          <button
+            onClick={() => setActiveTab('staff-portal')}
+            className="btn btn-primary"
+            style={{ marginTop: '16px' }}
+          >
+            Go to Staff Portal & Punch In
+          </button>
         </div>
       );
     }
