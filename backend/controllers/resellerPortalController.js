@@ -593,15 +593,15 @@ exports.getResellerWallet = async (req, res) => {
       connection.release();
     }
 
-    let salesQuery = `SELECT * FROM reseller_sales WHERE tenant_id = ?`;
+    let salesQuery = `SELECT * FROM reseller_sales WHERE tenant_id = ? AND order_source IN ('portal', 'portal_bulk')`;
     const params = [tenantId];
 
     if (reseller_id) {
-      salesQuery += ` AND reseller_id = ?`;
-      params.push(reseller_id);
+      salesQuery += ` AND (reseller_id = ? OR reseller_name = ?)`;
+      params.push(reseller_id, reseller_name);
     } else if (reseller_name) {
-      salesQuery += ` AND reseller_name = ?`;
-      params.push(reseller_name);
+      salesQuery += ` AND LOWER(reseller_name) = LOWER(?)`;
+      params.push(reseller_name.trim());
     }
 
     salesQuery += ` ORDER BY id DESC`;
@@ -1003,6 +1003,7 @@ exports.getAllResellerOrdersForAdmin = async (req, res) => {
     const [sales] = await db.query(
       `SELECT * FROM reseller_sales 
        WHERE tenant_id = ? 
+         AND order_source IN ('portal', 'portal_bulk')
        ORDER BY id DESC`,
       [tenantId]
     );

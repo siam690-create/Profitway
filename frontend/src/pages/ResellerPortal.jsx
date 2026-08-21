@@ -1188,7 +1188,7 @@ const ResellerPortal = () => {
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           <PackageCheck size={16} />
-          <span>📦 Active Orders ({orders.filter(o => (o.order_status || '').toLowerCase() !== 'paid').length})</span>
+          <span>📦 Active Orders ({activeOrders.length})</span>
         </button>
 
         <button
@@ -1197,7 +1197,7 @@ const ResellerPortal = () => {
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           <CheckCircle size={16} />
-          <span>💰 Completed Orders ({orders.filter(o => (o.order_status || '').toLowerCase() === 'paid').length})</span>
+          <span>💰 Completed Orders ({completedOrders.length})</span>
         </button>
 
         <button
