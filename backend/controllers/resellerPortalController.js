@@ -610,7 +610,7 @@ exports.getResellerWallet = async (req, res) => {
 
     for (let s of sales) {
       const [items] = await db.query(
-        `SELECT rsi.*, COALESCE(rsi.sku, p.sku) as sku, COALESCE(rsi.product_name, p.name) as product_name
+        `SELECT rsi.*, p.sku as sku, COALESCE(rsi.product_name, p.name) as product_name
          FROM reseller_sale_items rsi
          LEFT JOIN products p ON rsi.product_id = p.id
          WHERE rsi.reseller_sale_id = ? AND rsi.tenant_id = ?`,
@@ -1009,7 +1009,7 @@ exports.getAllResellerOrdersForAdmin = async (req, res) => {
 
     for (let s of sales) {
       const [items] = await db.query(
-        `SELECT rsi.*, COALESCE(rsi.sku, p.sku) as sku, COALESCE(rsi.product_name, p.name) as product_name
+        `SELECT rsi.*, p.sku as sku, COALESCE(rsi.product_name, p.name) as product_name
          FROM reseller_sale_items rsi
          LEFT JOIN products p ON rsi.product_id = p.id
          WHERE rsi.reseller_sale_id = ? AND rsi.tenant_id = ?`,
