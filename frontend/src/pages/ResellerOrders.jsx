@@ -361,33 +361,260 @@ export const ResellerOrders = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Bulk Print Shipping Labels (${selectedOrders.length} Parcels)</title>
+          <meta charset="UTF-8">
+          <title>Shipping Labels (${selectedOrders.length})</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; color: #000; }
-            .label-card { border: 2px solid #000; border-radius: 8px; padding: 16px; margin-bottom: 20px; page-break-inside: avoid; }
-            .label-header { border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-            .label-title { font-size: 20px; font-weight: bold; }
-            .label-row { font-size: 14px; margin-bottom: 6px; }
-            .label-row strong { font-size: 15px; }
-            .cod-box { font-size: 22px; font-weight: bold; margin-top: 10px; border-top: 1px dashed #000; padding-top: 8px; }
+            @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&family=Inter:wght@400;600;700;800;900&display=swap');
+            
+            @page {
+              size: 3in 4in;
+              margin: 0;
+            }
+            
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+            }
+
+            body {
+              font-family: 'Hind Siliguri', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+              color: #000;
+              background: #fff;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+
+            .label-page {
+              width: 3in;
+              height: 4in;
+              max-height: 4in;
+              padding: 4mm 4mm;
+              margin: 0 auto;
+              page-break-after: always;
+              page-break-inside: avoid;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              border: 1.5px solid #000;
+              box-sizing: border-box;
+              background: #fff;
+              position: relative;
+            }
+
+            @media screen {
+              body {
+                background: #f1f5f9;
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 16px;
+              }
+              .label-page {
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+              }
+            }
+
+            .label-header {
+              border-bottom: 1.5px solid #000;
+              padding-bottom: 3px;
+              margin-bottom: 4px;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+            }
+
+            .inv-no {
+              font-size: 13px;
+              font-weight: 800;
+              font-family: 'Inter', sans-serif;
+            }
+
+            .order-date {
+              font-size: 9.5px;
+              color: #333;
+              font-weight: 600;
+            }
+
+            .courier-tag {
+              background: #000;
+              color: #fff;
+              font-size: 9px;
+              font-weight: 800;
+              padding: 1px 5px;
+              border-radius: 3px;
+              text-transform: uppercase;
+              display: inline-block;
+            }
+
+            .recipient-box {
+              border: 1.5px solid #000;
+              border-radius: 4px;
+              padding: 4px 6px;
+              margin-bottom: 4px;
+              background: #fff;
+            }
+
+            .recipient-header {
+              font-size: 8.5px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              color: #444;
+              border-bottom: 0.5px dashed #888;
+              padding-bottom: 1px;
+              margin-bottom: 2px;
+            }
+
+            .cust-name {
+              font-size: 12px;
+              font-weight: 800;
+              line-height: 1.2;
+            }
+
+            .cust-phone {
+              font-size: 13px;
+              font-weight: 800;
+              font-family: 'Inter', monospace;
+              letter-spacing: 0.02em;
+              margin: 1px 0;
+            }
+
+            .cust-address {
+              font-size: 9.5px;
+              line-height: 1.25;
+              color: #111;
+              font-weight: 500;
+              word-break: break-word;
+            }
+
+            .items-box {
+              border: 1px dashed #666;
+              border-radius: 4px;
+              padding: 3px 5px;
+              margin-bottom: 4px;
+              flex: 1;
+              max-height: 70px;
+              overflow: hidden;
+            }
+
+            .items-title {
+              font-size: 8.5px;
+              font-weight: 700;
+              text-transform: uppercase;
+              color: #555;
+              margin-bottom: 2px;
+            }
+
+            .item-line {
+              font-size: 9.5px;
+              line-height: 1.2;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+
+            .cod-footer {
+              border-top: 1.5px solid #000;
+              padding-top: 3px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              background: #fff;
+            }
+
+            .cod-amount-box {
+              background: #000;
+              color: #fff;
+              padding: 3px 8px;
+              border-radius: 4px;
+              text-align: center;
+            }
+
+            .cod-label {
+              font-size: 8px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              line-height: 1;
+            }
+
+            .cod-val {
+              font-size: 16px;
+              font-weight: 900;
+              font-family: 'Inter', sans-serif;
+              line-height: 1.1;
+            }
+
+            .sender-info {
+              text-align: right;
+              font-size: 8.5px;
+              line-height: 1.2;
+            }
+
+            .sender-name {
+              font-weight: 700;
+              font-size: 9.5px;
+            }
           </style>
         </head>
         <body>
-          <h2>🚚 Customer Courier Shipping Labels (${selectedOrders.length} Parcels)</h2>
-          ${selectedOrders.map(o => `
-            <div class="label-card">
-              <div class="label-header">
-                <span class="label-title">Invoice #${o.invoice_no}</span>
-                <span>Reseller: ${o.reseller_name}</span>
+          ${selectedOrders.map(o => {
+            const formattedDate = o.sale_date ? new Date(o.sale_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (o.created_at ? new Date(o.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
+            const totalCOD = Number(o.total_price || o.total_amount || 0);
+            const items = o.items || [];
+            const courier = o.courier_name || o.provider_code || 'Courier';
+
+            return `
+              <div class="label-page">
+                <div>
+                  <div class="label-header">
+                    <div>
+                      <div class="inv-no">#${o.invoice_no || o.id}</div>
+                      ${formattedDate ? `<div class="order-date">${formattedDate}</div>` : ''}
+                    </div>
+                    <div style="text-align: right;">
+                      <span class="courier-tag">${courier}</span>
+                      ${o.tracking_code ? `<div style="font-size: 8.5px; font-family: monospace; font-weight: bold; margin-top: 2px;">${o.tracking_code}</div>` : ''}
+                    </div>
+                  </div>
+
+                  <div class="recipient-box">
+                    <div class="recipient-header">DELIVERY TO (প্রাপক)</div>
+                    <div class="cust-name">${o.customer_name || 'Customer'}</div>
+                    <div class="cust-phone">📞 ${o.customer_phone || o.phone || ''}</div>
+                    <div class="cust-address">
+                      📍 ${o.customer_address || o.address || ''}${o.district ? `, ${o.district}` : ''}${o.thana ? `, ${o.thana}` : ''}
+                    </div>
+                  </div>
+
+                  <div class="items-box">
+                    <div class="items-title">📦 PACKAGE ITEMS (${items.length}):</div>
+                    ${items.length > 0 ? items.map(i => `
+                      <div class="item-line">• ${i.product_name || i.name} <strong>×${i.quantity || 1}</strong></div>
+                    `).join('') : '<div class="item-line">• Standard Parcel</div>'}
+                  </div>
+                </div>
+
+                <div class="cod-footer">
+                  <div class="cod-amount-box">
+                    <div class="cod-label">CASH ON DELIVERY</div>
+                    <div class="cod-val">৳${totalCOD.toFixed(0)}</div>
+                  </div>
+                  <div class="sender-info">
+                    <div style="color: #666;">Sold by / Reseller:</div>
+                    <div class="sender-name">${o.reseller_name || 'Reseller'}</div>
+                  </div>
+                </div>
               </div>
-              <div class="label-row">👤 <strong>Customer:</strong> ${o.customer_name || 'N/A'}</div>
-              <div class="label-row">📞 <strong>Phone:</strong> ${o.customer_phone || 'N/A'}</div>
-              <div class="label-row">📍 <strong>Address:</strong> ${o.customer_address || 'N/A'} (${o.district || ''}, ${o.thana || ''})</div>
-              <div class="label-row">📦 <strong>Items:</strong> ${(o.items || []).map(i => `${i.product_name} x${i.quantity}`).join(', ')}</div>
-              <div class="cod-box">💰 Total COD Amount: ৳${Number(o.total_price || o.total_amount || 0).toFixed(2)}</div>
-            </div>
-          `).join('')}
-          <script>window.print();</script>
+            `;
+          }).join('')}
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
         </body>
       </html>
     `;
