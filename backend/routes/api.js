@@ -117,6 +117,11 @@ router.post('/store-api-keys', checkActiveSubscription, storeApiKeyController.cr
 router.patch('/store-api-keys/:id/toggle', checkActiveSubscription, storeApiKeyController.toggleStoreApiKey);
 router.delete('/store-api-keys/:id', checkActiveSubscription, storeApiKeyController.deleteStoreApiKey);
 
+// External API Store Orders Management APIs
+router.get('/external-orders', externalOrderController.getAllExternalOrders);
+router.put('/external-orders/:id/status', checkActiveSubscription, externalOrderController.updateExternalOrderStatus);
+router.delete('/external-orders/:id', checkActiveSubscription, externalOrderController.deleteExternalOrder);
+
 // Subscription & Plan Status APIs
 router.get('/subscription/my-plan', subscriptionController.getMySubscription);
 router.post('/subscription/upgrade', subscriptionController.requestPlanUpgrade);

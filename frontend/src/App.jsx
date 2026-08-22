@@ -24,6 +24,7 @@ import { ResellerInvoices } from './pages/ResellerInvoices';
 import ResellerPortal from './pages/ResellerPortal';
 import { Settings } from './pages/Settings';
 import { ApiManagement } from './pages/ApiManagement';
+import { ApiOrders } from './pages/ApiOrders';
 import { Subscription } from './pages/Subscription';
 import { Support } from './pages/Support';
 
@@ -128,6 +129,7 @@ function MainApp() {
         if (moduleKey === 'reseller-orders') return perms.includes('reseller-orders') || perms.includes('reseller-portal-orders');
         if (moduleKey === 'reseller-invoices') return perms.includes('reseller-invoices');
         if (moduleKey === 'reseller-parcels') return perms.includes('reseller-parcels') || perms.includes('resellers');
+        if (moduleKey === 'api-orders') return perms.includes('api-orders') || perms.includes('external-orders');
         if (moduleKey === 'tasks') return perms.includes('tasks');
         if (moduleKey === 'attendance') return perms.includes('attendance');
         return perms.includes(moduleKey);
@@ -137,6 +139,7 @@ function MainApp() {
         if (moduleKey === 'reseller-orders') return Boolean(perms['reseller-orders'] || perms['reseller-portal-orders']);
         if (moduleKey === 'reseller-invoices') return Boolean(perms['reseller-invoices']);
         if (moduleKey === 'reseller-parcels') return Boolean(perms['reseller-parcels'] || perms['resellers']);
+        if (moduleKey === 'api-orders') return Boolean(perms['api-orders'] || perms['external-orders']);
         return Boolean(perms[moduleKey]);
       }
       return false;
@@ -157,6 +160,8 @@ function MainApp() {
           setActiveTab('pos');
         } else if (hasModulePermission('orders')) {
           setActiveTab('orders');
+        } else if (hasModulePermission('api-orders')) {
+          setActiveTab('api-orders');
         } else if (hasModulePermission('reseller-orders')) {
           setActiveTab('reseller-orders');
         } else if (hasModulePermission('team-chat')) {
@@ -199,6 +204,7 @@ function MainApp() {
       case 'pos': return <POS />;
       case 'wholesale': return <Wholesale />;
       case 'orders': return <Orders />;
+      case 'api-orders': return <ApiOrders />;
       case 'expenses': return <Expenses />;
       case 'reports': return <Reports />;
       case 'finance': return <Finance />;

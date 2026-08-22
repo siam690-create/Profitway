@@ -238,3 +238,94 @@ exports.importExternalOrder = async (req, res) => {
     connection.release();
   }
 };
+
+// Get All External Store Imported Orders for Tenant
+exports.getAllExternalOrders = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const [orders] = await db.query(
+      `SELECT s.*, sak.store_domain, sak.store_name as key_store_name,
+              (SELECT COUNT(*) FROM sale_items WHERE sale_id = s.id) as item_count
+       FROM sales s
+       LEFT JOIN store_api_keys sak ON s.store_api_key_id = sak.id
+       WHERE s.tenant_id = ? 
+         AND (s.store_api_key_id IS NOT NULL OR s.source_website IS NOT NULL OR s.external_order_id IS NOT NULL)
+       ORDER BY s.id DESC`,
+      [tenantId]
+    );
+
+    for (const o of orders) {
+      const [items] = await db.query(
+        `SELECT si.*, p.sku as sku
+         FROM sale_items si
+         LEFT JOIN products p ON si.product_id = p.id
+         WHERE si.sale_id = ? AND si.tenant_id = ?`,
+        [o.id, tenantId]
+      );
+      o.items = items;
+    }
+
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching external orders:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update External Order Status
+exports.updateExternalOrderStatus = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+    const { order_status } = req.body;
+
+    if (!order_status) {
+      return res.status(400).json({ error: 'order_status is required.' });
+    }
+
+    await db.query(
+      'UPDATE sales SET order_status = ? WHERE id = ? AND tenant_id = ?',
+      [order_status, id, tenantId]
+    );
+
+    res.json({ success: true, message: `Order status updated to ${order_status.toUpperCase()}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Delete External Order
+exports.deleteExternalOrder = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = req.user.tenantId;
+    const { id } = req.params;
+
+    await connection.beginTransaction();
+
+    // Restore stock if matched products exist
+    const [items] = await connection.query(
+      'SELECT * FROM sale_items WHERE sale_id = ? AND tenant_id = ?',
+      [id, tenantId]
+    );
+    for (const item of items) {
+      if (item.product_id) {
+        await connection.query(
+          'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?',
+          [item.quantity, item.product_id, tenantId]
+        );
+      }
+    }
+
+    await connection.query('DELETE FROM sale_items WHERE sale_id = ? AND tenant_id = ?', [id, tenantId]);
+    await connection.query('DELETE FROM sales WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    await connection.commit();
+
+    res.json({ success: true, message: 'External order deleted successfully.' });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};

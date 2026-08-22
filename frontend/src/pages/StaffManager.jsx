@@ -32,6 +32,7 @@ const ALL_MODULE_PERMISSIONS = [
   { key: 'reseller-orders', label: '🛍️ Reseller Portal Orders', shortLabel: '🛍️ Reseller Orders', desc: 'রিসেলারদের পোর্টাল অর্ডার দেখা, স্ট্যাটাস পরিবর্তন ও লেবেল প্রিন্ট' },
   { key: 'reseller-invoices', label: '📄 Reseller Invoices', shortLabel: '📄 Reseller Invoices', desc: 'রিসেলারদের ইনভয়েস তৈরি, পে-আউট হিসাব ও পেমেন্ট সেটেলমেন্ট' },
   { key: 'reseller-parcels', label: '🤝 Reseller Management', shortLabel: '🤝 Reseller Profiles', desc: 'রিসেলার প্রোফাইল তৈরি ও অ্যাকাউন্ট ম্যানেজমেন্ট' },
+  { key: 'api-orders', label: '🌐 API Store Orders', shortLabel: '🌐 API Orders', desc: 'WooCommerce, Shopify ও এক্সটার্নাল ওয়েবসাইটের অর্ডার প্রসেসিং ও কুরিয়ার বুকিং' },
   { key: 'orders', label: '🚚 Sales & Orders', shortLabel: '🚚 Orders', desc: 'অনলাইন অর্ডার লিস্ট দেখা ও কুরিয়ার বুকিং' },
   { key: 'returns', label: '🔄 Courier Returns', shortLabel: '🔄 Returns', desc: 'কুরিয়ার রিটার্ন ট্র্যাকিং ও এন্ট্রি' },
   { key: 'purchases', label: '🏭 Purchases & Suppliers', shortLabel: '🏭 Purchases', desc: 'সাপ্লায়ারের কাছ থেকে পণ্য ক্রয় ও রিস্টক' },

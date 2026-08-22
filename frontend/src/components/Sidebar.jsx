@@ -24,7 +24,8 @@ import {
   CreditCard,
   Zap,
   MessageSquare,
-  Key
+  Key,
+  Globe
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -41,6 +42,7 @@ export const Sidebar = () => {
     { id: 'reseller-orders', label: 'Reseller Portal Orders', icon: ShoppingBag, badgeType: 'success' },
     { id: 'reseller-invoices', label: 'Reseller Invoices', icon: FileText },
     { id: 'reseller-parcels', label: 'Reseller Management', icon: Users },
+    { id: 'api-orders', label: 'API Store Orders', icon: Globe },
     { id: 'inventory', label: 'Inventory / Stock', icon: Package, badge: lowStockCount > 0 ? lowStockCount : null, badgeType: 'warning' },
     { id: 'purchases', label: 'Purchases & Suppliers', icon: Truck },
     { id: 'orders', label: 'Sales & Orders', icon: FileText },
@@ -50,7 +52,7 @@ export const Sidebar = () => {
     { id: 'reports', label: 'Profit & Loss', icon: TrendingUp },
     { id: 'finance', label: 'Finance & Dena-Pawna', icon: Landmark },
     { id: 'analytics', label: 'Analytics Breakdown', icon: BarChart3 },
-    {id: 'staff', label: 'Staff & HR OS', icon: Users },
+    { id: 'staff', label: 'Staff & HR OS', icon: Users },
     { id: 'tasks', label: 'Staff Task Manager', icon: CheckSquare },
     { id: 'api-management', label: 'API Management', icon: Key },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -69,6 +71,7 @@ export const Sidebar = () => {
     if (item.id === 'reseller-orders') return userPermissions.includes('reseller-orders') || userPermissions.includes('reseller-portal-orders');
     if (item.id === 'reseller-invoices') return userPermissions.includes('reseller-invoices');
     if (item.id === 'reseller-parcels') return userPermissions.includes('reseller-parcels') || userPermissions.includes('resellers') || userPermissions.includes('reseller-management');
+    if (item.id === 'api-orders') return userPermissions.includes('api-orders') || userPermissions.includes('external-orders');
     return userPermissions.includes(item.id);
   });
 

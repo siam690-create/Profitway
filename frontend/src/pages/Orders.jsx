@@ -213,8 +213,11 @@ export const Orders = () => {
     }
   };
 
-  // Filter Sales locally
+  // Filter Sales locally (Manual Entry / POS Sales only)
   const filteredSales = sales.filter(s => {
+    // Exclude API Store Orders (they are managed in API Store Orders page)
+    if (s.store_api_key_id || s.source_website || s.external_order_id) return false;
+
     const matchesSearch = (s.invoice_no && s.invoice_no.toLowerCase().includes(search.toLowerCase())) || 
                           (s.customer_name && s.customer_name.toLowerCase().includes(search.toLowerCase()));
     const matchesPayment = paymentMethod ? s.payment_method === paymentMethod : true;
