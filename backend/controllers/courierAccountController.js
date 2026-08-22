@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { adjustResellerOrderStock } = require('./resellerPortalController');
 
 // Ensure table exists
 const ensureTableExists = async () => {
@@ -415,6 +416,8 @@ exports.dispatchOrderToCourier = async (req, res) => {
             'UPDATE reseller_sales SET order_status = "in_courier", tracking_code = ?, courier_name = ?, provider_code = ? WHERE id = ? AND tenant_id = ?',
             [trackingCode, courierAcc.account_label, provider, singleId, tenantId]
           );
+          // Deduct stock for reseller order dispatched to courier
+          await adjustResellerOrderStock(db, singleId, tenantId, 'deduct');
         } else {
           await db.query(
             'UPDATE sales SET status = "in_courier", tracking_code = ? WHERE id = ? AND tenant_id = ?',
@@ -498,6 +501,16 @@ const applyResellerOrderStatusUpdate = async (sale, newStatus, collectedAmount =
      WHERE id = ? AND tenant_id = ?`,
     [statusLower, finalProfit, finalLoss, finalCollected, sale.id, sale.tenant_id]
   );
+
+  // Sync inventory stock
+  const activeStatuses = ['in_courier', 'ready', 'confirmed', 'processing', 'shipped', 'delivered', 'partially_delivered', 'complete', 'completed', 'paid'];
+  const returnOrCancelStatuses = ['returned', 'return_pending', 'cancelled', 'deleted'];
+
+  if (activeStatuses.includes(statusLower)) {
+    await adjustResellerOrderStock(db, sale.id, sale.tenant_id, 'deduct');
+  } else if (returnOrCancelStatuses.includes(statusLower)) {
+    await adjustResellerOrderStock(db, sale.id, sale.tenant_id, 'restore');
+  }
 
   return { status: statusLower, profit: finalProfit, loss: finalLoss };
 };

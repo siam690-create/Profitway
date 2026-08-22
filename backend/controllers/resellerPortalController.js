@@ -123,6 +123,10 @@ const ensureResellerSchema = async (conn) => {
     if (cprCols.length === 0) {
       await conn.query(`ALTER TABLE reseller_sales ADD COLUMN customer_paid_return DECIMAL(10,2) DEFAULT 0.00`);
     }
+    const [sdCols] = await conn.query(`SHOW COLUMNS FROM reseller_sales LIKE 'stock_deducted'`);
+    if (sdCols.length === 0) {
+      await conn.query(`ALTER TABLE reseller_sales ADD COLUMN stock_deducted TINYINT(1) DEFAULT 0`);
+    }
     try {
       await conn.query("ALTER TABLE reseller_sales ALTER order_status SET DEFAULT 'new'");
     } catch(e) {}
@@ -200,6 +204,179 @@ const resolveTenantId = async (req) => {
   }
   return 1;
 };
+
+// Central Helper to manage stock deduction/restoration for Reseller Orders
+const adjustResellerOrderStock = async (conn, saleId, tenantId, action = 'deduct') => {
+  try {
+    const [saleRows] = await conn.query(
+      'SELECT id, invoice_no, stock_deducted, order_status FROM reseller_sales WHERE id = ? AND tenant_id = ? FOR UPDATE',
+      [saleId, tenantId]
+    );
+    if (saleRows.length === 0) return;
+    const sale = saleRows[0];
+    const isDeducted = Number(sale.stock_deducted) === 1;
+
+    if (action === 'deduct') {
+      if (isDeducted) return; // already deducted, avoid double deduction
+
+      const [items] = await conn.query(
+        'SELECT product_id, product_name, quantity FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?',
+        [saleId, tenantId]
+      );
+
+      for (const item of items) {
+        let targetProductId = item.product_id;
+        const qty = Number(item.quantity || 1);
+
+        if (!targetProductId && item.product_name) {
+          const [pRows] = await conn.query(
+            'SELECT id FROM products WHERE tenant_id = ? AND (name = ? OR sku = ?) LIMIT 1',
+            [tenantId, item.product_name, item.product_name]
+          );
+          if (pRows.length > 0) targetProductId = pRows[0].id;
+        }
+
+        if (targetProductId) {
+          const [prodRows] = await conn.query(
+            'SELECT stock_quantity, name, is_combo FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+            [targetProductId, tenantId]
+          );
+          if (prodRows.length > 0) {
+            const product = prodRows[0];
+            if (product.is_combo) {
+              const [comboItems] = await conn.query(
+                'SELECT child_product_id, quantity FROM combo_items WHERE combo_product_id = ? AND tenant_id = ?',
+                [targetProductId, tenantId]
+              );
+              for (const child of comboItems) {
+                const childDeductQty = Number(child.quantity || 1) * qty;
+                const [cProd] = await conn.query(
+                  'SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+                  [child.child_product_id, tenantId]
+                );
+                const prevChildStock = cProd.length > 0 ? Number(cProd[0].stock_quantity || 0) : 0;
+                const newChildStock = Math.max(0, prevChildStock - childDeductQty);
+                await conn.query(
+                  'UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?',
+                  [newChildStock, child.child_product_id, tenantId]
+                );
+                try {
+                  await conn.query(
+                    `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+                     VALUES (?, ?, 'reseller_combo_dispatch', ?, ?, ?, ?, ?)`,
+                    [tenantId, child.child_product_id, -childDeductQty, prevChildStock, newChildStock, sale.invoice_no, `Deducted child product for Reseller Combo Order #${sale.invoice_no}`]
+                  );
+                } catch(e) {}
+              }
+            } else {
+              const prevStock = Number(product.stock_quantity || 0);
+              const newStock = Math.max(0, prevStock - qty);
+
+              await conn.query(
+                'UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?',
+                [newStock, targetProductId, tenantId]
+              );
+
+              try {
+                await conn.query(
+                  `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+                   VALUES (?, ?, 'reseller_order_dispatch', ?, ?, ?, ?, ?)`,
+                  [tenantId, targetProductId, -qty, prevStock, newStock, sale.invoice_no, `Deducted stock for Reseller Order #${sale.invoice_no} dispatched to courier`]
+                );
+              } catch(e) {}
+            }
+          }
+        }
+      }
+
+      await conn.query(
+        'UPDATE reseller_sales SET stock_deducted = 1 WHERE id = ? AND tenant_id = ?',
+        [saleId, tenantId]
+      );
+
+    } else if (action === 'restore') {
+      if (!isDeducted) return; // not deducted, nothing to restore
+
+      const [items] = await conn.query(
+        'SELECT product_id, product_name, quantity FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?',
+        [saleId, tenantId]
+      );
+
+      for (const item of items) {
+        let targetProductId = item.product_id;
+        const qty = Number(item.quantity || 1);
+
+        if (!targetProductId && item.product_name) {
+          const [pRows] = await conn.query(
+            'SELECT id FROM products WHERE tenant_id = ? AND (name = ? OR sku = ?) LIMIT 1',
+            [tenantId, item.product_name, item.product_name]
+          );
+          if (pRows.length > 0) targetProductId = pRows[0].id;
+        }
+
+        if (targetProductId) {
+          const [prodRows] = await conn.query(
+            'SELECT stock_quantity, name, is_combo FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+            [targetProductId, tenantId]
+          );
+          if (prodRows.length > 0) {
+            const product = prodRows[0];
+            if (product.is_combo) {
+              const [comboItems] = await conn.query(
+                'SELECT child_product_id, quantity FROM combo_items WHERE combo_product_id = ? AND tenant_id = ?',
+                [targetProductId, tenantId]
+              );
+              for (const child of comboItems) {
+                const childRestoreQty = Number(child.quantity || 1) * qty;
+                const [cProd] = await conn.query(
+                  'SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+                  [child.child_product_id, tenantId]
+                );
+                const prevChildStock = cProd.length > 0 ? Number(cProd[0].stock_quantity || 0) : 0;
+                const newChildStock = prevChildStock + childRestoreQty;
+                await conn.query(
+                  'UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?',
+                  [newChildStock, child.child_product_id, tenantId]
+                );
+                try {
+                  await conn.query(
+                    `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+                     VALUES (?, ?, 'reseller_combo_return', ?, ?, ?, ?, ?)`,
+                    [tenantId, child.child_product_id, childRestoreQty, prevChildStock, newChildStock, sale.invoice_no, `Restored child product for Reseller Combo Order #${sale.invoice_no}`]
+                  );
+                } catch(e) {}
+              }
+            } else {
+              const prevStock = Number(product.stock_quantity || 0);
+              const newStock = prevStock + qty;
+
+              await conn.query(
+                'UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?',
+                [newStock, targetProductId, tenantId]
+              );
+
+              try {
+                await conn.query(
+                  `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+                   VALUES (?, ?, 'reseller_order_return', ?, ?, ?, ?, ?)`,
+                  [tenantId, targetProductId, qty, prevStock, newStock, sale.invoice_no, `Restored stock for Reseller Order #${sale.invoice_no} (Returned/Cancelled)`]
+                );
+              } catch(e) {}
+            }
+          }
+        }
+      }
+
+      await conn.query(
+        'UPDATE reseller_sales SET stock_deducted = 0 WHERE id = ? AND tenant_id = ?',
+        [saleId, tenantId]
+      );
+    }
+  } catch (err) {
+    console.error('Error adjusting reseller order stock:', err);
+  }
+};
+exports.adjustResellerOrderStock = adjustResellerOrderStock;
 
 // 1. Get Product Catalog with Wholesale Reseller Price
 exports.getResellerCatalog = async (req, res) => {
@@ -625,6 +802,10 @@ exports.editResellerOrderByReseller = async (req, res) => {
       delivery_fee_charged,
       total_amount,
       customer_total_price,
+      notes,
+      items
+    } = req.body;
+
     const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
     let cleanPhone = undefined;
     if (customer_phone !== undefined) {
@@ -1315,29 +1496,13 @@ exports.updateResellerOrderStatusByAdmin = async (req, res) => {
     );
 
     // Stock management logic:
-    // If going from 'pending'/'cancelled' -> 'processing'/'shipped'/'delivered': deduct stock if not already deducted!
-    // If going to 'returned' or 'cancelled' from an active status: restore stock!
+    const activeStatuses = ['in_courier', 'ready', 'confirmed', 'processing', 'shipped', 'delivered', 'partially_delivered', 'complete', 'completed', 'paid'];
+    const returnOrCancelStatuses = ['returned', 'return_pending', 'cancelled', 'deleted'];
 
-    if ((prevStatus === 'pending' || prevStatus === 'cancelled') && (newStatus === 'processing' || newStatus === 'shipped' || newStatus === 'delivered')) {
-      // Deduct stock for ordered items
-      for (const item of items) {
-        if (item.product_id) {
-          await connection.query(
-            'UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ? AND tenant_id = ?',
-            [item.quantity, item.product_id, tenantId]
-          );
-        }
-      }
-    } else if ((prevStatus === 'processing' || prevStatus === 'shipped' || prevStatus === 'delivered') && (newStatus === 'returned' || newStatus === 'cancelled')) {
-      // Restore stock for items
-      for (const item of items) {
-        if (item.product_id) {
-          await connection.query(
-            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?',
-            [item.quantity, item.product_id, tenantId]
-          );
-        }
-      }
+    if (activeStatuses.includes(newStatus)) {
+      await adjustResellerOrderStock(connection, id, tenantId, 'deduct');
+    } else if (returnOrCancelStatuses.includes(newStatus)) {
+      await adjustResellerOrderStock(connection, id, tenantId, 'restore');
     }
 
     let finalProfit = Number(sale.reseller_profit || 0);
@@ -1579,6 +1744,9 @@ exports.deleteResellerOrderForAdmin = async (req, res) => {
       return res.status(404).json({ error: 'Reseller order not found.' });
     }
 
+    // Restore stock if previously deducted
+    await adjustResellerOrderStock(connection, id, tenantId, 'restore');
+
     // Soft delete by updating status to 'deleted'
     await connection.query("UPDATE reseller_sales SET order_status = 'deleted' WHERE id = ? AND tenant_id = ?", [id, tenantId]);
 
@@ -1607,27 +1775,14 @@ exports.bulkUpdateResellerOrdersStatus = async (req, res) => {
     const newStatus = order_status.toLowerCase();
     await connection.beginTransaction();
 
+    const activeStatuses = ['in_courier', 'ready', 'confirmed', 'processing', 'shipped', 'delivered', 'partially_delivered', 'complete', 'completed', 'paid'];
+    const returnOrCancelStatuses = ['returned', 'return_pending', 'cancelled', 'deleted'];
+
     for (const id of orderIds) {
-      const [saleRows] = await connection.query('SELECT * FROM reseller_sales WHERE id = ? AND tenant_id = ? FOR UPDATE', [id, tenantId]);
-      if (saleRows.length === 0) continue;
-
-      const sale = saleRows[0];
-      const prevStatus = (sale.order_status || 'pending').toLowerCase();
-      const [items] = await connection.query('SELECT * FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
-
-      // Stock logic
-      if ((prevStatus === 'pending' || prevStatus === 'cancelled' || prevStatus === 'deleted') && (newStatus === 'processing' || newStatus === 'shipped' || newStatus === 'delivered' || newStatus === 'in_courier')) {
-        for (const item of items) {
-          if (item.product_id) {
-            await connection.query('UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ? AND tenant_id = ?', [item.quantity, item.product_id, tenantId]);
-          }
-        }
-      } else if ((prevStatus === 'processing' || prevStatus === 'shipped' || prevStatus === 'delivered' || prevStatus === 'in_courier') && (newStatus === 'returned' || newStatus === 'cancelled' || newStatus === 'deleted')) {
-        for (const item of items) {
-          if (item.product_id) {
-            await connection.query('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND tenant_id = ?', [item.quantity, item.product_id, tenantId]);
-          }
-        }
+      if (activeStatuses.includes(newStatus)) {
+        await adjustResellerOrderStock(connection, id, tenantId, 'deduct');
+      } else if (returnOrCancelStatuses.includes(newStatus)) {
+        await adjustResellerOrderStock(connection, id, tenantId, 'restore');
       }
 
       await connection.query('UPDATE reseller_sales SET order_status = ? WHERE id = ? AND tenant_id = ?', [newStatus, id, tenantId]);
@@ -1656,6 +1811,10 @@ exports.bulkDeleteResellerOrders = async (req, res) => {
     }
 
     await connection.beginTransaction();
+
+    for (const id of orderIds) {
+      await adjustResellerOrderStock(connection, id, tenantId, 'restore');
+    }
 
     await connection.query("UPDATE reseller_sales SET order_status = 'deleted' WHERE id IN (?) AND tenant_id = ?", [orderIds, tenantId]);
 
