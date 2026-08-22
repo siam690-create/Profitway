@@ -86,19 +86,14 @@ const ResellerPortal = () => {
 
   // Reseller Order Edit & Cancel States
   const [editingOrder, setEditingOrder] = useState(null);
-  const [editProductSearch, setEditProductSearch] = useState('');
-  const [editFormData, setEditFormData] = useState({
-    customer_name: '',
-    customer_phone: '',
-    customer_address: '',
-    district: '',
-    thana: '',
-    courier_name: 'Steadfast',
-    delivery_fee_charged: 120,
-    customer_total_price: 0,
-    notes: '',
-    items: []
-  });
+  const [editCustomerName, setEditCustomerName] = useState('');
+  const [editCustomerPhone, setEditCustomerPhone] = useState('');
+  const [editCustomerAddress, setEditCustomerAddress] = useState('');
+  const [editOrderItems, setEditOrderItems] = useState([]);
+  const [editModalProductSearch, setEditModalProductSearch] = useState('');
+  const [editCustomerSellingPrice, setEditCustomerSellingPrice] = useState('');
+  const [editDeliveryArea, setEditDeliveryArea] = useState('');
+  const [editOrderNotes, setEditOrderNotes] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
 
@@ -478,69 +473,114 @@ const ResellerPortal = () => {
 
   const handleOpenEditModal = (order) => {
     setEditingOrder(order);
-    setEditProductSearch('');
-    const delivFee = Number(order.delivery_fee_charged || 120);
-    const totalCod = Number(order.total_amount || order.total_price || 0);
-
-    setEditFormData({
-      customer_name: order.customer_name || '',
-      customer_phone: order.customer_phone || '',
-      customer_address: order.customer_address || '',
-      district: order.district || '',
-      thana: order.thana || '',
-      courier_name: order.courier_name || 'Steadfast',
-      delivery_fee_charged: delivFee,
-      customer_total_price: totalCod,
-      notes: order.notes || '',
-      items: (order.items && order.items.length > 0) ? order.items.map(i => ({
-        id: i.id,
+    setEditCustomerName(order.customer_name || '');
+    setEditCustomerPhone(order.customer_phone || '');
+    setEditCustomerAddress(order.customer_address || '');
+    
+    // Items with unit & total reseller cost
+    const items = (order.items && order.items.length > 0) ? order.items.map(i => {
+      const unitWholesale = Number(i.unit_cost || i.unit_price || 0);
+      const qty = Number(i.quantity || 1);
+      return {
         product_id: i.product_id,
         product_name: i.product_name,
-        quantity: Number(i.quantity || 1),
-        unit_cost: Number(i.unit_cost || 0),
-        unit_price: Number(i.unit_cost || 0)
-      })) : []
+        quantity: qty,
+        unit_reseller_price: unitWholesale,
+        total_reseller_cost: unitWholesale * qty
+      };
+    }) : [];
+    setEditOrderItems(items);
+
+    // Delivery Area & Selling Price without delivery fee
+    const totalCod = Number(order.total_amount || order.total_price || 0);
+    const delivFee = Number(order.delivery_fee_charged || 120);
+    const prodSalePrice = Math.max(0, totalCod - delivFee);
+    setEditCustomerSellingPrice(prodSalePrice > 0 ? String(prodSalePrice) : '');
+
+    const matchedZone = deliveryZones.find(z => Number(z.charge) === delivFee) ||
+                        deliveryZones.find(z => z.zone_name === order.district || z.zone_name === order.thana) ||
+                        deliveryZones[0] ||
+                        { zone_name: 'ঢাকার বাইরে', charge: 120 };
+    setEditDeliveryArea(matchedZone.zone_name);
+
+    setEditOrderNotes(order.notes || '');
+    setEditModalProductSearch('');
+  };
+
+  const updateEditItemQty = (index, delta) => {
+    setEditOrderItems(prev => {
+      const updated = [...prev];
+      const newQty = Math.max(1, (updated[index].quantity || 1) + delta);
+      updated[index].quantity = newQty;
+      updated[index].total_reseller_cost = (updated[index].unit_reseller_price || 0) * newQty;
+      return updated;
     });
   };
 
-  const updateEditItemQty = (idx, delta) => {
-    const items = [...editFormData.items];
-    const newQty = Math.max(1, (items[idx].quantity || 1) + delta);
-    items[idx].quantity = newQty;
-    setEditFormData({ ...editFormData, items });
+  const setEditItemQty = (index, val) => {
+    const parsed = parseInt(val, 10);
+    const qty = isNaN(parsed) || parsed < 1 ? 1 : parsed;
+    setEditOrderItems(prev => {
+      const updated = [...prev];
+      updated[index].quantity = qty;
+      updated[index].total_reseller_cost = (updated[index].unit_reseller_price || 0) * qty;
+      return updated;
+    });
   };
 
-  const removeEditItem = (idx) => {
-    if (editFormData.items.length <= 1) {
+  const removeEditItemFromOrder = (index) => {
+    if (editOrderItems.length <= 1) {
       alert('অর্ডারে কমপক্ষে ১টি প্রোডাক্ট থাকতে হবে।');
       return;
     }
-    setEditFormData({ ...editFormData, items: editFormData.items.filter((_, i) => i !== idx) });
+    setEditOrderItems(prev => prev.filter((_, i) => i !== index));
   };
 
-  const addProductToEditOrder = (prod) => {
-    const items = [...editFormData.items];
-    const existing = items.find(i => i.product_id === prod.id);
-    if (existing) {
-      existing.quantity += 1;
-    } else {
-      items.push({
-        product_id: prod.id,
-        product_name: prod.name,
-        quantity: 1,
-        unit_cost: Number(prod.reseller_price || prod.cost_price || 0),
-        unit_price: Number(prod.reseller_price || prod.cost_price || 0)
-      });
-    }
-    setEditFormData({ ...editFormData, items });
-    setEditProductSearch('');
+  const handleAddProductToEditOrder = (product) => {
+    const unitPrice = Number(product.reseller_price || product.cost_price || 0);
+    setEditOrderItems(prev => {
+      const existsIndex = prev.findIndex(item => item.product_id === product.id);
+      if (existsIndex > -1) {
+        const updated = [...prev];
+        const newQty = updated[existsIndex].quantity + 1;
+        updated[existsIndex].quantity = newQty;
+        updated[existsIndex].total_reseller_cost = unitPrice * newQty;
+        return updated;
+      }
+      return [
+        ...prev,
+        {
+          product_id: product.id,
+          product_name: product.name,
+          quantity: 1,
+          unit_reseller_price: unitPrice,
+          total_reseller_cost: unitPrice
+        }
+      ];
+    });
+    setEditModalProductSearch('');
   };
+
+  // Edit Modal Derived Calculations
+  const editTotalWholesaleCost = editOrderItems.reduce((sum, i) => sum + Number(i.total_reseller_cost || 0), 0);
+  const editProductSalePrice = Number(editCustomerSellingPrice || 0);
+  const editSelectedZone = deliveryZones.find(z => z.zone_name === editDeliveryArea) || deliveryZones[0] || { zone_name: 'ঢাকার বাইরে', charge: 120 };
+  const editSelectedDeliveryFee = Number(editSelectedZone ? editSelectedZone.charge : 120);
+  const editTotalCOD = editProductSalePrice + editSelectedDeliveryFee;
+  const editNetEstimatedProfit = editProductSalePrice - editTotalWholesaleCost;
+  const isEditLoss = editProductSalePrice > 0 && editProductSalePrice < editTotalWholesaleCost;
 
   const handleSaveOrderEdit = async (e) => {
     e.preventDefault();
     if (!editingOrder) return;
-    if (!editFormData.customer_phone) return alert('Customer Phone is required.');
-    if (!editFormData.items || editFormData.items.length === 0) return alert('At least 1 product is required.');
+    if (!editCustomerPhone) return alert('Customer Phone is required.');
+    if (editOrderItems.length === 0) return alert('Please select at least 1 product.');
+
+    if (isEditLoss) {
+      if (!window.confirm(`Warning: Customer product sale price (${currency}${editProductSalePrice}) is lower than wholesale cost (${currency}${editTotalWholesaleCost}). Do you want to proceed?`)) {
+        return;
+      }
+    }
 
     setIsSavingEdit(true);
     try {
@@ -548,9 +588,23 @@ const ResellerPortal = () => {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...editFormData,
           reseller_name: resellerName,
-          reseller_id: resellerSession?.id || resellerId || null
+          reseller_id: resellerSession?.id || resellerId || null,
+          customer_name: editCustomerName,
+          customer_phone: editCustomerPhone,
+          customer_address: editCustomerAddress,
+          district: editSelectedZone ? editSelectedZone.zone_name : 'ঢাকার বাইরে',
+          thana: editSelectedZone ? editSelectedZone.zone_name : 'ঢাকার বাইরে',
+          delivery_fee_charged: editSelectedDeliveryFee,
+          customer_total_price: editTotalCOD,
+          notes: editOrderNotes,
+          items: editOrderItems.map(i => ({
+            product_id: i.product_id,
+            product_name: i.product_name,
+            quantity: i.quantity,
+            unit_cost: i.unit_reseller_price,
+            unit_price: i.unit_reseller_price
+          }))
         })
       });
       const data = await res.json();
@@ -3271,13 +3325,13 @@ const ResellerPortal = () => {
         </div>
       )}
 
-      {/* EDIT ORDER MODAL (For Reseller) */}
+      {/* EDIT CUSTOMER ORDER MODAL (Exact match with Submit Order Modal) */}
       {editingOrder && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '620px', maxHeight: '92vh', overflowY: 'auto' }}>
+          <div className="modal-content" style={{ maxWidth: '580px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Edit size={20} color="#38bdf8" />
+                <Edit size={20} color="var(--accent-primary)" />
                 <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Edit Order #{editingOrder.invoice_no}</h3>
               </div>
               <button onClick={() => setEditingOrder(null)} className="btn btn-secondary btn-icon">
@@ -3288,10 +3342,10 @@ const ResellerPortal = () => {
             <form onSubmit={handleSaveOrderEdit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 
-                {/* Status Notice */}
-                <div style={{ padding: '10px 14px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Status: <strong style={{ color: '#38bdf8', textTransform: 'capitalize' }}>{editingOrder.order_status || 'New'}</strong></span>
-                  <span style={{ fontSize: '12px', color: '#10b981' }}>✓ Editable before courier dispatch</span>
+                {/* Reseller Info Notice */}
+                <div style={{ padding: '10px 14px', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '8px', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Reseller Name: <strong style={{ color: '#8b5cf6' }}>{resellerName}</strong></span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Profile ID: Auto-Linked</span>
                 </div>
 
                 {/* Customer Details */}
@@ -3302,8 +3356,8 @@ const ResellerPortal = () => {
                       type="text"
                       className="form-input"
                       placeholder="e.g. Tanvir Ahmed"
-                      value={editFormData.customer_name}
-                      onChange={(e) => setEditFormData({ ...editFormData, customer_name: e.target.value })}
+                      value={editCustomerName}
+                      onChange={(e) => setEditCustomerName(e.target.value)}
                     />
                   </div>
 
@@ -3314,8 +3368,8 @@ const ResellerPortal = () => {
                       className="form-input"
                       required
                       placeholder="01711000000"
-                      value={editFormData.customer_phone}
-                      onChange={(e) => setEditFormData({ ...editFormData, customer_phone: e.target.value })}
+                      value={editCustomerPhone}
+                      onChange={(e) => setEditCustomerPhone(e.target.value)}
                     />
                   </div>
                 </div>
@@ -3327,203 +3381,338 @@ const ResellerPortal = () => {
                     className="form-input"
                     required
                     placeholder="e.g. House #12, Road #4, Sector #10, Uttara"
-                    value={editFormData.customer_address}
-                    onChange={(e) => setEditFormData({ ...editFormData, customer_address: e.target.value })}
+                    value={editCustomerAddress}
+                    onChange={(e) => setEditCustomerAddress(e.target.value)}
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="form-group">
-                    <label className="form-label">District (জেলা)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Dhaka"
-                      value={editFormData.district}
-                      onChange={(e) => setEditFormData({ ...editFormData, district: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Thana / Area (থানা)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Uttara"
-                      value={editFormData.thana}
-                      onChange={(e) => setEditFormData({ ...editFormData, thana: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* Selected Products Breakdown */}
+                {/* Selected Products Breakdown & Multi-Product Selector */}
                 <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <label className="form-label" style={{ marginBottom: 0, fontWeight: '700', fontSize: '13px' }}>
-                      🛍️ Selected Product(s) ({editFormData.items.length})
+                      🛍️ Selected Product(s) ({editOrderItems.length})
                     </label>
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       Wholesale Unit Rates
                     </span>
                   </div>
 
-                  {/* Items List */}
+                  {/* List of current items */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {editFormData.items.map((item, idx) => (
+                    {editOrderItems.map((item, idx) => (
                       <div
                         key={idx}
                         style={{
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: '8px',
+                          padding: '10px 12px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          padding: '8px 12px',
-                          background: 'var(--bg-primary)',
-                          borderRadius: '8px',
-                          border: '1px solid var(--border-color)',
-                          fontSize: '13px'
+                          gap: '10px',
+                          flexWrap: 'wrap'
                         }}
                       >
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{item.product_name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            Wholesale Cost: {currency}{Number(item.unit_cost || 0).toFixed(2)} / pc
+                        <div style={{ flex: 1, minWidth: '150px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', lineHeight: '1.3' }}>
+                            {item.product_name}
+                          </div>
+                          <div style={{ fontSize: '11.5px', color: '#c084fc', marginTop: '2px' }}>
+                            Unit Wholesale: {currency}{Number(item.unit_reseller_price || 0).toFixed(2)}
                           </div>
                         </div>
 
-                        {/* Qty Stepper */}
+                        {/* Quantity Controls */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <button
                             type="button"
                             onClick={() => updateEditItemQty(idx, -1)}
-                            className="btn btn-secondary btn-icon btn-sm"
-                            style={{ width: '26px', height: '26px', padding: 0 }}
+                            disabled={item.quantity <= 1}
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              cursor: item.quantity <= 1 ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              opacity: item.quantity <= 1 ? 0.4 : 1
+                            }}
                           >
-                            <Minus size={12} />
+                            <Minus size={14} />
                           </button>
-                          <span style={{ fontWeight: '700', minWidth: '20px', textAlign: 'center' }}>
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => updateEditItemQty(idx, 1)}
-                            className="btn btn-secondary btn-icon btn-sm"
-                            style={{ width: '26px', height: '26px', padding: 0 }}
-                          >
-                            <Plus size={12} />
-                          </button>
+
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => setEditItemQty(idx, e.target.value)}
+                            style={{
+                              width: '46px',
+                              height: '28px',
+                              textAlign: 'center',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              fontWeight: '700',
+                              fontSize: '13px'
+                            }}
+                          />
 
                           <button
                             type="button"
-                            onClick={() => removeEditItem(idx)}
-                            className="btn btn-secondary btn-icon btn-sm"
-                            style={{ width: '26px', height: '26px', padding: 0, color: '#ef4444', marginLeft: '6px' }}
-                            title="Remove Product"
+                            onClick={() => updateEditItemQty(idx, 1)}
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
                           >
-                            <Trash2 size={12} />
+                            <Plus size={14} />
                           </button>
+                        </div>
+
+                        {/* Subtotal & Delete */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', minWidth: '70px', textAlign: 'right' }}>
+                            {currency}{(item.total_reseller_cost || 0).toFixed(2)}
+                          </div>
+                          {editOrderItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeEditItemFromOrder(idx)}
+                              title="Remove item"
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                color: '#ef4444',
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Add More Products to Order Search */}
-                  <div style={{ marginTop: '6px' }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{ fontSize: '12px', padding: '6px 10px' }}
-                      placeholder="🔍 Type product name to add another item..."
-                      value={editProductSearch}
-                      onChange={(e) => setEditProductSearch(e.target.value)}
-                    />
-                    {editProductSearch.trim() && (
-                      <div style={{ maxHeight: '140px', overflowY: 'auto', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', marginTop: '4px' }}>
-                        {catalog
-                          .filter(p => p.name.toLowerCase().includes(editProductSearch.toLowerCase()) || String(p.sku || '').toLowerCase().includes(editProductSearch.toLowerCase()))
-                          .slice(0, 5)
-                          .map(p => (
-                            <div
-                              key={p.id}
-                              onClick={() => addProductToEditOrder(p)}
-                              style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}
-                            >
-                              <span>{p.name}</span>
-                              <span style={{ fontWeight: '700', color: '#8b5cf6' }}>+ Add ({currency}{p.reseller_price})</span>
+                  {/* Add Product Search & Quick Selector */}
+                  <div style={{ marginTop: '6px', position: 'relative' }}>
+                    <div style={{ position: 'relative' }}>
+                      <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#a78bfa' }} />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="🔍 SKU বা প্রোডাক্টের নাম লিখে খুঁজুন ও যোগ করুন..."
+                        value={editModalProductSearch}
+                        onChange={(e) => setEditModalProductSearch(e.target.value)}
+                        style={{
+                          paddingLeft: '36px',
+                          paddingRight: editModalProductSearch ? '30px' : '12px',
+                          background: 'rgba(139, 92, 246, 0.08)',
+                          borderColor: 'rgba(139, 92, 246, 0.3)',
+                          fontSize: '13px'
+                        }}
+                      />
+                      {editModalProductSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setEditModalProductSearch('')}
+                          style={{
+                            position: 'absolute',
+                            right: '10px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            padding: '2px'
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Instant Search Results Dropdown */}
+                    {editModalProductSearch.trim().length > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: '100%',
+                        marginTop: '4px',
+                        maxHeight: '220px',
+                        overflowY: 'auto',
+                        background: '#1e1b4b',
+                        border: '1px solid #7c3aed',
+                        borderRadius: '10px',
+                        boxShadow: '0 12px 30px rgba(0,0,0,0.7)',
+                        zIndex: 50
+                      }}>
+                        {catalog.filter(p => {
+                          const q = editModalProductSearch.toLowerCase().trim();
+                          return (p.name && p.name.toLowerCase().includes(q)) || (p.sku && p.sku.toLowerCase().includes(q));
+                        }).slice(0, 30).map(p => (
+                          <div
+                            key={p.id}
+                            onClick={() => handleAddProductToEditOrder(p)}
+                            style={{
+                              padding: '10px 14px',
+                              borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              cursor: 'pointer',
+                              gap: '10px'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(139, 92, 246, 0.25)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '13px', fontWeight: '600', color: '#fff', lineHeight: '1.3' }}>
+                                {p.sku && <span style={{ background: 'rgba(192, 132, 252, 0.2)', color: '#c084fc', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', marginRight: '6px', fontWeight: '700' }}>{p.sku}</span>}
+                                {p.name}
+                              </div>
+                              <div style={{ fontSize: '11.5px', color: '#34d399', marginTop: '2px' }}>
+                                Wholesale Price: <strong>{currency}{Number(p.reseller_price || p.retail_price || 0).toFixed(2)}</strong>
+                              </div>
                             </div>
-                          ))}
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              style={{ padding: '4px 10px', fontSize: '11.5px', borderRadius: '6px', background: '#8b5cf6', borderColor: '#8b5cf6', flexShrink: 0 }}
+                            >
+                              + Add
+                            </button>
+                          </div>
+                        ))}
+
+                        {catalog.filter(p => {
+                          const q = editModalProductSearch.toLowerCase().trim();
+                          return (p.name && p.name.toLowerCase().includes(q)) || (p.sku && p.sku.toLowerCase().includes(q));
+                        }).length === 0 && (
+                          <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                            "{editModalProductSearch}" দিয়ে কোনো প্রোডাক্ট খুঁজে পাওয়া যায়নি।
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                </div>
 
-                {/* Delivery Fee & Total COD */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Delivery Fee ({currency}) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-input"
-                      required
-                      value={editFormData.delivery_fee_charged}
-                      onChange={(e) => setEditFormData({ ...editFormData, delivery_fee_charged: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Customer Total COD ({currency}) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-input"
-                      required
-                      placeholder="Total COD to collect"
-                      value={editFormData.customer_total_price}
-                      onChange={(e) => setEditFormData({ ...editFormData, customer_total_price: Number(e.target.value) || 0 })}
-                    />
+                  {/* Total Reseller Wholesale Cost */}
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13.5px', fontWeight: '700' }}>
+                    <span>Total Reseller Wholesale Cost:</span>
+                    <span style={{ color: 'var(--accent-primary)', fontSize: '15px', fontWeight: '800' }}>{currency}{editTotalWholesaleCost.toFixed(2)}</span>
                   </div>
                 </div>
 
-                {/* Live Profit Preview */}
-                {(() => {
-                  const currentWholesale = editFormData.items.reduce((s, i) => s + (Number(i.unit_cost || 0) * Number(i.quantity || 1)), 0);
-                  const currentDeliv = Number(editFormData.delivery_fee_charged || 0);
-                  const currentCod = Number(editFormData.customer_total_price || 0);
-                  const currentEstProfit = Math.max(0, currentCod - (currentWholesale + currentDeliv));
-
-                  return (
-                    <div style={{ padding: '12px 14px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div>Wholesale: <strong>{currency}{currentWholesale.toFixed(2)}</strong> | Delivery: <strong>{currency}{currentDeliv.toFixed(2)}</strong></div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>COD to Collect: {currency}{currentCod.toFixed(2)}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Estimated Profit:</div>
-                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#10b981' }}>+{currency}{currentEstProfit.toFixed(2)}</div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Notes */}
+                {/* Product Sale Price (without delivery charge) */}
                 <div className="form-group">
-                  <label className="form-label">Order Notes / Instructions</label>
-                  <textarea
+                  <label className="form-label">Customer Product Sale Price (কাষ্টমারের প্রোডাক্ট বিক্রীদাম - ডেলিভারি চার্জ ছাড়া) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
                     className="form-input"
-                    rows="2"
-                    placeholder="e.g. Call before delivery, red color preferred..."
-                    value={editFormData.notes}
-                    onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                    required
+                    placeholder="e.g. 380 (ডেলিভারি চার্জ ছাড়া শুধু প্রোডাক্ট বিক্রীদাম)"
+                    value={editCustomerSellingPrice}
+                    onChange={(e) => setEditCustomerSellingPrice(e.target.value)}
                   />
                 </div>
+
+                {/* Delivery Area Select Dropdown */}
+                <div className="form-group">
+                  <label className="form-label">Delivery Area / কুরিয়ার এলাকা নির্বাচন করুন *</label>
+                  <select
+                    className="form-select"
+                    value={editDeliveryArea}
+                    onChange={(e) => setEditDeliveryArea(e.target.value)}
+                    style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 14px', borderRadius: '8px', width: '100%', fontSize: '13.5px', fontWeight: '600' }}
+                  >
+                    {deliveryZones.map((z, idx) => (
+                      <option key={idx} value={z.zone_name}>
+                        🚚 {z.zone_name} ({currency}{Number(z.charge).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Live Calculation Summary Box */}
+                <div style={{
+                  background: isEditLoss ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-secondary)',
+                  border: isEditLoss ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border-color)',
+                  padding: '14px',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
+                    <span>Product Sale Price (প্রোডাক্ট দাম):</span>
+                    <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{currency}{editProductSalePrice.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#38bdf8' }}>
+                    <span>Delivery Charge ({editSelectedZone ? editSelectedZone.zone_name : 'Delivery'}):</span>
+                    <span style={{ fontWeight: '700' }}>+{currency}{editSelectedDeliveryFee.toFixed(2)}</span>
+                  </div>
+                  <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '800' }}>
+                    <span>Total COD (কাষ্টমারের ডেলিভারিসহ মোট বিক্রীদাম):</span>
+                    <span style={{ color: '#f59e0b', fontSize: '16px' }}>{currency}{editTotalCOD.toFixed(2)}</span>
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: isEditLoss ? '#ef4444' : 'var(--text-primary)' }}>
+                      {isEditLoss ? '⚠️ Estimated Reseller Loss (লোকসান):' : 'Estimated Reseller Profit:'}
+                    </span>
+                    <strong style={{ fontSize: '18px', fontWeight: '800', color: isEditLoss ? '#ef4444' : '#10b981' }}>
+                      {isEditLoss ? '-' : '+'}{currency}{Math.abs(editNetEstimatedProfit).toFixed(2)}
+                    </strong>
+                  </div>
+                  {isEditLoss && (
+                    <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '8px 10px', fontSize: '12px', color: '#ef4444', fontWeight: '600', marginTop: '2px', lineHeight: '1.4' }}>
+                      ⚠️ সতর্কবার্তা: কাস্টমার বিক্রয়মূল্য ({currency}{editProductSalePrice.toFixed(2)}) সর্বমোট হোলসেল খরচের ({currency}{editTotalWholesaleCost.toFixed(2)}) চেয়ে কম হওয়ায় এই অর্ডারে আপনার <strong>{currency}{Math.abs(editNetEstimatedProfit).toFixed(2)}</strong> টাকা লোকসান হবে!
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Special Delivery Instructions / Notes</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Please deliver before 5 PM"
+                    value={editOrderNotes}
+                    onChange={(e) => setEditOrderNotes(e.target.value)}
+                  />
+                </div>
+
               </div>
 
-              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={() => setEditingOrder(null)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" disabled={isSavingEdit} className="btn btn-primary" style={{ background: '#38bdf8', borderColor: '#38bdf8', color: '#0f172a', fontWeight: '700' }}>
-                  {isSavingEdit ? 'Saving...' : '💾 Save Changes'}
+              <div className="modal-footer">
+                <button type="button" onClick={() => setEditingOrder(null)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" disabled={isSavingEdit} className="btn btn-success" style={{ background: '#10b981', borderColor: '#10b981', padding: '10px 24px', fontWeight: '700' }}>
+                  {isSavingEdit ? 'Saving...' : '💾 Update Order'}
                 </button>
               </div>
             </form>
