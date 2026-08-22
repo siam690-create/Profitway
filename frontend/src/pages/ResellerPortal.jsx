@@ -40,6 +40,17 @@ import {
   Edit
 } from 'lucide-react';
 
+const sanitizeBDPhoneNumber = (val) => {
+  const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  let clean = String(val || '').replace(/[০-৯]/g, d => bengaliDigits.indexOf(d));
+  clean = clean.replace(/[^0-9]/g, '').slice(0, 11);
+  return clean;
+};
+
+const isValidBDPhoneNumber = (phone) => {
+  return /^01[3-9]\d{8}$/.test(String(phone || '').trim());
+};
+
 const ResellerPortal = () => {
   const { authFetch, currency, showToast, resellerSession, logoutReseller, products: contextProducts, theme, toggleTheme } = useApp();
 
@@ -425,6 +436,13 @@ const ResellerPortal = () => {
       return alert('Please enter Customer Phone and select at least 1 product.');
     }
 
+    const cleanPhone = sanitizeBDPhoneNumber(customerPhone);
+    if (!isValidBDPhoneNumber(cleanPhone)) {
+      const errMsg = 'গ্রাহকের ফোন নম্বরটি অবশ্যই ১১ ডিজিটের সঠিক ইংরেজি নম্বর হতে হবে (যেমন: 01711000000)।';
+      showToast ? showToast('Invalid Phone', errMsg, 'error') : alert(errMsg);
+      return;
+    }
+
     if (customerProductSalePrice < totalWholesaleCost) {
       if (!window.confirm(`Warning: Customer product sale price (${currency}${customerProductSalePrice}) is lower than reseller wholesale cost (${currency}${totalWholesaleCost}). Do you want to proceed?`)) {
         return;
@@ -574,6 +592,14 @@ const ResellerPortal = () => {
     e.preventDefault();
     if (!editingOrder) return;
     if (!editCustomerPhone) return alert('Customer Phone is required.');
+
+    const cleanPhone = sanitizeBDPhoneNumber(editCustomerPhone);
+    if (!isValidBDPhoneNumber(cleanPhone)) {
+      const errMsg = 'গ্রাহকের ফোন নম্বরটি অবশ্যই ১১ ডিজিটের সঠিক ইংরেজি নম্বর হতে হবে (যেমন: 01711000000)।';
+      showToast ? showToast('Invalid Phone', errMsg, 'error') : alert(errMsg);
+      return;
+    }
+
     if (editOrderItems.length === 0) return alert('Please select at least 1 product.');
 
     if (isEditLoss) {
@@ -962,9 +988,14 @@ const ResellerPortal = () => {
             codPrice = 0;
           }
 
+          let cleanRowPhone = sanitizeBDPhoneNumber(phone);
+          if (cleanRowPhone.length === 13 && cleanRowPhone.startsWith('8801')) {
+            cleanRowPhone = cleanRowPhone.slice(2);
+          }
+
           let errors = [];
           if (!name) errors.push('Customer Name missing');
-          if (!phone || phone.length < 10) errors.push('Invalid phone number');
+          if (!isValidBDPhoneNumber(cleanRowPhone)) errors.push('Phone must be 11-digit English number (01xxxxxxxxx)');
           if (!address) errors.push('Address missing');
           if (!sku) errors.push('Product SKU missing');
           if (salePrice <= 0 && codPrice <= 0) errors.push('Sale Price / COD missing');
@@ -2747,15 +2778,35 @@ const ResellerPortal = () => {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Customer Phone *</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label className="form-label" style={{ marginBottom: 0 }}>Customer Phone *</label>
+                      {customerPhone && (
+                        <span style={{ fontSize: '11px', color: isValidBDPhoneNumber(customerPhone) ? '#10b981' : '#ef4444', fontWeight: '700' }}>
+                          {isValidBDPhoneNumber(customerPhone) ? '✓ Valid (11 Digits)' : `⚠️ ${customerPhone.length}/11 Digit`}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      maxLength={11}
                       className="form-input"
                       required
                       placeholder="01711000000"
                       value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      onChange={(e) => setCustomerPhone(sanitizeBDPhoneNumber(e.target.value))}
+                      style={{
+                        borderColor: customerPhone ? (isValidBDPhoneNumber(customerPhone) ? '#10b981' : '#ef4444') : 'var(--border-color)',
+                        fontFamily: 'monospace',
+                        fontSize: '14px',
+                        letterSpacing: '0.5px'
+                      }}
                     />
+                    {customerPhone && !isValidBDPhoneNumber(customerPhone) && (
+                      <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '3px', fontWeight: '600' }}>
+                        ⚠️ ফোন নম্বরটি অবশ্যই ১১ ডিজিটের ইংরেজি নম্বর হতে হবে (যেমন: 01711000000)।
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -3362,15 +3413,35 @@ const ResellerPortal = () => {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Customer Phone *</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label className="form-label" style={{ marginBottom: 0 }}>Customer Phone *</label>
+                      {editCustomerPhone && (
+                        <span style={{ fontSize: '11px', color: isValidBDPhoneNumber(editCustomerPhone) ? '#10b981' : '#ef4444', fontWeight: '700' }}>
+                          {isValidBDPhoneNumber(editCustomerPhone) ? '✓ Valid (11 Digits)' : `⚠️ ${editCustomerPhone.length}/11 Digit`}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      maxLength={11}
                       className="form-input"
                       required
                       placeholder="01711000000"
                       value={editCustomerPhone}
-                      onChange={(e) => setEditCustomerPhone(e.target.value)}
+                      onChange={(e) => setEditCustomerPhone(sanitizeBDPhoneNumber(e.target.value))}
+                      style={{
+                        borderColor: editCustomerPhone ? (isValidBDPhoneNumber(editCustomerPhone) ? '#10b981' : '#ef4444') : 'var(--border-color)',
+                        fontFamily: 'monospace',
+                        fontSize: '14px',
+                        letterSpacing: '0.5px'
+                      }}
                     />
+                    {editCustomerPhone && !isValidBDPhoneNumber(editCustomerPhone) && (
+                      <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '3px', fontWeight: '600' }}>
+                        ⚠️ ফোন নম্বরটি অবশ্যই ১১ ডিজিটের ইংরেজি নম্বর হতে হবে (যেমন: 01711000000)।
+                      </div>
+                    )}
                   </div>
                 </div>
 

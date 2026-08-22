@@ -293,6 +293,19 @@ exports.submitResellerOrder = async (req, res) => {
       return res.status(400).json({ error: 'Reseller Name, Customer Phone, and at least 1 product item are required.' });
     }
 
+    const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    const cleanPhone = String(customer_phone || '')
+      .replace(/[০-৯]/g, d => bengaliDigits.indexOf(d))
+      .replace(/[^0-9]/g, '')
+      .trim();
+
+    if (!/^01[3-9]\d{8}$/.test(cleanPhone)) {
+      await connection.rollback();
+      return res.status(400).json({ 
+        error: 'গ্রাহকের ফোন নম্বরটি অবশ্যই ১১ ডিজিটের সঠিক ইংরেজি নম্বর হতে হবে (যেমন: 01711000000)।' 
+      });
+    }
+
     let calculatedResellerWholesaleCost = 0;
 
     // Calculate Reseller Wholesale Cost for the items
@@ -336,7 +349,7 @@ exports.submitResellerOrder = async (req, res) => {
         reseller_id || null,
         reseller_name.trim(),
         customer_name ? customer_name.trim() : null,
-        customer_phone.trim(),
+        cleanPhone,
         customer_address || null,
         district || null,
         thana || null,
@@ -433,6 +446,20 @@ exports.bulkSubmitResellerOrders = async (req, res) => {
 
       if (!customerPhone || items.length === 0) {
         errors.push(`Row ${i + 1}: Missing customer phone or product item.`);
+        continue;
+      }
+
+      const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+      let cleanPhone = String(customerPhone || '')
+        .replace(/[০-৯]/g, d => bengaliDigits.indexOf(d))
+        .replace(/[^0-9]/g, '')
+        .trim();
+      if (cleanPhone.length === 13 && cleanPhone.startsWith('8801')) {
+        cleanPhone = cleanPhone.slice(2);
+      }
+
+      if (!/^01[3-9]\d{8}$/.test(cleanPhone)) {
+        errors.push(`Row ${i + 1}: Invalid customer phone "${customerPhone}". Must be 11-digit English number (e.g. 01711000000).`);
         continue;
       }
 
@@ -598,9 +625,19 @@ exports.editResellerOrderByReseller = async (req, res) => {
       delivery_fee_charged,
       total_amount,
       customer_total_price,
-      notes,
-      items
-    } = req.body;
+    const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    let cleanPhone = undefined;
+    if (customer_phone !== undefined) {
+      cleanPhone = String(customer_phone || '')
+        .replace(/[০-৯]/g, d => bengaliDigits.indexOf(d))
+        .replace(/[^0-9]/g, '')
+        .trim();
+      if (!/^01[3-9]\d{8}$/.test(cleanPhone)) {
+        return res.status(400).json({ 
+          error: 'গ্রাহকের ফোন নম্বরটি অবশ্যই ১১ ডিজিটের সঠিক ইংরেজি নম্বর হতে হবে (যেমন: 01711000000)।' 
+        });
+      }
+    }
 
     await connection.beginTransaction();
 
@@ -687,7 +724,7 @@ exports.editResellerOrderByReseller = async (req, res) => {
        WHERE id = ? AND tenant_id = ?`,
       [
         customer_name !== undefined ? customer_name : order.customer_name,
-        customer_phone !== undefined ? customer_phone : order.customer_phone,
+        cleanPhone !== undefined ? cleanPhone : order.customer_phone,
         customer_address !== undefined ? customer_address : order.customer_address,
         district !== undefined ? district : order.district,
         thana !== undefined ? thana : order.thana,
