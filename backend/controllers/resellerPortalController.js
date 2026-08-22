@@ -580,6 +580,224 @@ exports.getResellerOrders = async (req, res) => {
   }
 };
 
+// Reseller: Edit Order (Allowed only when order_status is 'new' or 'pending')
+exports.editResellerOrderByReseller = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = await resolveTenantId(req);
+    const { id } = req.params;
+    const {
+      reseller_name,
+      reseller_id,
+      customer_name,
+      customer_phone,
+      customer_address,
+      district,
+      thana,
+      courier_name,
+      delivery_fee_charged,
+      total_amount,
+      customer_total_price,
+      notes,
+      items
+    } = req.body;
+
+    await connection.beginTransaction();
+
+    const [orderRows] = await connection.query(
+      'SELECT * FROM reseller_sales WHERE id = ? AND tenant_id = ? FOR UPDATE',
+      [id, tenantId]
+    );
+
+    if (orderRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Reseller order not found.' });
+    }
+
+    const order = orderRows[0];
+    const status = (order.order_status || 'new').toLowerCase();
+
+    if (status !== 'new' && status !== 'pending') {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Order cannot be edited once it has been processed or dispatched by admin.' });
+    }
+
+    // Verify ownership
+    if (reseller_id && order.reseller_id && Number(order.reseller_id) !== Number(reseller_id)) {
+      await connection.rollback();
+      return res.status(403).json({ error: 'You are not authorized to edit this order.' });
+    } else if (reseller_name && order.reseller_name && order.reseller_name.toLowerCase() !== reseller_name.toLowerCase()) {
+      await connection.rollback();
+      return res.status(403).json({ error: 'You are not authorized to edit this order.' });
+    }
+
+    let calculatedResellerWholesaleCost = 0;
+    const processedItems = [];
+
+    if (items && Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        const qty = Number(item.quantity || 1);
+        let unitCost = Number(item.unit_cost || item.unit_price || 0);
+
+        if (item.product_id) {
+          const [pRows] = await connection.query(
+            'SELECT reseller_price, cost_price, selling_price, name FROM products WHERE id = ? AND tenant_id = ?',
+            [item.product_id, tenantId]
+          );
+          if (pRows.length > 0) {
+            unitCost = Number(pRows[0].reseller_price || pRows[0].cost_price || 0);
+            item.product_name = pRows[0].name;
+          }
+        }
+
+        const totalPrice = unitCost * qty;
+        calculatedResellerWholesaleCost += totalPrice;
+
+        processedItems.push({
+          product_id: item.product_id || null,
+          product_name: item.product_name || 'Product',
+          quantity: qty,
+          unit_cost: unitCost,
+          unit_price: unitCost,
+          total_price: totalPrice,
+          item_profit: 0
+        });
+      }
+    }
+
+    const finalCOD = Number(customer_total_price !== undefined ? customer_total_price : (total_amount !== undefined ? total_amount : order.total_amount));
+    const finalDelivFee = Number(delivery_fee_charged !== undefined ? delivery_fee_charged : order.delivery_fee_charged);
+    const finalWholesale = processedItems.length > 0 ? calculatedResellerWholesaleCost : Number(order.reseller_wholesale_cost);
+    const finalProfit = Math.max(0, finalCOD - (finalWholesale + finalDelivFee));
+
+    await connection.query(
+      `UPDATE reseller_sales SET 
+        customer_name = ?,
+        customer_phone = ?,
+        customer_address = ?,
+        district = ?,
+        thana = ?,
+        courier_name = ?,
+        delivery_fee_charged = ?,
+        total_amount = ?,
+        reseller_wholesale_cost = ?,
+        reseller_profit = ?,
+        gross_profit = ?,
+        notes = ?
+       WHERE id = ? AND tenant_id = ?`,
+      [
+        customer_name !== undefined ? customer_name : order.customer_name,
+        customer_phone !== undefined ? customer_phone : order.customer_phone,
+        customer_address !== undefined ? customer_address : order.customer_address,
+        district !== undefined ? district : order.district,
+        thana !== undefined ? thana : order.thana,
+        courier_name !== undefined ? courier_name : order.courier_name,
+        finalDelivFee,
+        finalCOD,
+        finalWholesale,
+        finalProfit,
+        finalProfit,
+        notes !== undefined ? notes : order.notes,
+        id,
+        tenantId
+      ]
+    );
+
+    if (processedItems.length > 0) {
+      await connection.query('DELETE FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
+      for (const item of processedItems) {
+        await connection.query(
+          `INSERT INTO reseller_sale_items 
+            (tenant_id, reseller_sale_id, product_id, product_name, quantity, unit_cost, unit_price, total_price, item_profit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            tenantId,
+            id,
+            item.product_id,
+            item.product_name,
+            item.quantity,
+            item.unit_cost,
+            item.unit_price,
+            item.total_price,
+            item.item_profit
+          ]
+        );
+      }
+    }
+
+    await connection.commit();
+    res.json({ success: true, message: 'Order updated successfully!' });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error editing reseller order:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
+// Reseller: Cancel Order (Allowed only when order_status is 'new' or 'pending')
+exports.cancelResellerOrderByReseller = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const tenantId = await resolveTenantId(req);
+    const { id } = req.params;
+    const { reseller_name, reseller_id, reason } = req.body;
+
+    await connection.beginTransaction();
+
+    const [orderRows] = await connection.query(
+      'SELECT * FROM reseller_sales WHERE id = ? AND tenant_id = ? FOR UPDATE',
+      [id, tenantId]
+    );
+
+    if (orderRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Reseller order not found.' });
+    }
+
+    const order = orderRows[0];
+    const status = (order.order_status || 'new').toLowerCase();
+
+    if (status !== 'new' && status !== 'pending') {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Order cannot be cancelled once it has been processed or dispatched by admin.' });
+    }
+
+    // Verify ownership
+    if (reseller_id && order.reseller_id && Number(order.reseller_id) !== Number(reseller_id)) {
+      await connection.rollback();
+      return res.status(403).json({ error: 'You are not authorized to cancel this order.' });
+    } else if (reseller_name && order.reseller_name && order.reseller_name.toLowerCase() !== reseller_name.toLowerCase()) {
+      await connection.rollback();
+      return res.status(403).json({ error: 'You are not authorized to cancel this order.' });
+    }
+
+    const updatedNotes = reason ? `${order.notes ? order.notes + ' | ' : ''}Cancelled by Reseller: ${reason}` : (order.notes ? order.notes + ' | Cancelled by Reseller' : 'Cancelled by Reseller');
+
+    await connection.query(
+      `UPDATE reseller_sales SET 
+        order_status = 'cancelled',
+        reseller_profit = 0.00,
+        gross_profit = 0.00,
+        notes = ?
+       WHERE id = ? AND tenant_id = ?`,
+      [updatedNotes, id, tenantId]
+    );
+
+    await connection.commit();
+    res.json({ success: true, message: `Order #${order.invoice_no} has been cancelled successfully!` });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error cancelling reseller order:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
 // 4. Get Reseller Earnings Wallet & P&L Summary
 exports.getResellerWallet = async (req, res) => {
   try {

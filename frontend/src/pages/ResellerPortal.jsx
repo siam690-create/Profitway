@@ -36,7 +36,8 @@ import {
   FileText,
   Printer,
   Eye,
-  RotateCcw
+  RotateCcw,
+  Edit
 } from 'lucide-react';
 
 const ResellerPortal = () => {
@@ -80,8 +81,26 @@ const ResellerPortal = () => {
 
   const [activeTab, setActiveTab] = useState('catalog'); // 'catalog', 'orders', 'wallet'
   const [catalog, setCatalog] = useState([]);
-  const [walletData, setWalletData] = useState(null);
   const [orders, setOrders] = useState([]);
+
+  // Reseller Order Edit & Cancel States
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [editProductSearch, setEditProductSearch] = useState('');
+  const [editFormData, setEditFormData] = useState({
+    customer_name: '',
+    customer_phone: '',
+    customer_address: '',
+    district: '',
+    thana: '',
+    courier_name: 'Steadfast',
+    delivery_fee_charged: 120,
+    customer_total_price: 0,
+    notes: '',
+    items: []
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+
   // Bulk Order Excel Upload States
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [parsedRows, setParsedRows] = useState([]);
@@ -453,6 +472,128 @@ const ResellerPortal = () => {
       alert(`Error submitting order: ${err.message}`);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenEditModal = (order) => {
+    setEditingOrder(order);
+    setEditProductSearch('');
+    const delivFee = Number(order.delivery_fee_charged || 120);
+    const totalCod = Number(order.total_amount || order.total_price || 0);
+
+    setEditFormData({
+      customer_name: order.customer_name || '',
+      customer_phone: order.customer_phone || '',
+      customer_address: order.customer_address || '',
+      district: order.district || '',
+      thana: order.thana || '',
+      courier_name: order.courier_name || 'Steadfast',
+      delivery_fee_charged: delivFee,
+      customer_total_price: totalCod,
+      notes: order.notes || '',
+      items: (order.items && order.items.length > 0) ? order.items.map(i => ({
+        id: i.id,
+        product_id: i.product_id,
+        product_name: i.product_name,
+        quantity: Number(i.quantity || 1),
+        unit_cost: Number(i.unit_cost || 0),
+        unit_price: Number(i.unit_cost || 0)
+      })) : []
+    });
+  };
+
+  const updateEditItemQty = (idx, delta) => {
+    const items = [...editFormData.items];
+    const newQty = Math.max(1, (items[idx].quantity || 1) + delta);
+    items[idx].quantity = newQty;
+    setEditFormData({ ...editFormData, items });
+  };
+
+  const removeEditItem = (idx) => {
+    if (editFormData.items.length <= 1) {
+      alert('অর্ডারে কমপক্ষে ১টি প্রোডাক্ট থাকতে হবে।');
+      return;
+    }
+    setEditFormData({ ...editFormData, items: editFormData.items.filter((_, i) => i !== idx) });
+  };
+
+  const addProductToEditOrder = (prod) => {
+    const items = [...editFormData.items];
+    const existing = items.find(i => i.product_id === prod.id);
+    if (existing) {
+      existing.quantity += 1;
+    } else {
+      items.push({
+        product_id: prod.id,
+        product_name: prod.name,
+        quantity: 1,
+        unit_cost: Number(prod.reseller_price || prod.cost_price || 0),
+        unit_price: Number(prod.reseller_price || prod.cost_price || 0)
+      });
+    }
+    setEditFormData({ ...editFormData, items });
+    setEditProductSearch('');
+  };
+
+  const handleSaveOrderEdit = async (e) => {
+    e.preventDefault();
+    if (!editingOrder) return;
+    if (!editFormData.customer_phone) return alert('Customer Phone is required.');
+    if (!editFormData.items || editFormData.items.length === 0) return alert('At least 1 product is required.');
+
+    setIsSavingEdit(true);
+    try {
+      const res = await fetch(`/api/reseller/orders/${editingOrder.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...editFormData,
+          reseller_name: resellerName,
+          reseller_id: resellerSession?.id || resellerId || null
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEditingOrder(null);
+        fetchOrders();
+        fetchWallet();
+        showToast ? showToast('Updated ✏️', data.message || 'Order updated successfully!', 'success') : alert(data.message || 'Order updated successfully!');
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error updating order: ${err.message}`);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleCancelOrder = async (order) => {
+    if (!window.confirm(`অর্ডার #${order.invoice_no} বাতিল (Cancel) করতে আপনি কি নিশ্চিত?`)) return;
+
+    setIsCancellingOrder(true);
+    try {
+      const res = await fetch(`/api/reseller/orders/${order.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reseller_name: resellerName,
+          reseller_id: resellerSession?.id || resellerId || null,
+          reason: 'Cancelled from Reseller Portal'
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchOrders();
+        fetchWallet();
+        showToast ? showToast('Cancelled 🚫', data.message || 'Order cancelled successfully!', 'success') : alert(data.message || 'Order cancelled successfully!');
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error cancelling order: ${err.message}`);
+    } finally {
+      setIsCancellingOrder(false);
     }
   };
 
@@ -1737,12 +1878,13 @@ const ResellerPortal = () => {
                   <th>PRICING & COD BREAKDOWN</th>
                   <th>DELIVERY STATUS</th>
                   <th>EST PROFIT & PAYOUT</th>
+                  <th style={{ textAlign: 'center' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {activeOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                    <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
                       No active orders found for profile "{resellerName}". Orders that have been invoiced appear in "Completed Orders".
                     </td>
                   </tr>
@@ -1996,6 +2138,46 @@ const ResellerPortal = () => {
                               );
                             })()}
                           </div>
+                        </td>
+
+                        {/* ACTIONS COLUMN (Edit & Cancel when order is in New/Pending status) */}
+                        <td style={{ textAlign: 'center' }}>
+                          {(() => {
+                            const isNew = status === 'new' || status === 'pending';
+                            if (isNew) {
+                              return (
+                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditModal(o)}
+                                    className="btn btn-secondary btn-sm"
+                                    style={{ padding: '4px 10px', fontSize: '11.5px', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(56, 189, 248, 0.1)' }}
+                                    title="Edit Customer Info & Products"
+                                  >
+                                    <Edit size={13} />
+                                    <span>Edit</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCancelOrder(o)}
+                                    disabled={isCancellingOrder}
+                                    className="btn btn-secondary btn-sm"
+                                    style={{ padding: '4px 10px', fontSize: '11.5px', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)' }}
+                                    title="Cancel Order"
+                                  >
+                                    <XCircle size={13} />
+                                    <span>Cancel</span>
+                                  </button>
+                                </div>
+                              );
+                            }
+                            return (
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                🔒 Locked
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );
@@ -3086,6 +3268,266 @@ const ResellerPortal = () => {
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* EDIT ORDER MODAL (For Reseller) */}
+      {editingOrder && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '620px', maxHeight: '92vh', overflowY: 'auto' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Edit size={20} color="#38bdf8" />
+                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>Edit Order #{editingOrder.invoice_no}</h3>
+              </div>
+              <button onClick={() => setEditingOrder(null)} className="btn btn-secondary btn-icon">
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveOrderEdit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                
+                {/* Status Notice */}
+                <div style={{ padding: '10px 14px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Status: <strong style={{ color: '#38bdf8', textTransform: 'capitalize' }}>{editingOrder.order_status || 'New'}</strong></span>
+                  <span style={{ fontSize: '12px', color: '#10b981' }}>✓ Editable before courier dispatch</span>
+                </div>
+
+                {/* Customer Details */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Customer Name</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Tanvir Ahmed"
+                      value={editFormData.customer_name}
+                      onChange={(e) => setEditFormData({ ...editFormData, customer_name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Customer Phone *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      required
+                      placeholder="01711000000"
+                      value={editFormData.customer_phone}
+                      onChange={(e) => setEditFormData({ ...editFormData, customer_phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Full Delivery Address *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    required
+                    placeholder="e.g. House #12, Road #4, Sector #10, Uttara"
+                    value={editFormData.customer_address}
+                    onChange={(e) => setEditFormData({ ...editFormData, customer_address: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">District (জেলা)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Dhaka"
+                      value={editFormData.district}
+                      onChange={(e) => setEditFormData({ ...editFormData, district: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Thana / Area (থানা)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Uttara"
+                      value={editFormData.thana}
+                      onChange={(e) => setEditFormData({ ...editFormData, thana: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* Selected Products Breakdown */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="form-label" style={{ marginBottom: 0, fontWeight: '700', fontSize: '13px' }}>
+                      🛍️ Selected Product(s) ({editFormData.items.length})
+                    </label>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Wholesale Unit Rates
+                    </span>
+                  </div>
+
+                  {/* Items List */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {editFormData.items.map((item, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          background: 'var(--bg-primary)',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border-color)',
+                          fontSize: '13px'
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{item.product_name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Wholesale Cost: {currency}{Number(item.unit_cost || 0).toFixed(2)} / pc
+                          </div>
+                        </div>
+
+                        {/* Qty Stepper */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => updateEditItemQty(idx, -1)}
+                            className="btn btn-secondary btn-icon btn-sm"
+                            style={{ width: '26px', height: '26px', padding: 0 }}
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span style={{ fontWeight: '700', minWidth: '20px', textAlign: 'center' }}>
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateEditItemQty(idx, 1)}
+                            className="btn btn-secondary btn-icon btn-sm"
+                            style={{ width: '26px', height: '26px', padding: 0 }}
+                          >
+                            <Plus size={12} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => removeEditItem(idx)}
+                            className="btn btn-secondary btn-icon btn-sm"
+                            style={{ width: '26px', height: '26px', padding: 0, color: '#ef4444', marginLeft: '6px' }}
+                            title="Remove Product"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add More Products to Order Search */}
+                  <div style={{ marginTop: '6px' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ fontSize: '12px', padding: '6px 10px' }}
+                      placeholder="🔍 Type product name to add another item..."
+                      value={editProductSearch}
+                      onChange={(e) => setEditProductSearch(e.target.value)}
+                    />
+                    {editProductSearch.trim() && (
+                      <div style={{ maxHeight: '140px', overflowY: 'auto', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', marginTop: '4px' }}>
+                        {catalog
+                          .filter(p => p.name.toLowerCase().includes(editProductSearch.toLowerCase()) || String(p.sku || '').toLowerCase().includes(editProductSearch.toLowerCase()))
+                          .slice(0, 5)
+                          .map(p => (
+                            <div
+                              key={p.id}
+                              onClick={() => addProductToEditOrder(p)}
+                              style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}
+                            >
+                              <span>{p.name}</span>
+                              <span style={{ fontWeight: '700', color: '#8b5cf6' }}>+ Add ({currency}{p.reseller_price})</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Delivery Fee & Total COD */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Delivery Fee ({currency}) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="form-input"
+                      required
+                      value={editFormData.delivery_fee_charged}
+                      onChange={(e) => setEditFormData({ ...editFormData, delivery_fee_charged: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Customer Total COD ({currency}) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="form-input"
+                      required
+                      placeholder="Total COD to collect"
+                      value={editFormData.customer_total_price}
+                      onChange={(e) => setEditFormData({ ...editFormData, customer_total_price: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+
+                {/* Live Profit Preview */}
+                {(() => {
+                  const currentWholesale = editFormData.items.reduce((s, i) => s + (Number(i.unit_cost || 0) * Number(i.quantity || 1)), 0);
+                  const currentDeliv = Number(editFormData.delivery_fee_charged || 0);
+                  const currentCod = Number(editFormData.customer_total_price || 0);
+                  const currentEstProfit = Math.max(0, currentCod - (currentWholesale + currentDeliv));
+
+                  return (
+                    <div style={{ padding: '12px 14px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div>Wholesale: <strong>{currency}{currentWholesale.toFixed(2)}</strong> | Delivery: <strong>{currency}{currentDeliv.toFixed(2)}</strong></div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>COD to Collect: {currency}{currentCod.toFixed(2)}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Estimated Profit:</div>
+                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#10b981' }}>+{currency}{currentEstProfit.toFixed(2)}</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Notes */}
+                <div className="form-group">
+                  <label className="form-label">Order Notes / Instructions</label>
+                  <textarea
+                    className="form-input"
+                    rows="2"
+                    placeholder="e.g. Call before delivery, red color preferred..."
+                    value={editFormData.notes}
+                    onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button type="button" onClick={() => setEditingOrder(null)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSavingEdit} className="btn btn-primary" style={{ background: '#38bdf8', borderColor: '#38bdf8', color: '#0f172a', fontWeight: '700' }}>
+                  {isSavingEdit ? 'Saving...' : '💾 Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -72,6 +72,8 @@ router.get('/reseller/catalog', resellerPortalController.getResellerCatalog);
 router.post('/reseller/orders/submit', resellerPortalController.submitResellerOrder);
 router.post('/reseller/orders/bulk-submit', resellerPortalController.bulkSubmitResellerOrders);
 router.get('/reseller/orders/my-orders', resellerPortalController.getResellerOrders);
+router.put('/reseller/orders/:id', resellerPortalController.editResellerOrderByReseller);
+router.post('/reseller/orders/:id/cancel', resellerPortalController.cancelResellerOrderByReseller);
 router.get('/reseller/wallet', resellerPortalController.getResellerWallet);
 
 // -------------------------------------------------------------
