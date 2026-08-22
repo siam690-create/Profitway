@@ -109,8 +109,9 @@ exports.createResellerSale = async (req, res) => {
       totalCost += totalCostItem;
       grossProfit += itemProfit;
 
-      const [pRows] = await connection.query('SELECT name, stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [item.product_id, tenantId]);
-      const prodName = pRows.length > 0 ? pRows[0].name : (item.product_name || 'Product');
+      const [pRows] = await connection.query('SELECT name, stock_quantity, is_combo FROM products WHERE id = ? AND tenant_id = ?', [item.product_id, tenantId]);
+      const prod = pRows.length > 0 ? pRows[0] : null;
+      const prodName = prod ? prod.name : (item.product_name || 'Product');
 
       await connection.query(
         `INSERT INTO reseller_sale_items 
@@ -119,18 +120,45 @@ exports.createResellerSale = async (req, res) => {
         [tenantId, saleId, item.product_id, prodName, qty, unitCost, unitPrice, totalPrice, itemProfit]
       );
 
-      // Deduct product stock & log movement
-      if (pRows.length > 0) {
-        const oldStock = Number(pRows[0].stock_quantity || 0);
-        const newStock = Math.max(0, oldStock - qty);
+      // Deduct product stock & log movement (Handling Combos & Standard Products)
+      if (prod) {
+        if (prod.is_combo) {
+          const [comboItems] = await connection.query(
+            'SELECT child_product_id, quantity FROM combo_items WHERE combo_product_id = ? AND tenant_id = ?',
+            [item.product_id, tenantId]
+          );
+          for (const child of comboItems) {
+            const childDeductQty = Number(child.quantity || 1) * qty;
+            const [cProd] = await connection.query(
+              'SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+              [child.child_product_id, tenantId]
+            );
+            const prevChildStock = cProd.length > 0 ? Number(cProd[0].stock_quantity || 0) : 0;
+            const newChildStock = Math.max(0, prevChildStock - childDeductQty);
+            await connection.query(
+              'UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?',
+              [newChildStock, child.child_product_id, tenantId]
+            );
+            try {
+              await connection.query(
+                `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+                 VALUES (?, ?, 'reseller_combo_sale_out', ?, ?, ?, ?, ?)`,
+                [tenantId, child.child_product_id, -childDeductQty, prevChildStock, newChildStock, invNo, `Deducted child product for Reseller Combo Sale #${invNo} (Reseller: ${reseller_name})`]
+              );
+            } catch(e) {}
+          }
+        } else {
+          const oldStock = Number(prod.stock_quantity || 0);
+          const newStock = Math.max(0, oldStock - qty);
 
-        await connection.query('UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?', [newStock, item.product_id, tenantId]);
+          await connection.query('UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?', [newStock, item.product_id, tenantId]);
 
-        await connection.query(
-          `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
-           VALUES (?, ?, 'Reseller Sale Out', ?, ?, ?, ?, ?)`,
-          [tenantId, item.product_id, -qty, oldStock, newStock, invNo, `Reseller Sale #${invNo} (Reseller: ${reseller_name})`]
-        );
+          await connection.query(
+            `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+             VALUES (?, ?, 'Reseller Sale Out', ?, ?, ?, ?, ?)`,
+            [tenantId, item.product_id, -qty, oldStock, newStock, invNo, `Reseller Sale #${invNo} (Reseller: ${reseller_name})`]
+          );
+        }
       }
     }
 
@@ -183,20 +211,49 @@ exports.deleteResellerSale = async (req, res) => {
     const sale = sales[0];
     const [items] = await connection.query('SELECT * FROM reseller_sale_items WHERE reseller_sale_id = ? AND tenant_id = ?', [id, tenantId]);
 
-    // Restore Stock for each product
+    // Restore Stock for each product (Handling Combos & Standard Products)
     for (const item of items) {
-      const [pRows] = await connection.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [item.product_id, tenantId]);
+      const [pRows] = await connection.query('SELECT stock_quantity, is_combo FROM products WHERE id = ? AND tenant_id = ?', [item.product_id, tenantId]);
       if (pRows.length > 0) {
-        const oldStock = Number(pRows[0].stock_quantity || 0);
-        const newStock = oldStock + Number(item.quantity || 1);
+        const prod = pRows[0];
+        const qty = Number(item.quantity || 1);
+        if (prod.is_combo) {
+          const [comboItems] = await connection.query(
+            'SELECT child_product_id, quantity FROM combo_items WHERE combo_product_id = ? AND tenant_id = ?',
+            [item.product_id, tenantId]
+          );
+          for (const child of comboItems) {
+            const childRestoreQty = Number(child.quantity || 1) * qty;
+            const [cProd] = await connection.query(
+              'SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+              [child.child_product_id, tenantId]
+            );
+            const prevChildStock = cProd.length > 0 ? Number(cProd[0].stock_quantity || 0) : 0;
+            const newChildStock = prevChildStock + childRestoreQty;
+            await connection.query(
+              'UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?',
+              [newChildStock, child.child_product_id, tenantId]
+            );
+            try {
+              await connection.query(
+                `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+                 VALUES (?, ?, 'reseller_combo_delete_restock', ?, ?, ?, ?, ?)`,
+                [tenantId, child.child_product_id, childRestoreQty, prevChildStock, newChildStock, sale.invoice_no, `Restocked child product due to deleted Reseller Combo Sale #${sale.invoice_no}`]
+              );
+            } catch(e) {}
+          }
+        } else {
+          const oldStock = Number(prod.stock_quantity || 0);
+          const newStock = oldStock + qty;
 
-        await connection.query('UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?', [newStock, item.product_id, tenantId]);
+          await connection.query('UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?', [newStock, item.product_id, tenantId]);
 
-        await connection.query(
-          `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
-           VALUES (?, ?, 'Reseller Order Cancel Restock', ?, ?, ?, ?, ?)`,
-          [tenantId, item.product_id, item.quantity, oldStock, newStock, sale.invoice_no, `Restocked stock due to deleted Reseller Sale #${sale.invoice_no}`]
-        );
+          await connection.query(
+            `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+             VALUES (?, ?, 'Reseller Order Cancel Restock', ?, ?, ?, ?, ?)`,
+            [tenantId, item.product_id, qty, oldStock, newStock, sale.invoice_no, `Restocked stock due to deleted Reseller Sale #${sale.invoice_no}`]
+          );
+        }
       }
     }
 
@@ -315,20 +372,48 @@ exports.createResellerReturn = async (req, res) => {
         [tenantId, returnId, item.product_id, qty, unitPrice, unitCost, profitReversalItem, cond]
       );
 
-      // Restock good items back into inventory
+      // Restock good items back into inventory (Handling Combos & Standard Products)
       if (isGood) {
-        const [pRows] = await connection.query('SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ?', [item.product_id, tenantId]);
+        const [pRows] = await connection.query('SELECT stock_quantity, is_combo FROM products WHERE id = ? AND tenant_id = ?', [item.product_id, tenantId]);
         if (pRows.length > 0) {
-          const oldStock = Number(pRows[0].stock_quantity || 0);
-          const newStock = oldStock + qty;
+          const prod = pRows[0];
+          if (prod.is_combo) {
+            const [comboItems] = await connection.query(
+              'SELECT child_product_id, quantity FROM combo_items WHERE combo_product_id = ? AND tenant_id = ?',
+              [item.product_id, tenantId]
+            );
+            for (const child of comboItems) {
+              const childRestoreQty = Number(child.quantity || 1) * qty;
+              const [cProd] = await connection.query(
+                'SELECT stock_quantity FROM products WHERE id = ? AND tenant_id = ? FOR UPDATE',
+                [child.child_product_id, tenantId]
+              );
+              const prevChildStock = cProd.length > 0 ? Number(cProd[0].stock_quantity || 0) : 0;
+              const newChildStock = prevChildStock + childRestoreQty;
+              await connection.query(
+                'UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?',
+                [newChildStock, child.child_product_id, tenantId]
+              );
+              try {
+                await connection.query(
+                  `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+                   VALUES (?, ?, 'reseller_combo_return_restock', ?, ?, ?, ?, ?)`,
+                  [tenantId, child.child_product_id, childRestoreQty, prevChildStock, newChildStock, invoice_no || 'RSL-RET', `Restocked child product from Reseller Return (Reseller: ${reseller_name || 'N/A'})`]
+                );
+              } catch(e) {}
+            }
+          } else {
+            const oldStock = Number(prod.stock_quantity || 0);
+            const newStock = oldStock + qty;
 
-          await connection.query('UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?', [newStock, item.product_id, tenantId]);
+            await connection.query('UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?', [newStock, item.product_id, tenantId]);
 
-          await connection.query(
-            `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
-             VALUES (?, ?, 'Reseller Return Restock', ?, ?, ?, ?, ?)`,
-            [tenantId, item.product_id, qty, oldStock, newStock, invoice_no || 'RSL-RET', `Reseller Return (Reseller: ${reseller_name || 'N/A'})`]
-          );
+            await connection.query(
+              `INSERT INTO stock_movements (tenant_id, product_id, movement_type, change_qty, previous_stock, new_stock, reference_no, notes)
+               VALUES (?, ?, 'Reseller Return Restock', ?, ?, ?, ?, ?)`,
+              [tenantId, item.product_id, qty, oldStock, newStock, invoice_no || 'RSL-RET', `Reseller Return (Reseller: ${reseller_name || 'N/A'})`]
+            );
+          }
         }
       }
     }
