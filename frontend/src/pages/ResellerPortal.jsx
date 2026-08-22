@@ -81,6 +81,7 @@ const ResellerPortal = () => {
 
   const [activeTab, setActiveTab] = useState('catalog'); // 'catalog', 'orders', 'wallet'
   const [catalog, setCatalog] = useState([]);
+  const [walletData, setWalletData] = useState(null);
   const [orders, setOrders] = useState([]);
 
   // Reseller Order Edit & Cancel States
@@ -555,8 +556,7 @@ const ResellerPortal = () => {
       const data = await res.json();
       if (res.ok) {
         setEditingOrder(null);
-        fetchOrders();
-        fetchWallet();
+        fetchWalletAndOrders();
         showToast ? showToast('Updated ✏️', data.message || 'Order updated successfully!', 'success') : alert(data.message || 'Order updated successfully!');
       } else {
         alert(`Error: ${data.error}`);
@@ -584,8 +584,7 @@ const ResellerPortal = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        fetchOrders();
-        fetchWallet();
+        fetchWalletAndOrders();
         showToast ? showToast('Cancelled 🚫', data.message || 'Order cancelled successfully!', 'success') : alert(data.message || 'Order cancelled successfully!');
       } else {
         alert(`Error: ${data.error}`);
