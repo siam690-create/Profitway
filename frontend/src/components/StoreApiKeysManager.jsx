@@ -13,7 +13,9 @@ import {
   RefreshCw,
   ShoppingBag,
   ExternalLink,
-  Power
+  Power,
+  FileDown,
+  Printer
 } from 'lucide-react';
 
 export const StoreApiKeysManager = () => {
@@ -22,7 +24,7 @@ export const StoreApiKeysManager = () => {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [copiedKey, setCopiedKey] = useState('');
-  const [activeSnippetTab, setActiveSnippetTab] = useState('curl'); // 'curl' | 'php' | 'json'
+  const [activeSnippetTab, setActiveSnippetTab] = useState('woocommerce'); // default to WooCommerce
 
   // Form State
   const [storeName, setStoreName] = useState('');
@@ -30,6 +32,433 @@ export const StoreApiKeysManager = () => {
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const handleDownloadPdfDocs = () => {
+    const activeKey = keys.find(k => k.is_active)?.api_key || 'pw_store_YOUR_API_KEY_HERE';
+    const printWindow = window.open('', '_blank', 'width=950,height=850');
+    if (!printWindow) {
+      alert('Please allow popups to view and download the API documentation PDF.');
+      return;
+    }
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Profitway SaaS — Multi-Store Order Ingestion API Documentation</title>
+  <style>
+    @page { size: A4; margin: 14mm; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      background: #ffffff;
+      margin: 0;
+      padding: 24px;
+      line-height: 1.5;
+      font-size: 13px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #4f46e5;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+    .brand {
+      font-size: 24px;
+      font-weight: 800;
+      color: #4f46e5;
+      letter-spacing: -0.5px;
+    }
+    .doc-badge {
+      background: #e0e7ff;
+      color: #4338ca;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    h2 {
+      font-size: 16px;
+      color: #0f172a;
+      margin: 20px 0 8px 0;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 6px;
+    }
+    h3 {
+      font-size: 13.5px;
+      color: #1e293b;
+      margin: 14px 0 6px 0;
+    }
+    .endpoint-box {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #10b981;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .method {
+      background: #10b981;
+      color: white;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-right: 8px;
+    }
+    code {
+      font-family: Consolas, Monaco, 'Courier New', Courier, monospace;
+      background: #f1f5f9;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #0f172a;
+    }
+    pre {
+      background: #0f172a;
+      color: #38bdf8;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-family: Consolas, Monaco, monospace;
+      overflow-x: auto;
+      line-height: 1.45;
+      page-break-inside: avoid;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px 0;
+      font-size: 12px;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 12px;
+      text-align: left;
+    }
+    th {
+      background: #f1f5f9;
+      font-weight: 700;
+      color: #334155;
+    }
+    .badge-req {
+      background: #fee2e2;
+      color: #b91c1c;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+    }
+    .badge-opt {
+      background: #f1f5f9;
+      color: #475569;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+    }
+    .badge-rec {
+      background: #dcfce7;
+      color: #15803d;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+    }
+    .footer {
+      margin-top: 30px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 10px;
+      text-align: center;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    @media print {
+      body { padding: 0; }
+      pre { color: #0369a1; background: #f8fafc; border: 1px solid #cbd5e1; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div class="brand">⚡ Profitway SaaS</div>
+      <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Multi-Store Real-Time Order Ingestion API Documentation</div>
+    </div>
+    <div style="text-align: right;">
+      <span class="doc-badge">v1.0 Production API</span>
+      <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Generated: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+    </div>
+  </div>
+
+  <div class="endpoint-box">
+    <div><strong>Endpoint URL:</strong> <span class="method">POST</span> <code>https://profitway.bd/api/v1/orders/import</code></div>
+    <div style="margin-top: 6px;"><strong>Authentication Header:</strong> <code>X-API-Key: ${activeKey}</code> (or <code>Authorization: Bearer ${activeKey}</code>)</div>
+    <div style="margin-top: 4px;"><strong>Content-Type:</strong> <code>application/json</code></div>
+  </div>
+
+  <h2>1. Overview & Auto-Sync Engine</h2>
+  <p>
+    This API allows external eCommerce websites (WooCommerce, Shopify, Sohoz Pro, Sales Funnels, or Custom Applications) to securely push customer orders directly into Profitway SaaS in real time.
+  </p>
+  <ul>
+    <li><strong>Automatic Stock Deduction:</strong> If <code>product_sku</code> matches an SKU in your Profitway inventory, stock quantity is deducted automatically.</li>
+    <li><strong>Live Profit & Analytics:</strong> Product unit costs are matched to calculate gross profits and analytics in real time.</li>
+    <li><strong>Idempotency & Duplicate Protection:</strong> Using <code>external_order_id</code>, duplicate order submissions are gracefully ignored to prevent multiple stock deductions or duplicate records.</li>
+  </ul>
+
+  <h2>2. Request Body Parameters Schema</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Field Name</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Description</th>
+        <th>Example</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>external_order_id</code></td>
+        <td>String</td>
+        <td><span class="badge-req">Required</span></td>
+        <td>Your website's unique Order ID / Invoice Number. Used for idempotency check.</td>
+        <td><code>"3086"</code></td>
+      </tr>
+      <tr>
+        <td><code>customer_name</code></td>
+        <td>String</td>
+        <td><span class="badge-req">Required</span></td>
+        <td>Full name of the customer.</td>
+        <td><code>"মোঃ হাসান"</code></td>
+      </tr>
+      <tr>
+        <td><code>customer_phone</code></td>
+        <td>String</td>
+        <td><span class="badge-req">Required</span></td>
+        <td>11-digit mobile phone number of the customer.</td>
+        <td><code>"01798008642"</code></td>
+      </tr>
+      <tr>
+        <td><code>shipping_address</code></td>
+        <td>String</td>
+        <td><span class="badge-req">Required</span></td>
+        <td>Full delivery address (Village/Road, Thana, District).</td>
+        <td><code>"House 12, Mirpur 10, Dhaka"</code></td>
+      </tr>
+      <tr>
+        <td><code>items</code></td>
+        <td>Array</td>
+        <td><span class="badge-req">Required</span></td>
+        <td>Array of ordered product objects.</td>
+        <td><code>[{ ... }]</code></td>
+      </tr>
+      <tr>
+        <td><code>items[].product_sku</code></td>
+        <td>String</td>
+        <td><span class="badge-rec">Recommended</span></td>
+        <td>Product SKU in Profitway for automated inventory deduction & cost calculation.</td>
+        <td><code>"SKU-101"</code></td>
+      </tr>
+      <tr>
+        <td><code>items[].product_name</code></td>
+        <td>String</td>
+        <td><span class="badge-opt">Optional</span></td>
+        <td>Product title / name.</td>
+        <td><code>"Magic Pitha Maker"</code></td>
+      </tr>
+      <tr>
+        <td><code>items[].quantity</code></td>
+        <td>Number</td>
+        <td><span class="badge-req">Required</span></td>
+        <td>Quantity ordered (must be &gt;= 1).</td>
+        <td><code>1</code></td>
+      </tr>
+      <tr>
+        <td><code>items[].unit_price</code></td>
+        <td>Number</td>
+        <td><span class="badge-req">Required</span></td>
+        <td>Selling price per unit item.</td>
+        <td><code>450.00</code></td>
+      </tr>
+      <tr>
+        <td><code>delivery_fee</code></td>
+        <td>Number</td>
+        <td><span class="badge-opt">Optional</span></td>
+        <td>Delivery charge applied to the order.</td>
+        <td><code>120.00</code></td>
+      </tr>
+      <tr>
+        <td><code>total_amount</code></td>
+        <td>Number</td>
+        <td><span class="badge-opt">Optional</span></td>
+        <td>Total COD cash to collect including delivery fee.</td>
+        <td><code>570.00</code></td>
+      </tr>
+      <tr>
+        <td><code>payment_method</code></td>
+        <td>String</td>
+        <td><span class="badge-opt">Optional</span></td>
+        <td>Payment method (e.g. Cash on Delivery, bKash, Nagad).</td>
+        <td><code>"Cash on Delivery"</code></td>
+      </tr>
+      <tr>
+        <td><code>customer_note</code></td>
+        <td>String</td>
+        <td><span class="badge-opt">Optional</span></td>
+        <td>Customer instructions or notes.</td>
+        <td><code>"Call before delivery"</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. Integration Code Examples</h2>
+
+  <h3>A. WordPress / WooCommerce Integration (functions.php)</h3>
+  <pre>&lt;?php
+/**
+ * Auto-sync WooCommerce Orders to Profitway SaaS
+ * Add this code to your theme's functions.php or Code Snippets plugin.
+ */
+add_action('woocommerce_thankyou', 'profitway_sync_woocommerce_order', 20, 1);
+function profitway_sync_woocommerce_order($order_id) {
+    if (!$order_id) return;
+    $order = wc_get_order($order_id);
+    if (!$order || $order-&gt;get_meta('_profitway_synced')) return;
+
+    $items = [];
+    foreach ($order-&gt;get_items() as $item) {
+        $product = $item-&gt;get_product();
+        $sku = $product ? $product-&gt;get_sku() : '';
+        $qty = $item-&gt;get_quantity();
+        $items[] = [
+            'product_sku'  =&gt; !empty($sku) ? $sku : 'SKU-' . $item-&gt;get_product_id(),
+            'product_name' =&gt; $item-&gt;get_name(),
+            'quantity'     =&gt; (int)$qty,
+            'unit_price'   =&gt; (float)($qty &gt; 0 ? ($item-&gt;get_subtotal() / $qty) : 0)
+        ];
+    }
+
+    $customer_name = trim($order-&gt;get_billing_first_name() . ' ' . $order-&gt;get_billing_last_name());
+    $shipping_address = trim(implode(', ', array_filter([
+        $order-&gt;get_shipping_address_1() ?: $order-&gt;get_billing_address_1(),
+        $order-&gt;get_shipping_city() ?: $order-&gt;get_billing_city(),
+        $order-&gt;get_shipping_state() ?: $order-&gt;get_billing_state()
+    ])));
+
+    $payload = [
+        'external_order_id' =&gt; (string)$order-&gt;get_id(),
+        'customer_name'     =&gt; !empty($customer_name) ? $customer_name : 'Customer',
+        'customer_phone'    =&gt; $order-&gt;get_billing_phone() ?: '01700000000',
+        'customer_email'    =&gt; $order-&gt;get_billing_email() ?: '',
+        'shipping_address'  =&gt; !empty($shipping_address) ? $shipping_address : 'Bangladesh',
+        'payment_method'    =&gt; $order-&gt;get_payment_method_title() ?: 'Cash on Delivery',
+        'delivery_fee'      =&gt; (float)$order-&gt;get_shipping_total(),
+        'total_amount'      =&gt; (float)$order-&gt;get_total(),
+        'customer_note'     =&gt; $order-&gt;get_customer_note() ?: '',
+        'items'             =&gt; $items
+    ];
+
+    $response = wp_remote_post('https://profitway.bd/api/v1/orders/import', [
+        'headers' =&gt; [
+            'Content-Type' =&gt; 'application/json',
+            'X-API-Key'    =&gt; '${activeKey}'
+        ],
+        'body'    =&gt; wp_json_encode($payload),
+        'timeout' =&gt; 20
+    ]);
+
+    if (!is_wp_error($response)) {
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code &gt;= 200 && $code &lt; 300) {
+            $order-&gt;update_meta_data('_profitway_synced', 'yes');
+            $order-&gt;save();
+        }
+    }
+}</pre>
+
+  <h3>B. cURL Command (Terminal / Postman)</h3>
+  <pre>curl -X POST https://profitway.bd/api/v1/orders/import \\
+  -H "X-API-Key: ${activeKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "external_order_id": "3086",
+    "customer_name": "মোঃ হাসান",
+    "customer_phone": "01798008642",
+    "shipping_address": "চার বাড়ি, পো: জমিরগঞ্জ, নোয়াখালী",
+    "payment_method": "Cash on Delivery",
+    "delivery_fee": 120.00,
+    "total_amount": 570.00,
+    "items": [
+      {
+        "product_sku": "SKU-101",
+        "product_name": "Magic Pitha Maker",
+        "quantity": 1,
+        "unit_price": 450.00
+      }
+    ]
+  }'</pre>
+
+  <h2>4. Server Responses</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Status Code</th>
+        <th>Scenario</th>
+        <th>JSON Response Body</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>200 OK</strong></td>
+        <td>Order successfully ingested</td>
+        <td><code>{ "success": true, "message": "Order successfully ingested into Profitway SaaS!", "order_number": "INV-10492" }</code></td>
+      </tr>
+      <tr>
+        <td><strong>200 OK</strong></td>
+        <td>Duplicate order previously synced</td>
+        <td><code>{ "success": true, "already_exists": true, "message": "Order has already been ingested into Profitway SaaS." }</code></td>
+      </tr>
+      <tr>
+        <td><strong>400 Bad Request</strong></td>
+        <td>Missing required fields</td>
+        <td><code>{ "success": false, "error": "Missing required payload fields: external_order_id, customer_name, customer_phone." }</code></td>
+      </tr>
+      <tr>
+        <td><strong>401 Unauthorized</strong></td>
+        <td>Invalid or missing API key</td>
+        <td><code>{ "success": false, "error": "Invalid or inactive Store API Key." }</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Profitway SaaS • Multi-Store Integration Engine • Support: support@profitway.bd • Documentation © ${new Date().getFullYear()}
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 300);
+    };
+  </script>
+</body>
+</html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
 
   const fetchKeys = async () => {
     try {
@@ -266,15 +695,41 @@ export const StoreApiKeysManager = () => {
             </p>
           </div>
 
-          {/* Active Store Key Selector */}
-          {keys.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>Active Token:</span>
-              <code style={{ fontSize: '12px', color: '#818cf8', fontWeight: '700' }}>
-                {keys.find(k => k.is_active)?.api_key ? `${keys.find(k => k.is_active)?.api_key.substring(0, 16)}...` : 'No Active Key'}
-              </code>
-            </div>
-          )}
+          {/* Actions & Active Token */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {keys.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-primary)', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>Active Token:</span>
+                <code style={{ fontSize: '12px', color: '#818cf8', fontWeight: '700' }}>
+                  {keys.find(k => k.is_active)?.api_key ? `${keys.find(k => k.is_active)?.api_key.substring(0, 16)}...` : 'No Active Key'}
+                </code>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleDownloadPdfDocs}
+              className="btn btn-primary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'linear-gradient(90deg, #4f46e5, #6366f1)',
+                borderColor: '#4f46e5',
+                color: '#fff',
+                fontWeight: '700',
+                padding: '8px 16px',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)'
+              }}
+              title="Download complete documentation as PDF"
+            >
+              <FileDown size={16} />
+              <span>📄 Download API Docs (PDF)</span>
+            </button>
+          </div>
         </div>
 
         {/* HTTP Endpoint & Auth Banner */}
