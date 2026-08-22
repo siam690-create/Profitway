@@ -68,7 +68,7 @@ class ErrorBoundary extends Component {
 }
 
 function MainApp() {
-  const { view, user, activeTab, topLoading, topProgress, toast, setToast } = useApp();
+  const { view, user, activeTab, setActiveTab, topLoading, topProgress, toast, setToast } = useApp();
 
   if (view === 'landing') {
     return (
