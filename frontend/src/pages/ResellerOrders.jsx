@@ -184,12 +184,19 @@ export const ResellerOrders = () => {
       const res = await authFetch('/api/courier-accounts/sync-status', {
         method: 'POST'
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error('Server returned an invalid response. Please verify courier credentials.');
+      }
+
       if (res.ok) {
         showToast ? showToast('Courier Synced 🔄', data.message, 'success') : alert(data.message);
         fetchResellerOrders();
       } else {
-        alert(`Error: ${data.error}`);
+        alert(`Error: ${data.error || data.message || 'Failed to sync courier statuses.'}`);
       }
     } catch (err) {
       alert(`Error syncing courier statuses: ${err.message}`);

@@ -543,17 +543,18 @@ exports.syncCourierOrderStatus = async (req, res) => {
 
     let updatedCount = 0;
     let statusLog = [];
+    const pathaoTokenCache = {};
 
-    for (const sale of orders) {
+    // Helper to check and update single parcel status
+    const checkSingleParcelStatus = async (sale) => {
       const provider = String(sale.provider_code || '').toLowerCase();
       const trackingCode = String(sale.tracking_code).trim();
       const invoiceNo = sale.invoice_no;
 
-      // Find matching courier account for this order
       const acc = accounts.find(a => a.tenant_id === sale.tenant_id && (a.provider_code.toLowerCase() === provider || provider.includes(a.provider_code.toLowerCase()))) ||
                   accounts.find(a => a.tenant_id === sale.tenant_id);
 
-      if (!acc) continue;
+      if (!acc || !trackingCode) return null;
 
       const apiKey = acc.client_id_key ? acc.client_id_key.trim() : '';
       const secretKey = acc.client_secret_key ? acc.client_secret_key.trim() : '';
@@ -561,38 +562,43 @@ exports.syncCourierOrderStatus = async (req, res) => {
 
       if (provider === 'steadfast' || acc.provider_code === 'steadfast') {
         if (!baseUrl) baseUrl = 'https://portal.steadfast.com.bd/api/v1';
-        if (!apiKey || !secretKey) continue;
+        if (!apiKey || !secretKey) return null;
 
         try {
-          // Steadfast status check API
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
+
           const sfRes = await fetch(`${baseUrl}/status_by_trackingcode/${trackingCode}`, {
             headers: {
               'Api-Key': apiKey,
               'Secret-Key': secretKey,
               'Content-Type': 'application/json'
-            }
+            },
+            signal: controller.signal
           });
-          const sfData = await sfRes.json();
+          clearTimeout(timeoutId);
 
-          if (sfRes.ok && (sfData.status === 200 || sfData.delivery_status)) {
-            const rawStatus = String(sfData.delivery_status || sfData.status || '').toLowerCase();
-            let newStatus = null;
-            let collectedAmount = Number(sfData.cod_amount || sfData.amount || 0);
+          if (sfRes.ok) {
+            const sfData = await sfRes.json();
+            if (sfData.status === 200 || sfData.delivery_status) {
+              const rawStatus = String(sfData.delivery_status || sfData.status || '').toLowerCase();
+              let newStatus = null;
+              let collectedAmount = Number(sfData.cod_amount || sfData.amount || 0);
 
-            if (rawStatus.includes('delivered') && !rawStatus.includes('partial')) {
-              newStatus = 'delivered';
-            } else if (rawStatus.includes('partial')) {
-              newStatus = 'partially_delivered';
-            } else if (rawStatus.includes('return')) {
-              newStatus = 'returned';
-            } else if (rawStatus.includes('cancel')) {
-              newStatus = 'cancelled';
-            }
+              if (rawStatus.includes('delivered') && !rawStatus.includes('partial')) {
+                newStatus = 'delivered';
+              } else if (rawStatus.includes('partial')) {
+                newStatus = 'partially_delivered';
+              } else if (rawStatus.includes('return')) {
+                newStatus = 'returned';
+              } else if (rawStatus.includes('cancel')) {
+                newStatus = 'cancelled';
+              }
 
-            if (newStatus && newStatus !== sale.order_status) {
-              await applyResellerOrderStatusUpdate(sale, newStatus, collectedAmount);
-              updatedCount++;
-              statusLog.push(`Order #${invoiceNo} -> ${newStatus.toUpperCase()}`);
+              if (newStatus && newStatus !== sale.order_status) {
+                await applyResellerOrderStatusUpdate(sale, newStatus, collectedAmount);
+                return `Order #${invoiceNo} -> ${newStatus.toUpperCase()}`;
+              }
             }
           }
         } catch (e) {
@@ -602,30 +608,46 @@ exports.syncCourierOrderStatus = async (req, res) => {
         if (!baseUrl) baseUrl = 'https://api-hermes.pathao.com';
         const merchantEmail = acc.store_name ? acc.store_name.trim() : '';
         const merchantPassword = acc.merchant_password ? acc.merchant_password.trim() : '';
-        if (!apiKey || !secretKey || !merchantEmail || !merchantPassword) continue;
+        if (!apiKey || !secretKey || !merchantEmail || !merchantPassword) return null;
 
         try {
-          // Pathao issue token
-          const tokenRes = await fetch(`${baseUrl}/aladdin/api/v1/issue-token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              client_id: apiKey,
-              client_secret: secretKey,
-              username: merchantEmail,
-              password: merchantPassword,
-              grant_type: 'password'
-            })
-          });
-          const tokenData = await tokenRes.json();
+          let accessToken = pathaoTokenCache[acc.id];
+          if (!accessToken) {
+            const tokenController = new AbortController();
+            const tokenTimeout = setTimeout(() => tokenController.abort(), 6000);
 
-          if (tokenRes.ok && tokenData.access_token) {
+            const tokenRes = await fetch(`${baseUrl}/aladdin/api/v1/issue-token`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                client_id: apiKey,
+                client_secret: secretKey,
+                username: merchantEmail,
+                password: merchantPassword,
+                grant_type: 'password'
+              }),
+              signal: tokenController.signal
+            });
+            clearTimeout(tokenTimeout);
+            const tokenData = await tokenRes.json();
+            if (tokenRes.ok && tokenData.access_token) {
+              accessToken = tokenData.access_token;
+              pathaoTokenCache[acc.id] = accessToken;
+            }
+          }
+
+          if (accessToken) {
+            const infoController = new AbortController();
+            const infoTimeout = setTimeout(() => infoController.abort(), 6000);
+
             const infoRes = await fetch(`${baseUrl}/aladdin/api/v1/orders/${trackingCode}/info`, {
               headers: {
-                'Authorization': `Bearer ${tokenData.access_token}`,
+                'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json'
-              }
+              },
+              signal: infoController.signal
             });
+            clearTimeout(infoTimeout);
             const infoData = await infoRes.json();
 
             if (infoRes.ok && infoData.data) {
@@ -645,13 +667,26 @@ exports.syncCourierOrderStatus = async (req, res) => {
 
               if (newStatus && newStatus !== sale.order_status) {
                 await applyResellerOrderStatusUpdate(sale, newStatus, collectedAmount);
-                updatedCount++;
-                statusLog.push(`Order #${invoiceNo} -> ${newStatus.toUpperCase()}`);
+                return `Order #${invoiceNo} -> ${newStatus.toUpperCase()}`;
               }
             }
           }
         } catch (e) {
           console.error(`Error checking Pathao status for #${invoiceNo}:`, e.message);
+        }
+      }
+      return null;
+    };
+
+    // Process orders concurrently in batches of 10
+    const chunkSize = 10;
+    for (let i = 0; i < orders.length; i += chunkSize) {
+      const chunk = orders.slice(i, i + chunkSize);
+      const results = await Promise.allSettled(chunk.map(sale => checkSingleParcelStatus(sale)));
+      for (const res of results) {
+        if (res.status === 'fulfilled' && res.value) {
+          updatedCount++;
+          statusLog.push(res.value);
         }
       }
     }
